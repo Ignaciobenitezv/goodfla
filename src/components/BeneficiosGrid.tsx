@@ -25,26 +25,26 @@ export default function BeneficiosGrid() {
       >
         {[
           {
-            titulo: 'VUCAS NEWS',
-            descripcion: 'Suscribite ahora y obtené 10% de descuento en tu primera compra.',
-            linkText: 'Desbloquear descuento',
+            titulo: 'PRIMERA COMPRA',
+            descripcion: 'Unite a nuestro canal de WhatsApp y ganate un descuento en tu primera compra.',
+            linkText: 'Unirse',
             linkHref: '#',
           },
           {
-            titulo: '#CLUBMEMBER',
-            descripcion: 'Sumate al #C CLUB para conectar con nosotros.',
-            linkText: 'Registrate',
-            linkHref: '#',
-          },
-          {
-            titulo: 'MIX & MATCH',
-            descripcion: 'Seleccioná 3 ítems con 15% off',
-            linkText: 'Creá tu look',
+            titulo: '#COMBOSGOODFLA',
+            descripcion: '¡Armá tu combo como más te guste con prendas en tendencia!',
+            linkText: 'Arma tu combo',
             linkHref: '#',
           },
           {
             titulo: 'MÉTODOS DE PAGO',
-            descripcion: 'Rápido, fácil y seguro.\n3 Cuotas sin interés.',
+            descripcion: 'Aboná tu compra de la forma más conveniente. ',
+            linkText: 'Ver más',
+            linkHref: '#',
+          },
+          {
+            titulo: 'ENVÍOS GRATIS',
+            descripcion: 'Con tus compras mayores a $100.000.',
             linkText: '+ Info',
             linkHref: '#',
           },
@@ -54,7 +54,7 @@ export default function BeneficiosGrid() {
             <p className="text-sm text-marca-gris mb-4 whitespace-pre-line">{item.descripcion}</p>
             <a
               href={item.linkHref}
-              className="text-sm font-semibold text-marca-piedra underline underline-offset-4 hover:text-marca-gris transition"
+              className="text-sm font-semibold text-marca-gris underline underline-offset-4 hover:text-marca-gris transition"
             >
               {item.linkText}
             </a>

@@ -9,10 +9,10 @@ type Categoria = {
 }
 
 const categorias: Categoria[] = [
-  { label: 'Calzas', img: '/calza1.jpg' },
-  { label: 'Tops', img: '/top1.jpg' },
-  { label: 'Conjuntos', img: '/conjunto.jpg' },
-  { label: 'Accesorios', img: '/accesorio.jpg' },
+  { label: 'Remeras', img: '/remerass.webp' },
+  { label: 'Jeans', img: '/jeanss.webp' },
+  { label: 'Zapatillas', img: '/nike.webp' },
+  { label: 'Combos', img: '/comboss.webp' },
 ]
 
 export default function CategoriasGrid() {

@@ -19,10 +19,10 @@ export default function FooterSeccion() {
 
         {/* Columna 2 */}
         <div>
-          <h3 className="uppercase font-semibold tracking-widest mb-4">Spirit the C-WORLD</h3>
+          <h3 className="uppercase font-semibold tracking-widest mb-4">GoodFla Club</h3>
           <p className="text-sm mb-4">
             <strong className="block text-base mb-1">SUSCRIBITE</strong>
-            Sé la primera en recibir las novedades, ofertas especiales y mucho más.
+            Sé el primero en recibir las novedades, ofertas especiales y mucho más.
           </p>
           <form className="space-y-4">
             <input

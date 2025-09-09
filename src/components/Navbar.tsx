@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { useState, useRef, useEffect, useLayoutEffect } from 'react'
+import Image from 'next/image'
 
 export default function Navbar() {
   const [menuOpen, setMenuOpen] = useState(false)
@@ -22,10 +23,10 @@ export default function Navbar() {
 
   const productosLinks = [
     { href: '/productos', label: 'Todos los productos' },
-    { href: '/productos/calzas-largas', label: 'Calzas Largas' },
-    { href: '/productos/calzas-cortas', label: 'Calzas Cortas' },
-    { href: '/productos/tops', label: 'Tops' },
-    { href: '/productos/conjuntos', label: 'Conjuntos' },
+    { href: '/productos/remeras', label: 'Remeras' },
+    { href: '/productos/jeans', label: 'Jeans' },
+    { href: '/productos/zapatillas', label: 'Zapatillas' },
+    { href: '/productos/combos', label: 'Combos' },
   ]
 
   useEffect(() => {
@@ -58,16 +59,19 @@ export default function Navbar() {
   }, [ayudaOpen])
 
   return (
-    <nav className="bg-marca-crema text-marca-gris shadow-md px-6 py-4 sticky top-0 z-[100]">
-      <div className="flex justify-between items-center max-w-7xl mx-auto relative">
+    <nav className="bg-marca-crema text-marca-gris shadow-md px-0 py-4 sticky top-0 z-[100]">
+  <div className="flex justify-between items-center w-full max-w-none mx-0 px-2 md:px-4">
         {/* Logo */}
         <Link href="/" className="flex items-center gap-3">
-          <img
-            src="/vucas_logo.svg"
-            alt="Logo VUCAS"
-            className="h-8 w-auto"
-          />
-        </Link>
+  <Image
+    src="/goodlogo.png"
+    alt="Logo Goodfla"
+    width={200}
+    height={48}
+    priority
+    className="h-14 md:h-12 w-auto shrink-0"
+  />
+</Link>
 
         {/* Botón hamburguesa móvil */}
         <div className="md:hidden">
@@ -82,7 +86,7 @@ export default function Navbar() {
         {/* Menú desktop */}
         <ul className="hidden md:flex gap-6 font-medium items-center relative z-[100]">
           <li>
-            <Link href="/" className="hover:text-marca-piedra transition-colors">
+            <Link href="/" className="hover:text-marca-amarillo transition-colors">
               Inicio
             </Link>
           </li>
@@ -94,38 +98,34 @@ export default function Navbar() {
                 setProductosOpen(!productosOpen)
                 setAyudaOpen(false)
               }}
-              className="hover:text-marca-piedra transition-colors"
+              className="hover:text-marca-amarillo transition-colors"
             >
               Productos ▾
             </button>
             {productosOpen && (
-              <ul
-                ref={submenuProductosRef}
-                className="absolute right-0 top-full mt-2 bg-marca-blanco border border-gray-200 rounded-md shadow-xl z-[100]"
-                style={{
-                  width: 'max-content',
-                  maxWidth: 'calc(100vw - 32px)',
-                  overflowWrap: 'break-word',
-                  padding: 0,
-                }}
-              >
-                {productosLinks.map((item) => (
-                  <li key={item.href}>
-                    <Link
-                      href={item.href}
-                      className="block px-4 py-2 text-sm text-marca-crema hover:bg-gray-100 transition"
-                      onClick={() => setProductosOpen(false)}
-                    >
-                      {item.label}
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            )}
+  <ul
+    ref={submenuProductosRef}
+    className="absolute right-0 top-full mt-2 bg-white text-marca-gris border border-black/10 rounded-xl shadow-2xl z-[300] overflow-hidden"
+    style={{ width:'max-content', maxWidth:'calc(100vw - 32px)', overflowWrap:'break-word', padding:0 }}
+  >
+    {productosLinks.map((item) => (
+      <li key={item.href}>
+        <Link
+          href={item.href}
+          className="block px-4 py-2 text-sm hover:bg-black/5 transition"
+          onClick={() => setProductosOpen(false)}
+        >
+          {item.label}
+        </Link>
+      </li>
+    ))}
+  </ul>
+)}
+
           </li>
 
           <li>
-            <Link href="/contacto" className="hover:text-marca-piedra transition-colors">
+            <Link href="/contacto" className="hover:text-marca-amarillo transition-colors">
               Contacto
             </Link>
           </li>
@@ -137,34 +137,30 @@ export default function Navbar() {
                 setAyudaOpen(!ayudaOpen)
                 setProductosOpen(false)
               }}
-              className="hover:text-marca-piedra transition-colors"
+              className="hover:text-marca-amarillo transition-colors"
             >
               Ayuda ▾
             </button>
             {ayudaOpen && (
-              <ul
-                ref={submenuRef}
-                className="absolute right-0 top-full mt-2 bg-marca-blanco border border-gray-200 rounded-md shadow-xl z-[100]"
-                style={{
-                  width: 'max-content',
-                  maxWidth: 'calc(100vw - 32px)',
-                  overflowWrap: 'break-word',
-                  padding: 0,
-                }}
-              >
-                {ayudaLinks.map((item) => (
-                  <li key={item.href}>
-                    <Link
-                      href={item.href}
-                      className="block px-4 py-2 text-sm text-marca-crema hover:bg-gray-100 transition"
-                      onClick={() => setAyudaOpen(false)}
-                    >
-                      {item.label}
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            )}
+  <ul
+    ref={submenuRef}
+    className="absolute right-0 top-full mt-2 bg-white text-marca-gris border border-black/10 rounded-xl shadow-2xl z-[300] overflow-hidden"
+    style={{ width:'max-content', maxWidth:'calc(100vw - 32px)', overflowWrap:'break-word', padding:0 }}
+  >
+    {ayudaLinks.map((item) => (
+      <li key={item.href}>
+        <Link
+          href={item.href}
+          className="block px-4 py-2 text-sm hover:bg-black/5 transition"
+          onClick={() => setAyudaOpen(false)}
+        >
+          {item.label}
+        </Link>
+      </li>
+    ))}
+  </ul>
+)}
+
           </li>
         </ul>
       </div>

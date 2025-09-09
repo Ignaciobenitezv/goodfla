@@ -7,7 +7,7 @@ module.exports = {
   theme: {
     extend: {
         fontFamily: {
-        sans: ['var(--font-barlow)', 'sans-serif'],
+        sans: ['var(--font-barlow)', 'var(--font-montserrat)', 'sans-serif'],
       },
       colors: {
         marca: {
@@ -16,6 +16,9 @@ module.exports = {
           crema: '#f1ece6',
           gris: '#272727',
           blanco: '#FFFFFF',
+          amarillo: '#f9d541',
+          grisg: '#66666',
+          negro: '#000000',
         },
       },
     },
