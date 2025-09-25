@@ -19,17 +19,8 @@ export const Q_PRODUCTOS_DESTACADOS = groq`
   "imagen": imagen.asset->url,
   "categoria": categoria->slug.current,
   "slug": slug.current
-}`
-
-export const Q_PRODUCTOS_BY_CATEGORIA = groq`
-*[_type=="producto" && categoria->slug.current == $slug] | order(_createdAt desc){
-  _id,
-  nombre,
-  precio,
-  "imagen": imagen.asset->url,
-  "categoria": categoria->slug.current,
-  "slug": slug.current
-}`
+}
+`
 
 export const Q_PRODUCTO_BY_SLUG = groq`
 *[_type=="producto" && slug.current == $slug][0]{
@@ -37,15 +28,75 @@ export const Q_PRODUCTO_BY_SLUG = groq`
   nombre,
   descripcion,
   precio,
-  // imagen principal + galería
   "imagen": imagen.asset->url,
   "galeria": coalesce(galeria[].asset->url, [imagen.asset->url]),
-  // variantes
   talles[]{label, inStock},
   colores,
   comboCantidad,
   esCombo,
-  // routing
   "categoria": categoria->slug.current,
   "slug": slug.current
 }`
+
+export const Q_COMBO_BY_SLUG = groq`
+*[_type == "combo" && slug.current == $slug][0]{
+  _id,
+  nombre,
+  descripcion,
+  precioAnterior,
+  precio,
+  "slug": slug.current,
+  "imagen": imagen.asset->url,
+  "galeria": coalesce(galeria[].asset->url, [imagen.asset->url]),
+  categoriasIncluidas[] {
+    cantidad,
+    categoria->{
+      _id,
+      titulo,
+      "slug": slug.current
+    }
+  }
+}`
+
+export const Q_COMBOS = groq`
+*[_type == "combo"] | order(_createdAt desc){
+  _id,
+  nombre,
+  descripcion,
+  precioAnterior,
+  precio,
+  "slug": slug.current,
+  "imagen": imagen.asset->url,
+  "galeria": coalesce(galeria[].asset->url, [imagen.asset->url]),
+  categoriasIncluidas[] {
+    cantidad,
+    categoria->{
+      _id,
+      titulo,
+      "slug": slug.current
+    }
+  }
+}`
+
+// Actualización de la consulta de productos por categoría
+export const Q_PRODUCTOS_BY_CATEGORIA = groq`
+*[_type=="producto" && categoria->slug.current == $slug] | order(_createdAt desc){
+  _id,
+  nombre,
+  precio,
+  "imagen": imagen.asset->url,
+  "categoria": categoria->slug.current,
+  "slug": slug.current,
+  talles[]{label, inStock},
+  colores
+}`
+
+
+
+export const Q_REMERAS = `*[_type == "producto" && categoria->slug.current == "remeras"] | order(_createdAt desc) {
+  _id,
+  nombre,
+  precio,
+  "imagen": imagen.asset->url,
+  "slug": slug.current
+}`;

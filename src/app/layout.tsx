@@ -4,6 +4,9 @@ import { ReactNode } from 'react'
 import Navbar from '@/components/Navbar'
 import { Barlow_Condensed } from 'next/font/google'
 import { Montserrat } from 'next/font/google'
+import { CartProvider } from "@/context/CartContext"
+import { UiProvider } from '@/context/UiContext'
+import CartDrawer from '@/components/CartDrawer'
 
 const barlowCondensed = Barlow_Condensed({
   subsets: ['latin'],
@@ -19,14 +22,18 @@ const montserrat = Montserrat({
   display: 'swap',
 })
 
-export default function RootLayout({ children }: { children: ReactNode }) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="es" className={montserrat.variable}>
-      <body className="relative overflow-visible z-50 font-sans">
-        <div className="relative overflow-visible min-h-screen">
-          <Navbar />
-          <main>{children}</main>
-        </div>
+    <html lang="es">
+      <body>
+        <UiProvider>
+          <CartProvider>
+            <Navbar />
+            {children}
+            {/* 👇 ahora el drawer vive fuera del nav */}
+            <CartDrawer />
+          </CartProvider>
+        </UiProvider>
       </body>
     </html>
   )

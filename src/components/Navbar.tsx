@@ -3,12 +3,18 @@
 import Link from 'next/link'
 import { useState, useRef, useEffect, useLayoutEffect } from 'react'
 import Image from 'next/image'
+import CartDrawer from "./CartDrawer"
+import { useUi } from "@/context/UiContext"
+import { useCart } from "@/context/CartContext"
 
 export default function Navbar() {
   const [menuOpen, setMenuOpen] = useState(false)
   const [ayudaOpen, setAyudaOpen] = useState(false)
   const [productosOpen, setProductosOpen] = useState(false)
   const [subMenuUp, setSubMenuUp] = useState(false)
+
+  const { openCart } = useUi()
+  const { items } = useCart()
 
   const ayudaRef = useRef<HTMLLIElement>(null)
   const submenuRef = useRef<HTMLUListElement>(null)
@@ -60,18 +66,18 @@ export default function Navbar() {
 
   return (
     <nav className="bg-marca-crema text-marca-gris shadow-md px-0 py-4 sticky top-0 z-[100]">
-  <div className="flex justify-between items-center w-full max-w-none mx-0 px-2 md:px-4">
+      <div className="flex justify-between items-center w-full max-w-none mx-0 px-2 md:px-4">
         {/* Logo */}
         <Link href="/" className="flex items-center gap-3">
-  <Image
-    src="/goodlogo.png"
-    alt="Logo Goodfla"
-    width={200}
-    height={48}
-    priority
-    className="h-14 md:h-12 w-auto shrink-0"
-  />
-</Link>
+          <Image
+            src="/goodlogo.png"
+            alt="Logo Goodfla"
+            width={200}
+            height={48}
+            priority
+            className="h-14 md:h-12 w-auto shrink-0"
+          />
+        </Link>
 
         {/* Botón hamburguesa móvil */}
         <div className="md:hidden">
@@ -103,25 +109,24 @@ export default function Navbar() {
               Productos ▾
             </button>
             {productosOpen && (
-  <ul
-    ref={submenuProductosRef}
-    className="absolute right-0 top-full mt-2 bg-white text-marca-gris border border-black/10 rounded-xl shadow-2xl z-[300] overflow-hidden"
-    style={{ width:'max-content', maxWidth:'calc(100vw - 32px)', overflowWrap:'break-word', padding:0 }}
-  >
-    {productosLinks.map((item) => (
-      <li key={item.href}>
-        <Link
-          href={item.href}
-          className="block px-4 py-2 text-sm hover:bg-black/5 transition"
-          onClick={() => setProductosOpen(false)}
-        >
-          {item.label}
-        </Link>
-      </li>
-    ))}
-  </ul>
-)}
-
+              <ul
+                ref={submenuProductosRef}
+                className="absolute right-0 top-full mt-2 bg-white text-marca-gris border border-black/10 rounded-xl shadow-2xl z-[300] overflow-hidden"
+                style={{ width:'max-content', maxWidth:'calc(100vw - 32px)', overflowWrap:'break-word', padding:0 }}
+              >
+                {productosLinks.map((item) => (
+                  <li key={item.href}>
+                    <Link
+                      href={item.href}
+                      className="block px-4 py-2 text-sm hover:bg-black/5 transition"
+                      onClick={() => setProductosOpen(false)}
+                    >
+                      {item.label}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
           </li>
 
           <li>
@@ -142,25 +147,39 @@ export default function Navbar() {
               Ayuda ▾
             </button>
             {ayudaOpen && (
-  <ul
-    ref={submenuRef}
-    className="absolute right-0 top-full mt-2 bg-white text-marca-gris border border-black/10 rounded-xl shadow-2xl z-[300] overflow-hidden"
-    style={{ width:'max-content', maxWidth:'calc(100vw - 32px)', overflowWrap:'break-word', padding:0 }}
-  >
-    {ayudaLinks.map((item) => (
-      <li key={item.href}>
-        <Link
-          href={item.href}
-          className="block px-4 py-2 text-sm hover:bg-black/5 transition"
-          onClick={() => setAyudaOpen(false)}
-        >
-          {item.label}
-        </Link>
-      </li>
-    ))}
-  </ul>
-)}
+              <ul
+                ref={submenuRef}
+                className="absolute right-0 top-full mt-2 bg-white text-marca-gris border border-black/10 rounded-xl shadow-2xl z-[300] overflow-hidden"
+                style={{ width:'max-content', maxWidth:'calc(100vw - 32px)', overflowWrap:'break-word', padding:0 }}
+              >
+                {ayudaLinks.map((item) => (
+                  <li key={item.href}>
+                    <Link
+                      href={item.href}
+                      className="block px-4 py-2 text-sm hover:bg-black/5 transition"
+                      onClick={() => setAyudaOpen(false)}
+                    >
+                      {item.label}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </li>
 
+          {/* 🛒 Carrito */}
+          <li>
+            <button
+              onClick={openCart}
+              className="relative hover:text-marca-amarillo transition-colors"
+            >
+              🛒
+              {items.length > 0 && (
+                <span className="absolute -top-2 -right-3 bg-red-600 text-white text-xs px-2 py-0.5 rounded-full">
+                  {items.length}
+                </span>
+              )}
+            </button>
           </li>
         </ul>
       </div>
@@ -202,8 +221,28 @@ export default function Navbar() {
               </ul>
             )}
           </li>
+          {/* 🛒 Carrito en móvil */}
+          <li>
+            <button
+              onClick={() => {
+                setMenuOpen(false)
+                openCart()
+              }}
+              className="relative"
+            >
+              🛒 Carrito
+              {items.length > 0 && (
+                <span className="ml-2 bg-red-600 text-white text-xs px-2 py-0.5 rounded-full">
+                  {items.length}
+                </span>
+              )}
+            </button>
+          </li>
         </ul>
       )}
+
+      {/* Drawer del carrito */}
+      <CartDrawer />
     </nav>
   )
 }
