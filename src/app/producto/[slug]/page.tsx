@@ -6,10 +6,26 @@ import PDPRemera from '@/components/PDPRemera'
 import PDPZapatillas from '@/components/PDPZapatillas'
 import { notFound } from 'next/navigation'
 
+// Normaliza el array de talles a { label, stock }
+const withStock = (p: any) => ({
+  ...p,
+  talles: Array.isArray(p?.talles)
+    ? p.talles.map((t: any) => ({
+        label: String(t?.label ?? t?.talle ?? t?.size ?? ""),
+        stock: Number(t?.stock ?? t?.stockDisponible ?? t?.qty ?? 0),
+      }))
+    : undefined,
+});
+
+
 export const revalidate = 60
 
-export default async function ProductoPage({ params }: { params: { slug: string } }) {
-  const producto = await getProductoBySlug(params.slug)
+type Params = { slug: string }
+
+export default async function ProductoPage({ params }: { params: Promise<Params> }) {
+  const { slug } = await params
+
+  const producto = await getProductoBySlug(slug)
   if (!producto) return notFound()
 
   const isCombo = producto.esCombo === true || producto.categoria === 'combos'
@@ -17,25 +33,31 @@ export default async function ProductoPage({ params }: { params: { slug: string 
   const isRemera = producto.categoria === 'remeras'
   const isZapatilla = producto.categoria === 'zapatillas'
 
-  // 👇 Si es Zapatilla 2x1 (zapa marcada como combo), usar el PDP de combos
+  // Si es Zapatilla 2x1 (zapa marcada como combo), usar el PDP de combos
   const isZapa2x1 = isZapatilla && producto.esCombo === true && (producto.comboCantidad ?? 0) >= 2
 
-  if (isCombo || isZapa2x1) {
-    return <PDPComboDetalle producto={producto as ProductoDetalle} />
-  }
+  // Si es Zapatilla 2x1 (zapa marcada como combo), usar el PDP de zapatillas con talles normalizados
+if (isZapa2x1) {
+  const productoAdaptado = withStock(producto);
+  return <PDPZapatillas producto={productoAdaptado} />;
+}
 
-  if (isJean) {
-    return <PDPJean producto={producto as ProductoDetalle} />
-  }
+// En la página genérica, los combos los mostramos con PDPDetalle
+if (isCombo) {
+  const productoAdaptado = withStock(producto);
+  return <PDPDetalle producto={productoAdaptado} />;
+}
 
-  if (isRemera) {
-    return <PDPRemera producto={producto as ProductoDetalle} />
-  }
+if (isJean) {
+  const productoAdaptado = withStock(producto);
+  return <PDPJean producto={productoAdaptado} />;
+}
 
-  if (isZapatilla) {
-    return <PDPZapatillas producto={producto as ProductoDetalle} />
-  }
+if (isRemera) {
+  const productoAdaptado = withStock(producto);
+  return <PDPRemera producto={productoAdaptado} />;
+}
 
-  // fallback: productos normales
-  return <PDPDetalle producto={producto as ProductoDetalle} />
+// fallback: productos normales
+return <PDPDetalle producto={withStock(producto)} />;
 }

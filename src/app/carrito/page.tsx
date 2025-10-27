@@ -18,23 +18,32 @@ export default function CarritoPage() {
         <p className="text-gray-500">Tu carrito está vacío 🛒</p>
       ) : (
         <>
-          {items.map((item) => (
-            <div key={item.id} className="flex gap-3 items-center border-b pb-3">
-              <Image
-                src={item.imagen}
-                alt={item.nombre}
-                width={70}
-                height={90}
-                className="rounded object-cover"
-              />
-              <div className="flex-1">
-                <p className="font-medium">{item.nombre}</p>
-                <p className="text-sm text-gray-500">
-                  ${item.precio} × {item.cantidad}
-                </p>
+          {items.map((item, idx) => {
+            // 👇 evitar error de tipos: casteo sólo para armar la key
+            const anyItem = item as any
+            const key =
+              anyItem._id ??
+              anyItem.slug ??
+              `${item.nombre}-${(anyItem.talle ?? "")}-${(anyItem.color ?? "")}-${idx}`
+
+            return (
+              <div key={key} className="flex gap-3 items-center border-b pb-3">
+                <Image
+                  src={item.imagen}
+                  alt={item.nombre}
+                  width={70}
+                  height={90}
+                  className="rounded object-cover"
+                />
+                <div className="flex-1">
+                  <p className="font-medium">{item.nombre}</p>
+                  <p className="text-sm text-gray-500">
+                    ${item.precio} × {item.cantidad}
+                  </p>
+                </div>
               </div>
-            </div>
-          ))}
+            )
+          })}
 
           <div className="flex justify-between font-bold text-lg mt-4">
             <span>Total:</span>

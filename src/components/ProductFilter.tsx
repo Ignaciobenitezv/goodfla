@@ -17,15 +17,26 @@ type Props = {
 
 export default function ProductFilter({ categoria }: Props) {
   const [productos, setProductos] = useState<Producto[]>([])
-  const [precio, setPrecio] = useState([0, 75000])
+  const [precio, setPrecio] = useState<[number, number]>([0, 999999])
   const [filtro, setFiltro] = useState("")
 
   useEffect(() => {
     // Llamada a la API o función para obtener productos según la categoría
     const fetchProductos = async () => {
-      const result = await getProductosPorCategoria(categoria, precio, filtro)
-      setProductos(result)
-    }
+  const result = await getProductosPorCategoria(categoria, precio, filtro)
+
+  // 🔧 Normalizo para que cumpla con tu tipo Producto
+  const normalizados = result.map((p: any) => ({
+    nombre: p.nombre,
+    precio: Number(p.precio ?? 0),
+    imagen: p.imagen ?? "/placeholder.png",
+    // asegura string: si viene undefined, uso la categoría actual del filtro
+    categoria: p.categoria ?? categoria,
+  }))
+
+  setProductos(normalizados)
+}
+
 
     fetchProductos()
   }, [categoria, precio, filtro])

@@ -74,7 +74,24 @@ export default function ProductosPage() {
       </div>
 
       {/* Grid de productos */}
-      <ProductGrid productos={productosFiltrados.filter(p => p._id && p.slug)} />
+      <ProductGrid
+  productos={
+    productosFiltrados
+      .filter(p => p._id && p.slug)
+      .map(p => ({
+        id: String(p._id),
+        _id: String(p._id),
+        nombre: p.nombre,
+        descripcion: p.descripcion ?? "",      // <- asegura string
+        precio: Number(p.precio ?? 0),
+        imagen: p.imagen,
+        slug: p.slug,
+        // Omitimos 'categoria' para evitar choque de tipos
+      })) as any
+  }
+/>
+
+
     </section>
   )
 }

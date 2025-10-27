@@ -81,11 +81,14 @@ export default function CheckoutPage() {
   const handleMercadoPago = async () => {
     try {
       // Guardar orden para updateStock en success
-      const lastOrderPayload = items.map((i) => ({
-        productId: i.productId || i.id, // 👈 asegurate que tengas el _id real de Sanity
-        cantidad: i.cantidad,
-      }))
-      localStorage.setItem("lastOrder", JSON.stringify(lastOrderPayload))
+      // Guardar orden para updateStock en success
+const lastOrderPayload = items.map((i: any, idx: number) => ({
+  // Prioridad: _id real de Sanity → productId → slug → fallback estable
+  productId: i._id ?? i.productId ?? i.slug ?? `${i.nombre}-${i.talle ?? ""}-${i.color ?? ""}-${idx}`,
+  cantidad: i.cantidad,
+}))
+localStorage.setItem("lastOrder", JSON.stringify(lastOrderPayload))
+
 
       // Guardar carrito completo (para limpiar después)
       localStorage.setItem("cart", JSON.stringify(items))
@@ -316,10 +319,11 @@ export default function CheckoutPage() {
             {envio === "domicilio" && (
               <div className="mb-6 space-y-3">
                 <h3 className="font-semibold">Datos de envío</h3>
-                <ValidatedInput placeholder="Calle" value={destinatario.calle} onChange={(v) => handleChangeDestinatario("calle", v)} />
-                <ValidatedInput placeholder="Número" value={destinatario.numero} onChange={(v) => handleChangeDestinatario("numero", v)} />
-                <ValidatedInput placeholder="Barrio (opcional)" value={destinatario.barrio} onChange={(v) => handleChangeDestinatario("barrio", v)} />
-                <ValidatedInput placeholder="Ciudad" value={destinatario.ciudad} onChange={(v) => handleChangeDestinatario("ciudad", v)} />
+                <ValidatedInput placeholder="Calle" value={destinatario.calle} onChange={(v: string) => handleChangeDestinatario("calle", v)} />
+<ValidatedInput placeholder="Número" value={destinatario.numero} onChange={(v: string) => handleChangeDestinatario("numero", v)} />
+<ValidatedInput placeholder="Barrio (opcional)" value={destinatario.barrio} onChange={(v: string) => handleChangeDestinatario("barrio", v)} />
+<ValidatedInput placeholder="Ciudad" value={destinatario.ciudad} onChange={(v: string) => handleChangeDestinatario("ciudad", v)} />
+
               </div>
             )}
 
@@ -405,15 +409,24 @@ export default function CheckoutPage() {
 
       {/* --------- RESUMEN --------- */}
       <aside className="space-y-4 border p-4 rounded">
-        {items.map((item) => (
-          <div key={item.id} className="flex gap-3 items-center border-b pb-2">
-            <Image src={item.imagen} alt={item.nombre} width={60} height={80} className="object-cover rounded" />
-            <div className="flex-1 text-sm">
-              <p>{item.nombre}</p>
-              <p className="font-bold">${item.precio.toLocaleString("es-AR")} × {item.cantidad}</p>
-            </div>
-          </div>
-        ))}
+        {items.map((item, idx) => {
+  const anyItem = item as any;
+  const key =
+    anyItem._id ??
+    anyItem.slug ??
+    `${item.nombre}-${(anyItem.talle ?? "")}-${(anyItem.color ?? "")}-${idx}`;
+
+  return (
+    <div key={key} className="flex gap-3 items-center border-b pb-2">
+      <Image src={item.imagen} alt={item.nombre} width={60} height={80} className="object-cover rounded" />
+      <div className="flex-1 text-sm">
+        <p>{item.nombre}</p>
+        <p className="font-bold">${item.precio.toLocaleString("es-AR")} × {item.cantidad}</p>
+      </div>
+    </div>
+  );
+})}
+
         <div className="flex justify-between font-medium">
           <span>Subtotal</span>
           <span>${totalProductos.toLocaleString("es-AR")}</span>

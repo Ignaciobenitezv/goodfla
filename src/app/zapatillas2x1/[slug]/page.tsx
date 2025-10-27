@@ -6,9 +6,13 @@ import { notFound } from "next/navigation"
 
 export const revalidate = 60
 
-export default async function Zapa2x1Page({ params }: { params: { slug: string } }) {
+type Params = { slug: string }
+
+export default async function Zapa2x1Page({ params }: { params: Promise<Params> }) {
+  const { slug } = await params
+
   // Traemos el "combo" de zapatillas 2x1
-  const combo = await sanityClient.fetch(Q_ZAPA2X1_BY_SLUG, { slug: params.slug })
+  const combo = await sanityClient.fetch(Q_ZAPA2X1_BY_SLUG, { slug })
   if (!combo) return notFound()
 
   // Armamos productosPorCategoria tal como usa PDPComboDetalle

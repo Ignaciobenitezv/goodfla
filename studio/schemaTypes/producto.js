@@ -54,12 +54,13 @@ export const producto = defineType({
             },
           ],
           preview: {
-            select: {
-              title: 'color',
-              subtitle: 'talle',
-              media: 'imagenVariante',
-            },
-          },
+  select: { title: 'title', media: 'portada', precio: 'precioActual' },
+  prepare: (value) => ({
+    title: value.title,
+    subtitle: value.precio != null ? `$${value.precio}` : '',
+    media: value.media,
+  }),
+},
         },
       ],
     },

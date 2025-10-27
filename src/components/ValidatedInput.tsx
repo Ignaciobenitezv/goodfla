@@ -1,17 +1,17 @@
-"use client"
+"use client";
 
-import { Check, X } from "lucide-react"
-import { useState } from "react"
+import { Check, X } from "lucide-react";
+import { useState, type ChangeEvent } from "react";
 
 type ValidatedInputProps = {
-  label: string
-  type?: string
-  placeholder?: string
-  required?: boolean
-  validate?: (value: string) => boolean
-  value: string
-  onChange: (value: string) => void
-}
+  label?: string;                     // ← ahora opcional
+  type?: string;
+  placeholder?: string;
+  required?: boolean;
+  validate?: (value: string) => boolean;
+  value: string;
+  onChange: (value: string) => void;
+};
 
 export default function ValidatedInput({
   label,
@@ -22,13 +22,18 @@ export default function ValidatedInput({
   value,
   onChange,
 }: ValidatedInputProps) {
-  const [touched, setTouched] = useState(false)
+  const [touched, setTouched] = useState(false);
 
-  const isValid = validate ? validate(value) : value.trim() !== ""
+  const isValid = validate ? validate(value) : value.trim() !== "";
+  const labelText = label ?? placeholder ?? "";
+
+  const handleChange = (e: ChangeEvent<HTMLInputElement>) => {
+    onChange(e.target.value);
+  };
 
   return (
     <div className="space-y-1">
-      <label className="text-sm font-medium">{label}</label>
+      {labelText && <label className="text-sm font-medium">{labelText}</label>}
       <div className="relative">
         <input
           type={type}
@@ -36,13 +41,11 @@ export default function ValidatedInput({
           value={value}
           required={required}
           onBlur={() => setTouched(true)}
-          onChange={(e) => onChange(e.target.value)}
+          onChange={handleChange}
+          aria-label={labelText || undefined}
+          aria-invalid={touched ? !isValid : undefined}   // ← booleano, no string
           className={`w-full border rounded px-3 py-2 pr-8 focus:outline-none ${
-            touched
-              ? isValid
-                ? "border-green-500"
-                : "border-red-500"
-              : "border-gray-300"
+            touched ? (isValid ? "border-green-500" : "border-red-500") : "border-gray-300"
           }`}
         />
         {touched && isValid && (
@@ -53,5 +56,5 @@ export default function ValidatedInput({
         )}
       </div>
     </div>
-  )
+  );
 }

@@ -4,8 +4,12 @@ import ProductosClient from "./ProductosClient"
 
 export const revalidate = 60
 
-export default async function CategoriaPage({ params }: { params: { categoria: string } }) {
-  const { categoria } = params
+type Params = { categoria: string }
+
+export default async function CategoriaPage(
+  props: { params: Promise<Params> }
+) {
+  const { categoria } = await props.params
 
   const productos = await sanityClient.fetch(
     `*[_type=="producto" && categoria->slug.current == $slug]{

@@ -55,11 +55,14 @@ export default {
             },
           ],
           preview: {
-            select: {
-              title: 'label',
-              subtitle: 'stock',
-            },
-          },
+  select: { title: 'title', media: 'portada', precio: 'precioActual' },
+  prepare: (value) => ({
+    title: value.title,
+    subtitle: value.precio != null ? `$${value.precio}` : '',
+    media: value.media,
+  }),
+}
+
         },
       ],
     },

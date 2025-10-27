@@ -1,52 +1,48 @@
 "use client";
 import { useEffect } from "react";
 
-declare global {
-  interface Window {
-    MercadoPago: any;
-  }
-}
-
 export default function CheckoutPage() {
   useEffect(() => {
     const initializeBrick = async () => {
-      const script = document.createElement("script");
-      script.src = "https://sdk.mercadopago.com/js/v2";
-      script.onload = async () => {
-        if (window.MercadoPago) {
-          const mp = new window.MercadoPago(process.env.NEXT_PUBLIC_MP_PUBLIC_KEY, {
-            locale: "es-AR",
-          });
+      // Evita inyectar el script dos veces
+      if (!document.querySelector('script[src="https://sdk.mercadopago.com/js/v2"]')) {
+        const script = document.createElement("script");
+        script.src = "https://sdk.mercadopago.com/js/v2";
+        script.async = true;
+        script.onload = handleReady;
+        document.body.appendChild(script);
+      } else {
+        handleReady();
+      }
 
-          const bricksBuilder = mp.bricks();
+      async function handleReady() {
+        const MP = (window as any).MercadoPago;
+        if (!MP) return;
 
-          // Llamo al backend para obtener la preferencia
-          const res = await fetch("/api/checkout", { method: "POST" });
-          const pref = await res.json();
+        const mp = new MP(process.env.NEXT_PUBLIC_MP_PUBLIC_KEY, { locale: "es-AR" });
+        const bricksBuilder = mp.bricks();
 
-          bricksBuilder.create("payment", "paymentBrick_container", {
-            initialization: {
-              amount: 10000, // 👈 monto de la compra
-              preferenceId: pref.id, // 👈 la preferencia del backend
+        // Llamo al backend para obtener la preferencia
+        const res = await fetch("/api/checkout", { method: "POST" });
+        const pref = await res.json();
+
+        bricksBuilder.create("payment", "paymentBrick_container", {
+          initialization: {
+            amount: 10000, // monto de la compra
+            preferenceId: pref.id, // preferencia del backend
+          },
+          customization: {
+            visual: { style: { theme: "default" } }, // otros: "dark", "flat"
+          },
+          callbacks: {
+            onReady: () => console.log("Brick listo"),
+            onSubmit: (formData: any) => {
+              console.log("Datos enviados:", formData);
             },
-            customization: {
-              visual: {
-                style: {
-                  theme: "default", // otros: "dark", "flat"
-                },
-              },
-            },
-            callbacks: {
-              onReady: () => console.log("Brick listo"),
-              onSubmit: (formData: any) => {
-                console.log("Datos enviados:", formData);
-              },
-              onError: (error: any) => console.error("Error en brick:", error),
-            },
-          });
-        }
-      };
-      document.body.appendChild(script);
+            onError: (error: any) => console.error("Error en brick:", error),
+          },
+        });
+      }
     };
 
     initializeBrick();

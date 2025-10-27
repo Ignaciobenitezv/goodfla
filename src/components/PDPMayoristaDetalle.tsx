@@ -37,14 +37,14 @@ export default function PDPMayoristaDetalle({ producto }: { producto: MayoristaP
   const handleAddToCart = () => {
     // para mayorista no hay talle; agregamos por pack
     addItem({
-      id: producto._id || producto.nombre,
-      nombre: producto.nombre,
-      precio: producto.precioActual,
-      cantidad,
-      imagen: galeria[0] || "/placeholder.jpg",
-      slug: producto.slug,
-      // sin talle
-    });
+  productId: (producto as any)?._id ?? (producto as any)?.slug ?? producto.nombre,
+  nombre: producto.nombre,
+  precio: producto.precioActual,
+  cantidad,
+  imagen: producto.galeria?.[0],
+  slug: (producto as any)?.slug,
+} as any)
+
     alert("✅ Pack añadido al carrito");
   };
 

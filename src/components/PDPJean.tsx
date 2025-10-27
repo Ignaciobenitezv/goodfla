@@ -36,9 +36,12 @@ export default function PDPJean({ producto }: PDPJeanProps) {
   const { addItem, items } = useCart()
 
   // 🔹 calcular stock restante considerando lo que ya está en el carrito
-  const carritoActual = items.find(
-    (i) => i.id === (producto._id || producto.nombre) && i.talle === talleSeleccionado?.label
-  )
+  const carritoActual = items.find((i: any) => {
+  const itemKey = i._id ?? i.productId ?? i.slug ?? i.nombre
+  const prodKey = (producto as any)?._id ?? (producto as any)?.slug ?? producto.nombre
+  return itemKey === prodKey && i.talle === talleSeleccionado?.label
+})
+
   const stockRestante = talleSeleccionado
     ? talleSeleccionado.stock - (carritoActual?.cantidad || 0)
     : 0
@@ -60,16 +63,25 @@ export default function PDPJean({ producto }: PDPJeanProps) {
     }
 
     addItem({
-      id: producto._id || producto.nombre,
-      nombre: producto.nombre,
-      precio: producto.precio,
-      cantidad,
-      imagen: galeria[0] || "/placeholder.jpg",
-      slug: producto.slug,
-      talle: talleSeleccionado.label,
-    })
+  productId: (producto as any)?._id ?? (producto as any)?.slug ?? producto.nombre,
+  nombre: producto.nombre,
+  precio: producto.precio,
+  cantidad,
+  imagen: producto.galeria?.[0],
+  slug: (producto as any)?.slug,
+  talle: talleSeleccionado?.label,
+} as any)
+
     alert("✅ Producto añadido al carrito")
   }
+
+// Decide la tabla de talles: 'jean' (default) o 'remera'
+const tipoTabla: 'jean' | 'remera' = (() => {
+  const cat = String((producto as any)?.categoria ?? '').toLowerCase()
+  if (cat.includes('remera') || cat === 'remeras') return 'remera'
+  return 'jean'
+})()
+
 
   return (
     <>
@@ -322,10 +334,12 @@ export default function PDPJean({ producto }: PDPJeanProps) {
 
         {/* Modal guía de talles */}
         <GuiaDeTallesTabs
-          abierto={openModal}
-          onClose={() => setOpenModal(false)}
-          imagen={imagenActiva}
-        />
+  abierto={openModal}
+  onClose={() => setOpenModal(false)}
+  imagen={imagenActiva}
+  tipo={tipoTabla}
+/>
+
       </main>
 
       <ServiciosDiferencia />

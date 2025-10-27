@@ -1,3 +1,4 @@
+// src/app/mayorista/[slug]/page.tsx
 import { notFound } from "next/navigation";
 import { sanityClient } from "@/lib/sanity.client";
 import { Q_MAYORISTA_BY_SLUG } from "@/lib/sanityQueries";
@@ -5,8 +6,12 @@ import PDPMayoristaDetalle from "@/components/PDPMayoristaDetalle";
 
 export const revalidate = 60;
 
-export default async function Page({ params }: { params: { slug: string } }) {
-  const pack = await sanityClient.fetch(Q_MAYORISTA_BY_SLUG, { slug: params.slug });
+type Params = { slug: string };
+
+export default async function Page({ params }: { params: Promise<Params> }) {
+  const { slug } = await params;
+
+  const pack = await sanityClient.fetch(Q_MAYORISTA_BY_SLUG, { slug });
   if (!pack) return notFound();
 
   // Mapear Sanity -> props que espera el PDP

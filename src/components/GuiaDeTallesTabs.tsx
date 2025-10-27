@@ -281,11 +281,12 @@ export default function GuiaDeTallesTabs({ abierto, onClose, imagen, tipo }: Pro
                 <tbody>
                   {(tipo === "jean" ? tablaJeans : tablaRemeras).map((r) => (
                     <tr key={r.talle} className="border-b">
-                      <td className="p-2">{r.talle}</td>
-                      <td className="p-2">{r.busto}</td>
-                      <td className="p-2">{r.largo}</td>
-                      <td className="p-2">{r.largoManga}</td>
-                    </tr>
+  <td className="p-2">{r.talle}</td>
+  <td className="p-2">{'busto' in r ? r.busto : '—'}</td>
+  <td className="p-2">{r.largo}</td>
+  <td className="p-2">{'largoManga' in r ? r.largoManga : '—'}</td>
+</tr>
+
                   ))}
                 </tbody>
               </table>

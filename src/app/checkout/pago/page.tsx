@@ -179,23 +179,32 @@ export default function PagoPage() {
 
       {/* --------- RESUMEN --------- */}
       <aside className="space-y-4 border p-4 rounded">
-        {items.map((item) => (
-          <div key={item.id} className="flex gap-3 items-center border-b pb-2">
-            <Image
-              src={item.imagen}
-              alt={item.nombre}
-              width={60}
-              height={80}
-              className="object-cover rounded"
-            />
-            <div className="flex-1 text-sm">
-              <p>{item.nombre}</p>
-              <p className="font-bold">
-                ${item.precio} × {item.cantidad}
-              </p>
-            </div>
-          </div>
-        ))}
+        {items.map((item, idx) => {
+  const anyItem = item as any;
+  const key =
+    anyItem._id ??
+    anyItem.slug ??
+    `${item.nombre}-${(anyItem.talle ?? "")}-${(anyItem.color ?? "")}-${idx}`;
+
+  return (
+    <div key={key} className="flex gap-3 items-center border-b pb-2">
+      <Image
+        src={item.imagen}
+        alt={item.nombre}
+        width={60}
+        height={80}
+        className="object-cover rounded"
+      />
+      <div className="flex-1 text-sm">
+        <p>{item.nombre}</p>
+        <p className="font-bold">
+          ${item.precio.toLocaleString("es-AR")} × {item.cantidad}
+        </p>
+      </div>
+    </div>
+  );
+})}
+
         <div className="flex justify-between font-medium">
           <span>Subtotal</span>
           <span>${total}</span>

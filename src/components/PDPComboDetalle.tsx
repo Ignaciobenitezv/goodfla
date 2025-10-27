@@ -30,9 +30,15 @@ export default function PDPComboDetalle({ combo, productosPorCategoria }: PDPCom
     const t = prod.talles.find((x: any) => x.label === talle)
     if (!t) return 0
 
-    const enCarrito = items.find(
-      (i) => i.id.startsWith(prod._id) && i.talle === talle
-    )
+   const enCarrito = items.find((i: any) => {
+  const itemKey = i._id ?? i.productId ?? i.slug ?? i.nombre
+  const prodKey = String(prod._id ?? prod.slug ?? prod.nombre)
+  return (
+    (String(itemKey) === prodKey || String(itemKey).startsWith(prodKey)) &&
+    i.talle === talle
+  )
+})
+
     return t.stock - (enCarrito?.cantidad || 0)
   }
 
@@ -189,16 +195,18 @@ export default function PDPComboDetalle({ combo, productosPorCategoria }: PDPCom
 
               const itemsCombo = Object.values(selected).flat().filter(Boolean)
 
-              itemsCombo.forEach((prod: any, idx: number) => {
-                addItem({
-                  id: `${prod._id || prod.nombre}-${prod.talle || idx}`,
-                  nombre: `${prod.nombre}${prod.talle ? ` (Talle ${prod.talle})` : ""}`,
-                  precio: combo.precio / itemsCombo.length, // reparte el precio total
-                  cantidad: 1,
-                  imagen: prod.imagen || "/placeholder.png",
-                  talle: prod.talle || null,
-                })
-              })
+              itemsCombo.forEach((prod: any) => {
+  addItem({
+    productId: prod._id ?? prod.slug ?? prod.nombre, // clave estable
+    nombre: `${prod.nombre}${prod.talle ? ` (Talle ${prod.talle})` : ""}`,
+    precio: combo.precio / itemsCombo.length,        // prorratea el total
+    cantidad: 1,
+    imagen: prod.imagen || "/placeholder.png",
+    slug: prod.slug ?? undefined,
+    talle: prod.talle ?? undefined,
+  } as any)
+})
+
 
               alert("✅ Combo añadido al carrito")
             }}

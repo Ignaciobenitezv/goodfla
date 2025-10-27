@@ -70,9 +70,13 @@ export default function PDPZapatillas({
   const { addItem, items } = useCart()
 
   // ====== UTILIDADES COMUNES ======
-  const carritoActual = items.find(
-    (i) => i.id === (producto._id || producto.nombre) && i.talle === talleSeleccionado?.label
-  )
+  const carritoActual = items.find((i: any) => {
+  const itemKey =
+    i._id ?? i.productId ?? i.slug ?? i.nombre
+  const prodKey =
+    (producto as any)?._id ?? (producto as any)?.slug ?? producto.nombre
+  return itemKey === prodKey && i.talle === talleSeleccionado?.label
+})
   const stockRestante = talleSeleccionado
     ? talleSeleccionado.stock - (carritoActual?.cantidad || 0)
     : 0
@@ -92,15 +96,17 @@ export default function PDPZapatillas({
       alert("❌ No hay stock suficiente")
       return
     }
-    addItem({
-      id: producto._id || producto.nombre,
-      nombre: producto.nombre,
-      precio: producto.precio,
-      cantidad,
-      imagen: galeria[0] || "/placeholder.jpg",
-      slug: producto.slug,
-      talle: talleSeleccionado.label,
-    })
+   addItem({
+  productId: (producto as any)?._id ?? (producto as any)?.slug ?? producto.nombre,
+  nombre: producto.nombre,
+  precio: producto.precio,
+  cantidad,
+  imagen: producto.galeria?.[0],
+  slug: (producto as any)?.slug,
+  talle: talleSeleccionado?.label,
+  // color: colorSeleccionado ?? undefined, // ← solo si tenés colorSeleccionado
+} as any)
+
     alert("✅ Producto añadido al carrito")
   }
 
@@ -120,7 +126,11 @@ export default function PDPZapatillas({
     if (!sizes.length) return 1
     const t = sizes.find((x) => x.label === talle)
     if (!t) return 0
-    const enCarrito = items.find((i) => i.id.startsWith(prod._id) && i.talle === talle)
+    const enCarrito = items.find((i: any) => {
+  const itemKey = i.productId ?? i.slug ?? i.nombre
+  const prodKey = prod._id ?? prod.slug ?? prod.nombre
+  return String(itemKey) === String(prodKey) && i.talle === talle
+})
     return (t.stock ?? 0) - (enCarrito?.cantidad || 0)
   }
 
@@ -157,14 +167,15 @@ export default function PDPZapatillas({
     const itemsCombo = selected.filter(Boolean)
     itemsCombo.forEach((prod: any, idx: number) => {
       addItem({
-        id: `${prod._id || prod.nombre}-${prod.talle || idx}`,
-        nombre: `${prod.nombre}${prod.talle ? ` (Talle ${prod.talle})` : ""}`,
-        // 👉 repartimos el precio total en partes iguales
-        precio: producto.precio / itemsCombo.length,
-        cantidad: 1,
-        imagen: prod.imagen || "/placeholder.png",
-        talle: prod.talle || null,
-      })
+  productId: (producto as any)?._id ?? (producto as any)?.slug ?? producto.nombre,
+  nombre: producto.nombre,
+  precio: producto.precio,
+  cantidad,
+  imagen: producto.galeria?.[0],
+  slug: (producto as any)?.slug,
+  talle: talleSeleccionado?.label,
+  // color: colorSeleccionado ?? undefined, // ← solo si tenés colorSeleccionado
+} as any)
     })
     alert("✅ Combo añadido al carrito")
   }
@@ -397,7 +408,13 @@ export default function PDPZapatillas({
         </div>
 
         {/* ===== Modal guía de talles ===== */}
-        <GuiaDeTallesTabs abierto={openModalTalles} onClose={() => setOpenModalTalles(false)} imagen={imagenActiva} />
+        <GuiaDeTallesTabs
+  abierto={openModalTalles}
+  onClose={() => setOpenModalTalles(false)}
+  imagen={imagenActiva}
+  tipo="jean"
+/>
+
       </main>
 
       <ServiciosDiferencia />
