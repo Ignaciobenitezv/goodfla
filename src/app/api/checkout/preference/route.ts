@@ -24,8 +24,7 @@ export async function POST(req: Request) {
     console.log("🚀 compactCart enviado a MP:", compactCart);
 
     // ✅ Base URL sin ngrok: SITE_URL (prod) o origin desde req.url
-    const url = new URL(req.url);
-    const origin = url.origin || "";
+    const { origin } = new URL(req.url);
     const baseUrl = process.env.SITE_URL || origin || "http://localhost:3000";
 
     // ✅ Token server-side obligatorio
