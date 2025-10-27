@@ -1,43 +1,43 @@
 // app/api/checkout/preference/route.ts
 import { NextResponse } from "next/server";
+import { randomUUID } from "crypto";
+
+export const runtime = "nodejs"; // asegura Node.js runtime (no Edge)
 
 export async function POST(req: Request) {
   try {
     const body = await req.json();
 
-    console.log("📦 Items recibidos:", body.items);
+    console.log("📦 Items recibidos:", body?.items);
 
     // Carrito compacto para metadata
-    const compactCart = (body.items || []).map((i: any) => {
+    const compactCart = (body?.items || []).map((i: any) => {
       const productId =
-        i.talle && typeof i.id === "string"
+        i?.talle && typeof i?.id === "string"
           ? i.id.replace(new RegExp(`-${i.talle}$`), "")
-          : i.id;
+          : i?.id;
       return {
-        id: i.id,
+        id: i?.id,
         productId,
-        talle: i.talle || null,
-        cantidad: i.cantidad || 1,
+        talle: i?.talle || null,
+        cantidad: Number(i?.cantidad || 1),
       };
     });
 
     console.log("🚀 compactCart enviado a MP:", compactCart);
 
-    // ✅ Base URL sin ngrok: SITE_URL (prod) o origin desde req.url
+    // Base URL sin ngrok: SITE_URL (prod) o origin de la request
     const { origin } = new URL(req.url);
     const baseUrl = process.env.SITE_URL || origin || "http://localhost:3000";
 
-    // ✅ Token server-side obligatorio
+    // Token server-side obligatorio
     const token = process.env.MP_ACCESS_TOKEN;
     if (!token) {
       console.error("❌ Falta MP_ACCESS_TOKEN en variables de entorno");
-      return NextResponse.json(
-        { error: "Missing MP_ACCESS_TOKEN" },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: "Missing MP_ACCESS_TOKEN" }, { status: 500 });
     }
 
-    const orderId = crypto.randomUUID();
+    const orderId = randomUUID();
 
     const res = await fetch("https://api.mercadopago.com/checkout/preferences", {
       method: "POST",
@@ -47,10 +47,10 @@ export async function POST(req: Request) {
       },
       body: JSON.stringify({
         items:
-          body.items?.map((i: any) => ({
-            title: i.nombre || "Producto",
-            quantity: i.cantidad || 1,
-            unit_price: i.precio || 0,
+          (body?.items || []).map((i: any) => ({
+            title: i?.nombre || "Producto",
+            quantity: Number(i?.cantidad || 1),
+            unit_price: Number(i?.precio || 0),
             currency_id: "ARS",
           })) ?? [],
         back_urls: {
@@ -81,9 +81,6 @@ export async function POST(req: Request) {
     });
   } catch (error) {
     console.error("❌ Error en servidor:", error);
-    return NextResponse.json(
-      { error: "Error al crear preferencia" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Error al crear preferencia" }, { status: 500 });
   }
 }
