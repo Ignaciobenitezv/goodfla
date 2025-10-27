@@ -1,5 +1,6 @@
 // app/api/checkout/preference/route.ts
 import { NextResponse } from "next/server";
+import { headers } from "next/headers";
 
 export async function POST(req: Request) {
   try {
@@ -7,7 +8,7 @@ export async function POST(req: Request) {
 
     console.log("📦 Items recibidos:", body.items);
 
-    // Armamos un carrito compacto para metadata (como string)
+    // Carrito compacto para metadata
     const compactCart = (body.items || []).map((i: any) => {
       const productId =
         i.talle && typeof i.id === "string"
@@ -21,8 +22,22 @@ export async function POST(req: Request) {
       };
     });
 
-    // 👇 Aca agregás el log para debug
     console.log("🚀 compactCart enviado a MP:", compactCart);
+
+    // ⚠️ Base URL sin ngrok: SITE_URL (prod) u origin (dev/preview)
+    const h = headers();
+    const origin = h.get("origin") || "";
+    const baseUrl = process.env.SITE_URL || origin || "http://localhost:3000";
+
+    // ⚠️ Token server-side obligatorio
+    const token = process.env.MP_ACCESS_TOKEN;
+    if (!token) {
+      console.error("❌ Falta MP_ACCESS_TOKEN en variables de entorno");
+      return NextResponse.json(
+        { error: "Missing MP_ACCESS_TOKEN" },
+        { status: 500 }
+      );
+    }
 
     const orderId = crypto.randomUUID();
 
@@ -30,7 +45,7 @@ export async function POST(req: Request) {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${process.env.MP_ACCESS_TOKEN}`,
+        Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify({
         items:
@@ -41,17 +56,19 @@ export async function POST(req: Request) {
             currency_id: "ARS",
           })) ?? [],
         back_urls: {
-          success: `${process.env.PUBLIC_BASE_URL}/checkout/success`,
-          failure: `${process.env.PUBLIC_BASE_URL}/checkout/failure`,
-          pending: `${process.env.PUBLIC_BASE_URL}/checkout/pending`,
+          success: `${baseUrl}/checkout/success`,
+          failure: `${baseUrl}/checkout/failure`,
+          pending: `${baseUrl}/checkout/pending`,
         },
         auto_return: "approved",
-        notification_url: `${process.env.PUBLIC_BASE_URL}/api/mp/webhook`,
+        notification_url: `${baseUrl}/api/mp/webhook`,
         metadata: {
           orderId,
           cart: JSON.stringify(compactCart),
         },
       }),
+      // Evitar cachés en edge
+      cache: "no-store",
     });
 
     const data = await res.json();

@@ -1,5 +1,8 @@
+// app/api/mp/webhook/route.ts
 import { NextResponse } from "next/server";
 import { createClient } from "@sanity/client";
+
+export const dynamic = "force-dynamic"; // 👈 evita cache en Vercel/Edge
 
 const sanity = createClient({
   projectId: process.env.NEXT_PUBLIC_SANITY_PROJECT_ID!,
@@ -12,8 +15,12 @@ const sanity = createClient({
 type CartItem = { productId: string; talle?: string | null; cantidad: number };
 
 async function mpGet(url: string) {
+  const token = process.env.MP_ACCESS_TOKEN;
+  if (!token) {
+    throw new Error("Missing MP_ACCESS_TOKEN");
+  }
   const r = await fetch(url, {
-    headers: { Authorization: `Bearer ${process.env.MP_ACCESS_TOKEN}` },
+    headers: { Authorization: `Bearer ${token}` },
     cache: "no-store",
   });
   if (!r.ok) throw new Error(await r.text());
@@ -45,23 +52,39 @@ async function descontarStock(cart: CartItem[]) {
 }
 
 async function handle(req: Request) {
+  // Intentamos leer body (si viene POST con JSON)
   let body: any = null;
   try {
     body = await req.json();
     console.log("📩 Webhook POST body:", body);
-  } catch {}
+  } catch {
+    // Si es GET o no trae JSON, no pasa nada
+  }
 
   const url = new URL(req.url);
   const topic = url.searchParams.get("topic") || body?.topic;
 
-  // Procesamos SOLO merchant_order
+  // Solo procesamos merchant_order (tal como ya hacías)
   if (topic === "merchant_order") {
-    const id = url.searchParams.get("id") || body?.resource?.split("/").pop();
-    if (!id) return NextResponse.json({ ok: false, msg: "Sin id" });
+    const id =
+      url.searchParams.get("id") ||
+      body?.id ||
+      body?.resource?.split("/")?.pop();
+    if (!id) {
+      console.warn("⚠️ merchant_order sin id");
+      return NextResponse.json({ ok: false, msg: "Sin id" });
+    }
 
-    const order = await mpGet(`https://api.mercadopago.com/merchant_orders/${id}`);
-    console.log("🧾 merchant_order:", { id: order.id, preference_id: order.preference_id });
+    // Traemos merchant order
+    const order = await mpGet(
+      `https://api.mercadopago.com/merchant_orders/${id}`
+    );
+    console.log("🧾 merchant_order:", {
+      id: order.id,
+      preference_id: order.preference_id,
+    });
 
+    // Traemos la preferencia para recuperar el metadata.cart
     const pref = await mpGet(
       `https://api.mercadopago.com/checkout/preferences/${order.preference_id}`
     );
@@ -69,13 +92,20 @@ async function handle(req: Request) {
     let cart: CartItem[] = [];
     try {
       if (pref?.metadata?.cart) cart = JSON.parse(pref.metadata.cart);
-    } catch {}
-    if (!cart.length) return NextResponse.json({ ok: true, msg: "Sin cart" });
+    } catch (e) {
+      console.warn("⚠️ No se pudo parsear metadata.cart", e);
+    }
+
+    if (!cart.length) {
+      console.log("ℹ️ merchant_order sin cart en metadata");
+      return NextResponse.json({ ok: true, msg: "Sin cart" });
+    }
 
     await descontarStock(cart);
     return NextResponse.json({ ok: true, from: "merchant_order" });
   }
 
+  // Si no es merchant_order, lo ignoramos (como antes)
   return NextResponse.json({ ok: true, ignored: true });
 }
 
