@@ -1,6 +1,5 @@
 // app/api/checkout/preference/route.ts
 import { NextResponse } from "next/server";
-import { headers } from "next/headers";
 
 export async function POST(req: Request) {
   try {
@@ -24,12 +23,12 @@ export async function POST(req: Request) {
 
     console.log("🚀 compactCart enviado a MP:", compactCart);
 
-    // ⚠️ Base URL sin ngrok: SITE_URL (prod) u origin (dev/preview)
-    const h = headers();
-    const origin = h.get("origin") || "";
+    // ✅ Base URL sin ngrok: SITE_URL (prod) o origin desde req.url
+    const url = new URL(req.url);
+    const origin = url.origin || "";
     const baseUrl = process.env.SITE_URL || origin || "http://localhost:3000";
 
-    // ⚠️ Token server-side obligatorio
+    // ✅ Token server-side obligatorio
     const token = process.env.MP_ACCESS_TOKEN;
     if (!token) {
       console.error("❌ Falta MP_ACCESS_TOKEN en variables de entorno");
@@ -67,7 +66,6 @@ export async function POST(req: Request) {
           cart: JSON.stringify(compactCart),
         },
       }),
-      // Evitar cachés en edge
       cache: "no-store",
     });
 
