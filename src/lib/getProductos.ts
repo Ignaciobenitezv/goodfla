@@ -4,6 +4,8 @@ import {
   Q_PRODUCTOS_DESTACADOS,
   Q_PRODUCTOS_BY_CATEGORIA,
   Q_PRODUCTO_BY_SLUG,
+  Q_COMBOS,
+  Q_COMBO_BY_SLUG,
 } from './sanityQueries'
 
 export type Talle = { label: string; inStock?: boolean }
@@ -33,8 +35,14 @@ export type ProductoDetalle = Producto & {
 
 // Consultas (probablemente ya las tengas definidas en sanityQueries)
 export async function getProductos(): Promise<Producto[]> {
-  return sanityClient.fetch(Q_PRODUCTOS)
+  const [productos, combos] = await Promise.all([
+    sanityClient.fetch(Q_PRODUCTOS),
+    sanityClient.fetch(Q_COMBOS),
+  ])
+
+  return [...productos, ...combos]
 }
+
 
 // Obtener productos destacados
 export async function getProductosDestacados(limit = 6): Promise<ProductoPreview[]> {

@@ -5,14 +5,17 @@ import { useState } from "react"
 import { FiInfo } from "react-icons/fi"
 import GuiaDeTallesTabs from "./GuiaDeTallesTabs"
 import ServiciosDiferencia from "./ServiciosDiferencia"
+import { useCart } from "../context/CartContext" // 👈 importa tu contexto
 
 type Producto = {
+  _id?: string
   nombre: string
   precio: number
   descripcion?: string
   galeria?: string[]
-  talles?: { label: string; inStock?: boolean }[]
+  talles?: { label: string; stock: number }[]
   composicion?: string
+  slug?: string
 }
 
 type Section = {
@@ -22,7 +25,7 @@ type Section = {
 
 type Props = {
   producto: Producto
-  accordionSections?: Section[]   // 👈 secciones opcionales
+  accordionSections?: Section[]
 }
 
 export default function PDPBase({ producto, accordionSections }: Props) {
@@ -30,6 +33,41 @@ export default function PDPBase({ producto, accordionSections }: Props) {
   const [imagenActiva, setImagenActiva] = useState(galeria[0])
   const [cantidad, setCantidad] = useState(1)
   const [openModal, setOpenModal] = useState(false)
+  const [talleSeleccionado, setTalleSeleccionado] = useState<{ label: string; stock: number } | null>(null)
+
+  const { addItem, items } = useCart() // 👈 ahora también usamos items del carrito
+
+  // 🔹 calcular stock restante considerando lo que ya está en carrito
+  const carritoActual = items.find(
+    (i) => i.id === (producto._id || producto.nombre) && i.talle === talleSeleccionado?.label
+  )
+  const stockRestante = talleSeleccionado
+    ? talleSeleccionado.stock - (carritoActual?.cantidad || 0)
+    : 0
+
+  const handleCantidad = (n: number) => {
+    if (!talleSeleccionado) return
+    const nueva = cantidad + n
+    if (nueva >= 1 && nueva <= stockRestante) setCantidad(nueva)
+  }
+
+  const handleAddToCart = () => {
+    if (!talleSeleccionado) return
+    if (cantidad > stockRestante) {
+      alert("❌ No hay stock suficiente")
+      return
+    }
+    addItem({
+      id: producto._id!,
+      nombre: producto.nombre,
+      precio: producto.precio,
+      cantidad,
+      talle: talleSeleccionado.label,
+      imagen: galeria[0],
+      slug: producto.slug,
+    })
+    alert("✅ Producto añadido al carrito")
+  }
 
   return (
     <>
@@ -41,12 +79,12 @@ export default function PDPBase({ producto, accordionSections }: Props) {
               {/* Miniaturas */}
               <div className="flex flex-col gap-3 w-24">
                 {galeria.map((img, i) => (
-                  <button
-                    key={i}
-                    onClick={() => setImagenActiva(img)}
-                    className={`border rounded-md overflow-hidden ${
-                      imagenActiva === img ? "ring-2 ring-black" : ""
-                    }`}
+  <button
+    key={`${img}-${i}`}   // ✅ ahora es único aunque la URL se repita
+    onClick={() => setImagenActiva(img)}
+    className={`border rounded-md overflow-hidden ${
+      imagenActiva === img ? "ring-2 ring-black" : ""
+    }`}
                   >
                     <Image
                       src={img}
@@ -98,19 +136,28 @@ export default function PDPBase({ producto, accordionSections }: Props) {
               <h3 className="font-medium mb-2 text-lg">Talle:</h3>
               <div className="flex gap-2 flex-wrap">
                 {producto.talles.map((t, i) => (
-                  <button
-                    key={i}
-                    disabled={!t.inStock}
-                    className={`px-6 py-2 border rounded-md text-base ${
-                      t.inStock
-                        ? "hover:bg-black hover:text-white"
-                        : "opacity-40 cursor-not-allowed"
-                    }`}
-                  >
-                    {t.label}
-                  </button>
-                ))}
+  <button
+    key={`${t.label}-${i}`}   // ✅ combina label + índice
+    onClick={() => {
+      setTalleSeleccionado(t)
+      setCantidad(1)
+    }}
+    disabled={t.stock <= 0}
+    className={`px-6 py-2 border rounded-md text-base ${
+      talleSeleccionado?.label === t.label
+        ? "bg-black text-white"
+        : "bg-white text-black"
+    } ${t.stock <= 0 ? "opacity-40 cursor-not-allowed" : "hover:bg-black hover:text-white"}`}
+  >
+    {t.label}
+  </button>
+))}
               </div>
+              {talleSeleccionado && (
+                <p className="mt-2 text-gray-600 text-sm">
+                  Stock disponible: {stockRestante}
+                </p>
+              )}
             </div>
           ) : null}
 
@@ -119,14 +166,16 @@ export default function PDPBase({ producto, accordionSections }: Props) {
             <h3 className="font-medium mb-2 text-lg">Cantidad</h3>
             <div className="flex items-center border rounded-md w-48">
               <button
-                onClick={() => setCantidad((c) => Math.max(1, c - 1))}
+                onClick={() => handleCantidad(-1)}
+                disabled={cantidad <= 1}
                 className="px-4 py-2 text-xl"
               >
                 –
               </button>
               <span className="flex-1 text-center">{cantidad}</span>
               <button
-                onClick={() => setCantidad((c) => c + 1)}
+                onClick={() => handleCantidad(1)}
+                disabled={!talleSeleccionado || cantidad >= stockRestante}
                 className="px-4 py-2 text-xl"
               >
                 +
@@ -135,7 +184,11 @@ export default function PDPBase({ producto, accordionSections }: Props) {
           </div>
 
           {/* Botón carrito */}
-          <button className="w-full bg-black text-white py-4 rounded-md font-medium text-lg">
+          <button
+            onClick={handleAddToCart}
+            disabled={!talleSeleccionado || stockRestante <= 0}
+            className="w-full bg-black text-white py-4 rounded-md font-medium text-lg disabled:bg-gray-400"
+          >
             Añadir al carrito
           </button>
 
@@ -178,24 +231,7 @@ export default function PDPBase({ producto, accordionSections }: Props) {
 
           {/* AccordionInfo */}
           <AccordionInfo
-            sections={
-              accordionSections && accordionSections.length > 0
-                ? accordionSections
-                : [
-                    {
-                      title: "Origen y Cuidados",
-                      content: <p>Texto sobre origen y cuidados...</p>,
-                    },
-                    {
-                      title: "Retiros y Envíos a toda Argentina",
-                      content: <p>Texto sobre envíos...</p>,
-                    },
-                    {
-                      title: "Cambios y Devoluciones",
-                      content: <p>Texto sobre devoluciones...</p>,
-                    },
-                  ]
-            }
+            sections={accordionSections && accordionSections.length > 0 ? accordionSections : []}
           />
         </div>
 

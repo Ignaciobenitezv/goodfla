@@ -2,21 +2,25 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from "react"
 
 type CartItem = {
-  id: string
+  productId: string     // 🔹 _id real de Sanity
+  cartKey: string       // 🔹 id único en el carrito (productId + talle)
   nombre: string
   precio: number
   cantidad: number
   imagen: string
+  slug?: string
+  talle?: string
+  stock?: number        // 🔹 stock global desde Sanity
 }
 
 type CartContextType = {
   items: CartItem[]
-  addItem: (item: CartItem) => void
-  removeItem: (id: string) => void
+  addItem: (item: Omit<CartItem, "cartKey">) => void
+  removeItem: (cartKey: string) => void
   clearCart: () => void
-  increaseQuantity: (id: string) => void
-  decreaseQuantity: (id: string) => void
-  checkout: () => void // 👈 agregado
+  increaseQuantity: (cartKey: string) => void
+  decreaseQuantity: (cartKey: string) => void
+  checkout: () => void
 }
 
 const CartContext = createContext<CartContextType | undefined>(undefined)
@@ -24,73 +28,122 @@ const CartContext = createContext<CartContextType | undefined>(undefined)
 export function CartProvider({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<CartItem[]>([])
 
-  // 🔹 Cargar carrito desde localStorage al inicio
+  // cargar desde localStorage
   useEffect(() => {
     const stored = localStorage.getItem("cart")
-    if (stored) {
-      setItems(JSON.parse(stored))
-    }
+    if (stored) setItems(JSON.parse(stored))
   }, [])
 
-  // 🔹 Guardar carrito en localStorage cada vez que cambia
+  // guardar en localStorage
   useEffect(() => {
     localStorage.setItem("cart", JSON.stringify(items))
   }, [items])
 
-  const addItem = (item: CartItem) => {
+  const addItem = (item: Omit<CartItem, "cartKey">) => {
+    const cartKey = `${item.productId}-${item.talle || "default"}`
+
     setItems((prev) => {
-      const existing = prev.find((i) => i.id === item.id)
+      const existing = prev.find((i) => i.cartKey === cartKey)
+
+      // calcular stock restante considerando lo que ya está en carrito
+      const enCarrito = existing ? existing.cantidad : 0
+      const stockRestante = (item.stock ?? Infinity) - enCarrito
+
+      if (item.cantidad > stockRestante) {
+        alert("No hay suficiente stock disponible")
+        return prev
+      }
+
       if (existing) {
         return prev.map((i) =>
-          i.id === item.id ? { ...i, cantidad: i.cantidad + item.cantidad } : i
+          i.cartKey === cartKey
+            ? { ...i, cantidad: i.cantidad + item.cantidad }
+            : i
         )
       }
-      return [...prev, item]
+
+      return [...prev, { ...item, cartKey, productId: item.productId }]
     })
   }
 
-  const removeItem = (id: string) => {
-    setItems((prev) => prev.filter((i) => i.id !== id))
-  }
+  const removeItem = (cartKey: string) => {
+  setItems((prev) => {
+    // intento normal por cartKey
+    const after = prev.filter((i) => i.cartKey !== cartKey)
+    if (after.length !== prev.length) {
+      console.log("[Cart] removed by cartKey:", cartKey)
+      return after
+    }
+
+    // 🔁 fallback: por productId + talle (por si el cartKey que llega no coincide 1:1)
+    const [pid, ...rest] = cartKey.split("-")
+    const sizeFromKey = rest.length ? rest.join("-") : "default"
+
+    const afterFallback = prev.filter(
+      (i) => !(i.productId === pid && (i.talle ?? "default") === sizeFromKey)
+    )
+    if (afterFallback.length !== prev.length) {
+      console.log("[Cart] removed by fallback pid+talle:", pid, sizeFromKey)
+      return afterFallback
+    }
+
+    console.warn("[Cart] removeItem no encontró coincidencias para:", cartKey, prev)
+    return prev
+  })
+}
+
 
   const clearCart = () => setItems([])
 
-  const increaseQuantity = (id: string) => {
-    setItems((prev) =>
-      prev.map((i) => (i.id === id ? { ...i, cantidad: i.cantidad + 1 } : i))
-    )
-  }
-
-  const decreaseQuantity = (id: string) => {
+  const increaseQuantity = (cartKey: string) => {
     setItems((prev) =>
       prev.map((i) =>
-        i.id === id && i.cantidad > 1 ? { ...i, cantidad: i.cantidad - 1 } : i
+        i.cartKey === cartKey && (i.stock ?? Infinity) > i.cantidad
+          ? { ...i, cantidad: i.cantidad + 1 }
+          : i
       )
     )
   }
 
-  // 🔹 Checkout con MercadoPago
-  const checkout = async () => {
-    try {
-      const res = await fetch("/api/checkout/preference", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ items }),
-      })
-
-      const data = await res.json()
-      console.log("🔗 Preference:", data)
-
-      if (data.init_point) {
-        window.location.href = data.init_point // 🚀 Redirige a MP
-      } else {
-        alert("⚠️ No se pudo iniciar el pago")
-      }
-    } catch (err) {
-      console.error("❌ Error en checkout:", err)
-      alert("Hubo un error al procesar el pago")
-    }
+  const decreaseQuantity = (cartKey: string) => {
+    setItems((prev) =>
+      prev.map((i) =>
+        i.cartKey === cartKey && i.cantidad > 1
+          ? { ...i, cantidad: i.cantidad - 1 }
+          : i
+      )
+    )
   }
+
+// checkout
+const checkout = async () => {
+  try {
+    // 🔹 Guardamos SOLO lo que necesita updateStock
+    const lastOrderPayload = items.map((i) => ({
+      productId: i.productId, // _id real de Sanity
+      cantidad: i.cantidad,
+    }))
+
+    localStorage.setItem("lastOrder", JSON.stringify(lastOrderPayload))
+
+    const res = await fetch("/api/checkout/preference", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ items }), // para MP podés enviar todo el carrito
+    })
+
+    const data = await res.json()
+    if (data.init_point) {
+      window.location.href = data.init_point
+    } else {
+      alert("⚠️ No se pudo iniciar el pago")
+    }
+  } catch (err) {
+    console.error("❌ Error en checkout:", err)
+    alert("Hubo un error al procesar el pago")
+  }
+}
+
 
   return (
     <CartContext.Provider
@@ -101,7 +154,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
         clearCart,
         increaseQuantity,
         decreaseQuantity,
-        checkout, // 👈 agregado al provider
+        checkout,
       }}
     >
       {children}

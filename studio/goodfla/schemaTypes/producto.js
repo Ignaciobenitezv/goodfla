@@ -5,14 +5,24 @@ export default {
   type: 'document',
   fields: [
     { name: 'nombre', title: 'Nombre', type: 'string' },
-    { name: 'slug', title: 'Slug', type: 'slug', options: { source: 'nombre' } },
+    {
+      name: 'slug',
+      title: 'Slug',
+      type: 'slug',
+      options: { source: 'nombre' },
+    },
     { name: 'descripcion', title: 'Descripción', type: 'text' },
     { name: 'precio', title: 'Precio', type: 'number' },
 
     // Imagen principal (fallback)
-    { name: 'imagen', title: 'Imagen principal', type: 'image', options: { hotspot: true } },
+    {
+      name: 'imagen',
+      title: 'Imagen principal',
+      type: 'image',
+      options: { hotspot: true },
+    },
 
-    // 👇 NUEVO: galería de imágenes
+    // Galería de imágenes
     {
       name: 'galeria',
       title: 'Galería',
@@ -21,7 +31,7 @@ export default {
       options: { layout: 'grid' },
     },
 
-    // 👇 NUEVO: talles (label + stock)
+    // 🔹 Talles con stock numérico
     {
       name: 'talles',
       title: 'Talles',
@@ -31,10 +41,25 @@ export default {
           type: 'object',
           name: 'talle',
           fields: [
-            { name: 'label', title: 'Etiqueta', type: 'string' },
-            { name: 'inStock', title: 'Hay stock', type: 'boolean', initialValue: true },
+            {
+              name: 'label',
+              title: 'Etiqueta',
+              type: 'string',
+              description: 'Ejemplo: S, M, L, XL para remeras / 38, 40, 42 para jeans / 40, 41, 42 para zapatillas',
+            },
+            {
+              name: 'stock',
+              title: 'Stock disponible',
+              type: 'number',
+              validation: (Rule) => Rule.min(0).integer(),
+            },
           ],
-          preview: { select: { title: 'label', subtitle: 'inStock' } },
+          preview: {
+            select: {
+              title: 'label',
+              subtitle: 'stock',
+            },
+          },
         },
       ],
     },

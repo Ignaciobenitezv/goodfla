@@ -3,25 +3,20 @@ import Link from 'next/link'
 
 type ProductCardProps = {
   product: {
-    _id: string
-    nombre: string
-    precio: number
-    imagen: string
-    slug: string
+    _id?: string
+    nombre?: string
+    precio?: number
+    imagen?: string
+    slug?: string
   }
   view: "list" | "grid2" | "grid3" | "grid4"
 }
 
 const ProductCard = ({ product, view }: ProductCardProps) => {
-  // Clases dinámicas para el grid
-  const gridClass =
-    view === "list"
-      ? "flex flex-col gap-6"
-      : view === "grid2"
-      ? "grid grid-cols-2 gap-4"
-      : view === "grid3"
-      ? "grid grid-cols-3 gap-4"
-      : "grid grid-cols-4 gap-4"
+  if (!product || !product._id || !product.slug) {
+    console.warn("⚠️ Producto inválido:", product)
+    return null
+  }
 
   const imageWrapClass =
     view === "list"
@@ -44,7 +39,7 @@ const ProductCard = ({ product, view }: ProductCardProps) => {
         {product.imagen ? (
           <Image
             src={product.imagen}
-            alt={product.nombre}
+            alt={product.nombre || "Producto sin nombre"}
             fill
             sizes={imageSizes}
             className="object-cover"
@@ -58,10 +53,12 @@ const ProductCard = ({ product, view }: ProductCardProps) => {
 
       {/* Texto debajo */}
       <div className="p-4">
-        <h2 className="font-semibold text-base">{product.nombre}</h2>
-        <p className="text-red-600 font-bold text-lg">
-          ${product.precio.toLocaleString("es-AR")}
-        </p>
+        <h2 className="font-semibold text-base">{product.nombre || "Sin nombre"}</h2>
+        {product.precio !== undefined && (
+          <p className="text-red-600 font-bold text-lg">
+            ${product.precio.toLocaleString("es-AR")}
+          </p>
+        )}
       </div>
     </Link>
   )

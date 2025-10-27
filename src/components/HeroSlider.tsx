@@ -38,7 +38,7 @@ export default function HeroSlider() {
           <div key={`${src}-${i}`} className="relative flex-[0_0_100%] h-full">
             <Image
               src={src}
-              alt="Campaña VUCAS"
+              alt="Goodfla"
               fill
               priority={i < 1}
               sizes="100vw"
@@ -53,9 +53,9 @@ export default function HeroSlider() {
       {/* Overlay + copy + CTA */}
       <div className="absolute inset-0 bg-black/30 flex flex-col justify-center items-center text-center text-marca-amarillo">
         <p className="text-marca-amarillo text-outline-fill font-black whitespace-nowrap max-w-none text-3xl sm:text-6xl md:text-8xl mb-6 mt-80">
-          txt:Titulo
+          REBAJAS DEL 80%
         </p>
-        <Link href="/productos">
+        <Link href="/mayorista">
           <AnimatedButton />
         </Link>
       </div>

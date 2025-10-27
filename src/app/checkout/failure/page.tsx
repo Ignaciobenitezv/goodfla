@@ -7,7 +7,7 @@ export default function FailurePage() {
         Revisá tus datos o probá con otro método de pago.
       </p>
       <a
-        href="/checkout/pago"
+        href="/checkout"
         className="inline-block mt-6 px-6 py-3 bg-black text-white rounded-md"
       >
         Intentar nuevamente

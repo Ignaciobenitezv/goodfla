@@ -27,13 +27,12 @@ export default function Navbar() {
     { href: '/politica-de-cambios', label: 'Política de Cambios' },
   ]
 
+  // Productos (links directos; mantenemos tu orden actual)
   const productosLinks = [
-    { href: '/productos', label: 'Todos los productos' },
-    { href: '/productos/remeras', label: 'Remeras' },
-    { href: '/productos/jeans', label: 'Jeans' },
-    { href: '/productos/zapatillas', label: 'Zapatillas' },
-    { href: '/productos/combos', label: 'Combos' },
-  ]
+    { label: 'Mayorista', href: '/mayorista' },
+    { label: 'Zapatillas 2x1', href: '/productos/zapatillas' },
+    { label: 'Combos', href: '/productos/combos' },
+  ];
 
   useEffect(() => {
     if (ayudaOpen && ayudaRef.current) {
@@ -53,7 +52,6 @@ export default function Navbar() {
       const spaceBelow = viewportHeight - rect.bottom
 
       const submenuHeight = submenuRef.current.offsetHeight
-
       const openUp = spaceBelow < submenuHeight && spaceAbove > submenuHeight
       setSubMenuUp(openUp)
 
@@ -65,7 +63,7 @@ export default function Navbar() {
   }, [ayudaOpen])
 
   return (
-    <nav className="bg-marca-crema text-marca-gris shadow-md px-0 py-4 sticky top-0 z-[100]">
+    <nav className="bg-white text-black shadow-md px-0 py-4 sticky top-0 z-[100]">
       <div className="flex justify-between items-center w-full max-w-none mx-0 px-2 md:px-4">
         {/* Logo */}
         <Link href="/" className="flex items-center gap-3">
@@ -83,14 +81,13 @@ export default function Navbar() {
         <div className="md:hidden">
           <button
             onClick={() => setMenuOpen(!menuOpen)}
-            className="text-marca-blanco text-2xl focus:outline-none"
-          >
+            className="text-black text-2xl focus:outline-none">
             ☰
           </button>
         </div>
 
         {/* Menú desktop */}
-        <ul className="hidden md:flex gap-6 font-medium items-center relative z-[100]">
+        <ul className="hidden md:flex gap-6 font-semibold items-center relative z-[100]">
           <li>
             <Link href="/" className="hover:text-marca-amarillo transition-colors">
               Inicio
@@ -111,11 +108,11 @@ export default function Navbar() {
             {productosOpen && (
               <ul
                 ref={submenuProductosRef}
-                className="absolute right-0 top-full mt-2 bg-white text-marca-gris border border-black/10 rounded-xl shadow-2xl z-[300] overflow-hidden"
+                className="absolute right-0 top-full mt-2 bg-white text-black border border-black/10 rounded-xl shadow-2xl z-[300] overflow-visible"
                 style={{ width:'max-content', maxWidth:'calc(100vw - 32px)', overflowWrap:'break-word', padding:0 }}
               >
                 {productosLinks.map((item) => (
-                  <li key={item.href}>
+                  <li key={item.label || item.href} className="relative">
                     <Link
                       href={item.href}
                       className="block px-4 py-2 text-sm hover:bg-black/5 transition"
@@ -149,7 +146,7 @@ export default function Navbar() {
             {ayudaOpen && (
               <ul
                 ref={submenuRef}
-                className="absolute right-0 top-full mt-2 bg-white text-marca-gris border border-black/10 rounded-xl shadow-2xl z-[300] overflow-hidden"
+                className="absolute right-0 top-full mt-2 bg-white text-black border border-black/10 rounded-xl shadow-2xl z-[300] overflow-hidden"
                 style={{ width:'max-content', maxWidth:'calc(100vw - 32px)', overflowWrap:'break-word', padding:0 }}
               >
                 {ayudaLinks.map((item) => (
@@ -170,73 +167,99 @@ export default function Navbar() {
           {/* 🛒 Carrito */}
           <li>
             <button
-              onClick={openCart}
-              className="relative hover:text-marca-amarillo transition-colors"
-            >
-              🛒
-              {items.length > 0 && (
-                <span className="absolute -top-2 -right-3 bg-red-600 text-white text-xs px-2 py-0.5 rounded-full">
-                  {items.length}
-                </span>
-              )}
-            </button>
+  onClick={openCart}
+  className="relative hover:opacity-80 transition"
+  aria-label="Abrir carrito"
+>
+  <Image
+    src="/carrito.png"
+    alt="Carrito"
+    width={24}
+    height={24}
+    className="w-6 h-6"
+    priority={false}
+  />
+  {items.length > 0 && (
+    <span className="absolute -top-2 -right-3 bg-red-600 text-white text-xs px-2 py-0.5 rounded-full">
+      {items.length}
+    </span>
+  )}
+</button>
+
           </li>
         </ul>
       </div>
 
       {/* Menú móvil */}
       {menuOpen && (
-        <ul className="md:hidden mt-3 space-y-2 px-4 text-marca-blanco font-medium">
+        <ul className="md:hidden mt-3 space-y-2 px-4 text-black font-semibold">
           <li>
-            <Link href="/" onClick={() => setMenuOpen(false)}>
-              Inicio
-            </Link>
+            <Link href="/" onClick={() => setMenuOpen(false)}>Inicio</Link>
           </li>
-          <li>
-            <Link href="/productos" onClick={() => setMenuOpen(false)}>
-              Productos
-            </Link>
-          </li>
-          <li>
-            <Link href="/contacto" onClick={() => setMenuOpen(false)}>
-              Contacto
-            </Link>
-          </li>
+
+          {/* Productos en móvil (links directos) */}
           <li>
             <button
-              onClick={() => setAyudaOpen(!ayudaOpen)}
+              onClick={() => setProductosOpen((v) => !v)}
               className="w-full text-left py-1"
             >
-              Ayuda ▾
+              Productos ▾
             </button>
+            {productosOpen && (
+              <ul className="ml-4 mt-1 space-y-1 text-black bg-white p-2 rounded-md">
+                <li>
+                  <Link href="/mayorista" onClick={() => setMenuOpen(false)}>Mayorista</Link>
+                </li>
+                <li>
+                  <Link href="/productos/zapatillas" onClick={() => setMenuOpen(false)}>Zapatillas</Link>
+                </li>
+                <li>
+                  <Link href="/productos/combos" onClick={() => setMenuOpen(false)}>Combos</Link>
+                </li>
+              </ul>
+            )}
+          </li>
+
+          <li>
+            <Link href="/contacto" onClick={() => setMenuOpen(false)}>Contacto</Link>
+          </li>
+
+          {/* Ayuda en móvil */}
+          <li>
+            <button onClick={() => setAyudaOpen(!ayudaOpen)} className="w-full text-left py-1">Ayuda ▾</button>
             {ayudaOpen && (
               <ul className="ml-4 mt-1 space-y-1 text-marca-crema bg-marca-blanco p-2 rounded-md">
                 {ayudaLinks.map((item) => (
                   <li key={item.href}>
-                    <Link href={item.href} onClick={() => setMenuOpen(false)}>
-                      {item.label}
-                    </Link>
+                    <Link href={item.href} onClick={() => setMenuOpen(false)}>{item.label}</Link>
                   </li>
                 ))}
               </ul>
             )}
           </li>
+
           {/* 🛒 Carrito en móvil */}
           <li>
             <button
-              onClick={() => {
-                setMenuOpen(false)
-                openCart()
-              }}
-              className="relative"
-            >
-              🛒 Carrito
-              {items.length > 0 && (
-                <span className="ml-2 bg-red-600 text-white text-xs px-2 py-0.5 rounded-full">
-                  {items.length}
-                </span>
-              )}
-            </button>
+  onClick={() => { setMenuOpen(false); openCart(); }}
+  className="relative flex items-center gap-2"
+  aria-label="Abrir carrito"
+>
+  <Image
+    src="/carrito.png"
+    alt="Carrito"
+    width={20}
+    height={20}
+    className="w-5 h-5"
+  />
+  <span>Carrito</span>
+  {items.length > 0 && (
+    <span className="ml-2 bg-red-600 text-white text-xs px-2 py-0.5 rounded-full">
+      {items.length}
+    </span>
+  )}
+</button>
+
           </li>
         </ul>
       )}

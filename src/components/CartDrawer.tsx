@@ -37,7 +37,7 @@ export default function CartDrawer() {
         {/* Header */}
         <div className="flex justify-between items-center p-4 border-b">
           <h2 className="text-lg font-bold uppercase">Carrito de compras</h2>
-          <button onClick={closeCart} className="text-2xl">×</button>
+          <button onClick={closeCart} className="text-2xl" type="button">×</button>
         </div>
 
         {/* Productos */}
@@ -46,7 +46,10 @@ export default function CartDrawer() {
             <p className="text-center text-gray-500">Tu carrito está vacío 🛒</p>
           ) : (
             items.map((item) => (
-              <div key={item.id} className="flex gap-3 border-b pb-3">
+              <div
+                key={item.cartKey} 
+                className="flex gap-3 border-b pb-3"
+              >
                 <Image
                   src={item.imagen}
                   alt={item.nombre}
@@ -56,6 +59,9 @@ export default function CartDrawer() {
                 />
                 <div className="flex-1">
                   <h3 className="font-semibold text-sm">{item.nombre}</h3>
+                  {item.talle && (
+                    <p className="text-xs text-gray-500">Talle: {item.talle}</p>
+                  )}
 
                   {/* Subtotal por producto */}
                   <p className="text-xs text-gray-500">
@@ -68,14 +74,16 @@ export default function CartDrawer() {
                   {/* Cantidad */}
                   <div className="flex items-center gap-2 mt-2">
                     <button
-                      onClick={() => decreaseQuantity(item.id)}
+                      type="button" /* 👈 evita submit */
+                      onClick={() => decreaseQuantity(item.cartKey)} /* 👈 usa cartKey */
                       className="px-2 border rounded"
                     >
                       –
                     </button>
                     <span>{item.cantidad}</span>
                     <button
-                      onClick={() => increaseQuantity(item.id)}
+                      type="button"
+                      onClick={() => increaseQuantity(item.cartKey)} /* 👈 usa cartKey */
                       className="px-2 border rounded"
                     >
                       +
@@ -83,8 +91,14 @@ export default function CartDrawer() {
                   </div>
                 </div>
                 <button
-                  onClick={() => removeItem(item.id)}
-                  className="text-red-500 text-xs"
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault()
+                    e.stopPropagation()
+                    removeItem(item.cartKey) /* 👈 usa SIEMPRE cartKey */
+                  }}
+                  className="p-2 rounded hover:bg-black/5 text-red-500 text-xs"
+                  aria-label={`Eliminar ${item.nombre}`}
                 >
                   🗑
                 </button>
@@ -109,7 +123,7 @@ export default function CartDrawer() {
                 onChange={(e) => setCp(e.target.value)}
                 className="border px-2 py-1 rounded w-32"
               />
-              <button className="px-3 py-1 border rounded bg-gray-100">
+              <button className="px-3 py-1 border rounded bg-gray-100" type="button">
                 Cambiar CP
               </button>
             </div>
@@ -151,11 +165,13 @@ export default function CartDrawer() {
               <button
                 onClick={clearCart}
                 className="flex-1 px-4 py-2 bg-gray-200 rounded"
+                type="button"
               >
                 Vaciar
               </button>
               <Link
                 href="/carrito"
+                onClick={closeCart}
                 className="flex-1 px-4 py-2 bg-black text-white rounded text-center"
               >
                 Finalizar compra

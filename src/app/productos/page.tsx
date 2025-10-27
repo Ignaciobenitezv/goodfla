@@ -10,10 +10,11 @@ export type CategoriaProducto = string
 export type Producto = {
   _id: string
   nombre: string
-  descripcion: string
+  descripcion?: string
   precio: number
-  imagen: string
-  categoria: CategoriaProducto
+  imagen?: string
+  categoria?: CategoriaProducto
+  slug?: string   // 👈 agregado porque lo usás en ProductCard
 }
 
 export default function ProductosPage() {
@@ -24,6 +25,8 @@ export default function ProductosPage() {
   useEffect(() => {
     const fetchData = async () => {
       const [prods, cats] = await Promise.all([getProductos(), getCategorias()])
+      console.log("🔎 Productos desde Sanity:", prods)
+      console.log("🔎 Categorías desde Sanity:", cats)
       setProductos(prods)
       setCategorias(cats)
     }
@@ -33,12 +36,16 @@ export default function ProductosPage() {
   const productosFiltrados =
     categoriaSeleccionada === 'todos'
       ? productos
-      : productos.filter((prod) => prod.categoria === categoriaSeleccionada)
+      : productos.filter(
+          (prod) =>
+            prod.categoria?.toLowerCase() === categoriaSeleccionada.toLowerCase()
+        )
 
   return (
     <section className="px-4 py-16 max-w-7xl mx-auto">
       <h1 className="text-3xl font-bold text-center mb-8">Nuestros productos</h1>
 
+      {/* Filtros */}
       <div className="flex flex-wrap justify-center gap-4 mb-12">
         <button
           onClick={() => setCategoriaSeleccionada('todos')}
@@ -61,12 +68,13 @@ export default function ProductosPage() {
                 : 'bg-white text-marca-gris border-marca-gris'
             }`}
           >
-            {cat.nombre}
+            {cat.titulo} {/* 👈 ahora usamos "titulo" */}
           </button>
         ))}
       </div>
 
-      <ProductGrid productos={productosFiltrados} />
+      {/* Grid de productos */}
+      <ProductGrid productos={productosFiltrados.filter(p => p._id && p.slug)} />
     </section>
   )
 }

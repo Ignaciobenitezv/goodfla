@@ -1,16 +1,13 @@
 export default function PendingPage() {
   return (
-    <main className="p-10 text-center">
-      <h1 className="text-2xl font-bold text-amber-600">⌛ Pago pendiente</h1>
-      <p className="mt-2 text-gray-700">
-        Tu pago está siendo procesado.  
-        Te notificaremos por email una vez que se acredite.
-      </p>
+    <main className="max-w-2xl mx-auto text-center py-20">
+      <h1 className="text-3xl font-bold text-yellow-600 mb-4">⌛ Pago pendiente</h1>
+      <p className="text-lg">Tu pago está en proceso de verificación. Te notificaremos cuando se confirme.</p>
       <a
         href="/"
-        className="inline-block mt-6 px-6 py-3 bg-black text-white rounded-md"
+        className="mt-8 inline-block bg-black text-white px-6 py-3 rounded hover:bg-gray-800"
       >
-        Volver al inicio
+        Volver a la tienda
       </a>
     </main>
   )

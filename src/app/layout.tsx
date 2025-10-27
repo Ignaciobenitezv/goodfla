@@ -7,6 +7,7 @@ import { Montserrat } from 'next/font/google'
 import { CartProvider } from "@/context/CartContext"
 import { UiProvider } from '@/context/UiContext'
 import CartDrawer from '@/components/CartDrawer'
+import WhatsAppButton from '@/components/WhatsAppButton'
 
 const barlowCondensed = Barlow_Condensed({
   subsets: ['latin'],
@@ -32,8 +33,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             {children}
             {/* 👇 ahora el drawer vive fuera del nav */}
             <CartDrawer />
+            <WhatsAppButton />
           </CartProvider>
         </UiProvider>
+        
       </body>
     </html>
   )

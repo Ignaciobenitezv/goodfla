@@ -7,7 +7,7 @@ const accordionSections = [
       <div className="space-y-3 text-base leading-relaxed">
         <p><strong>Origen</strong></p>
         <p>
-          Nuestras prendas son 100% argentinas tanto en su materia prima como en su elaboración artesanal.
+          Nuestras prendas son 1000% argentinas tanto en su materia prima como en su elaboración artesanal.
           Creemos en el valor de lo hecho a mano, y al no ser un proceso mecanizado,
           cada prenda puede contar con pequeñas diferencias o imperfecciones.
         </p>
@@ -91,7 +91,7 @@ type PDPRemeraProps = {
     descripcion?: string
     composicion?: string
     galeria?: string[]
-    talles?: { label: string; inStock?: boolean }[]
+    talles?: { label: string; stock: number }[]
   }
 }
 

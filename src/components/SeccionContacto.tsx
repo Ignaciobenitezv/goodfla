@@ -32,13 +32,13 @@ export default function SeccionContacto() {
   </p>
   <p>
     Explícanos el problema que estás experimentando detallando tu dirección de correo electrónico, número de pedido y el nombre
-    vinculado a tu cuenta CALVAGNI para que podamos ayudarte.
+    vinculado a tu cuenta Goodfla para que podamos ayudarte.
   </p>
   <p>
     Si tienes problemas técnicos para completar la orden, puedes enviarnos una grabación o captura de pantalla del error que muestra el sitio web, y nuestro equipo de soporte técnico te ayudará a resolverlo.
   </p>
   <p>
-    Comunícate con nosotras mediante el siguiente formulario y dentro de 1 a 2 días hábiles recibirás tu respuesta.
+    Comunícate con nosotros mediante el siguiente formulario y dentro de 1 a 2 días hábiles recibirás tu respuesta.
   </p>
 </div>
 

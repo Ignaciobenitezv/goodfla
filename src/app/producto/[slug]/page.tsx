@@ -2,7 +2,8 @@ import { getProductoBySlug, type ProductoDetalle } from '@/lib/getProductos'
 import PDPDetalle from '@/components/PDPDetalle'
 import PDPComboDetalle from '@/components/PDPComboDetalle'
 import PDPJean from '@/components/PDPJean'
-import PDPRemera from '@/components/PDPRemera'   // 👈 importamos el PDP para remeras
+import PDPRemera from '@/components/PDPRemera'
+import PDPZapatillas from '@/components/PDPZapatillas'
 import { notFound } from 'next/navigation'
 
 export const revalidate = 60
@@ -11,14 +12,15 @@ export default async function ProductoPage({ params }: { params: { slug: string 
   const producto = await getProductoBySlug(params.slug)
   if (!producto) return notFound()
 
-  // chequeamos si es combo
-  const isCombo = producto.esCombo || producto.categoria === 'combos'
-  // chequeamos si es jean
+  const isCombo = producto.esCombo === true || producto.categoria === 'combos'
   const isJean = producto.categoria === 'jeans'
-  // chequeamos si es remera
-  const isRemera = producto.categoria === 'remeras'   // 👈 ajustá el valor exacto según Sanity
+  const isRemera = producto.categoria === 'remeras'
+  const isZapatilla = producto.categoria === 'zapatillas'
 
-  if (isCombo) {
+  // 👇 Si es Zapatilla 2x1 (zapa marcada como combo), usar el PDP de combos
+  const isZapa2x1 = isZapatilla && producto.esCombo === true && (producto.comboCantidad ?? 0) >= 2
+
+  if (isCombo || isZapa2x1) {
     return <PDPComboDetalle producto={producto as ProductoDetalle} />
   }
 
@@ -28,6 +30,10 @@ export default async function ProductoPage({ params }: { params: { slug: string 
 
   if (isRemera) {
     return <PDPRemera producto={producto as ProductoDetalle} />
+  }
+
+  if (isZapatilla) {
+    return <PDPZapatillas producto={producto as ProductoDetalle} />
   }
 
   // fallback: productos normales

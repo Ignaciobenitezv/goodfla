@@ -35,7 +35,7 @@ export default function PDPDetalle({ producto }: { producto: ProductoDetalle }) 
           <div className="flex lg:flex-col gap-3 overflow-auto max-h-[70vh] pr-1">
             {imgs.map((src, i) => (
               <button
-                key={src + i}
+                key={`${src}-${i}`}
                 onClick={() => setIdx(i)}
                 className={`relative h-20 w-20 rounded-lg overflow-hidden border transition
                   ${i === idx ? 'border-black' : 'border-black/10 hover:border-black/40'}`}
@@ -107,12 +107,12 @@ export default function PDPDetalle({ producto }: { producto: ProductoDetalle }) 
           </div>
 
           <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
-            {talles.map((t) => {
+            {talles.map((t, i) => {
               const active = size === t.label
               const disabled = t.inStock === false
               return (
                 <button
-                  key={t.label}
+                  key={`${t.label}-${i}`}
                   disabled={disabled}
                   onClick={() => setSize(t.label)}
                   className={`h-11 rounded-md border text-sm font-medium transition

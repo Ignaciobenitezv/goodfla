@@ -17,7 +17,7 @@ export default function AccordionInfo({ sections }: Props) {
   return (
     <div className="divide-y border-t">
       {sections.map((s, i) => (
-        <div key={i}>
+         <div key={`${s.title}-${i}`}>
           {/* Botón de cada título */}
           <button
             className="w-full flex justify-between items-center py-4 text-lg font-bold"

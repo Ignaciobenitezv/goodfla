@@ -5,7 +5,7 @@ import Image from "next/image"
 import Modal from "@/components/Modal"
 import ServiciosDiferencia from "@/components/ServiciosDiferencia"
 import AccordionInfo from "@/components/AccordionInfo"
-import { useCart } from "@/context/CartContext" // 👈 agregado
+import { useCart } from "@/context/CartContext"
 
 interface PDPComboDetalleProps {
   combo: any
@@ -19,14 +19,27 @@ export default function PDPComboDetalle({ combo, productosPorCategoria }: PDPCom
   const [activeModal, setActiveModal] = useState<{ cat: string; index: number } | null>(null)
   const [draft, setDraft] = useState<DraftSelections>({})
 
-  const { addItem, checkout } = useCart() // 👈 agregado
+  const { addItem, items } = useCart() // usamos items para chequear stock
 
   const setDraftValue = (prodId: string, key: "talle" | "color", value: string) =>
     setDraft((d) => ({ ...d, [prodId]: { ...(d[prodId] || {}), [key]: value } }))
 
+  // 🔹 Calcula el stock restante (considerando lo que ya está en carrito)
+  const getStockRestante = (prod: any, talle?: string) => {
+    if (!prod.talles) return 1 // si no tiene talles, asumimos que hay stock
+    const t = prod.talles.find((x: any) => x.label === talle)
+    if (!t) return 0
+
+    const enCarrito = items.find(
+      (i) => i.id.startsWith(prod._id) && i.talle === talle
+    )
+    return t.stock - (enCarrito?.cantidad || 0)
+  }
+
   const handleAddToCombo = (categoriaSlug: string, index: number, prod: any) => {
     const d = draft[prod._id] || {}
     const sizeOptions = normalizeSizes(prod.talles)
+
     if (sizeOptions.length && !d.talle) {
       alert("Seleccioná un talle antes de agregar.")
       return
@@ -36,19 +49,34 @@ export default function PDPComboDetalle({ combo, productosPorCategoria }: PDPCom
       return
     }
 
+    // chequeo stock antes de agregar
+    if (d.talle && getStockRestante(prod, d.talle) <= 0) {
+      alert("❌ No hay stock disponible para este talle.")
+      return
+    }
+
     const nuevos = [...(selected[categoriaSlug] || [])]
     nuevos[index] = { ...prod, talle: d.talle || null, color: d.color || null }
     setSelected({ ...selected, [categoriaSlug]: nuevos })
     setActiveModal(null)
   }
 
+  // 🔹 Todos seleccionados
   const allSelected = combo.categoriasIncluidas.every(
     (cat: any) =>
       selected[cat.categoria.slug]?.length === cat.cantidad &&
       selected[cat.categoria.slug].every((v: any) => v)
   )
 
-  
+  // 🔹 Todos con stock
+  const allWithStock = allSelected
+    ? Object.values(selected)
+        .flat()
+        .every((prod: any) =>
+          prod.talle ? getStockRestante(prod, prod.talle) > 0 : true
+        )
+    : false
+
   return (
     <>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
@@ -152,29 +180,33 @@ export default function PDPComboDetalle({ combo, productosPorCategoria }: PDPCom
 
           {/* Botón pagar */}
           <button
-            disabled={!allSelected}
+            disabled={!allWithStock}
             onClick={() => {
-  if (!allSelected) return
+              if (!allWithStock) {
+                alert("❌ No hay stock suficiente para completar este combo.")
+                return
+              }
 
-  const itemsCombo = Object.values(selected).flat().filter(Boolean)
+              const itemsCombo = Object.values(selected).flat().filter(Boolean)
 
-  itemsCombo.forEach((prod: any, idx: number) => {
-    addItem({
-      id: `${prod._id || prod.nombre}-${prod.talle || idx}`,
-      nombre: `${prod.nombre}${prod.talle ? ` (Talle ${prod.talle})` : ""}`,
-      precio: combo.precio / itemsCombo.length, // reparte el precio total
-      cantidad: 1,
-      imagen: prod.imagen || "/placeholder.png",
-    })
-  })
+              itemsCombo.forEach((prod: any, idx: number) => {
+                addItem({
+                  id: `${prod._id || prod.nombre}-${prod.talle || idx}`,
+                  nombre: `${prod.nombre}${prod.talle ? ` (Talle ${prod.talle})` : ""}`,
+                  precio: combo.precio / itemsCombo.length, // reparte el precio total
+                  cantidad: 1,
+                  imagen: prod.imagen || "/placeholder.png",
+                  talle: prod.talle || null,
+                })
+              })
 
-  alert("✅ Combo añadido al carrito")
+              alert("✅ Combo añadido al carrito")
             }}
             className={`w-full mt-6 py-3 rounded-lg font-bold text-white ${
               allSelected ? "bg-black hover:bg-gray-800" : "bg-gray-400 cursor-not-allowed"
             }`}
           >
-            AÑADOR AL CARRITO
+            AÑADIR AL CARRITO
           </button>
 
           {/* Acordeón */}
@@ -305,16 +337,16 @@ export default function PDPComboDetalle({ combo, productosPorCategoria }: PDPCom
 
             {/* Grid responsive */}
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
-              {productosPorCategoria[activeModal.cat]?.map((prod: any) => {
-                const sizeOptions = normalizeSizes(prod.talles)
-                const hasColors = Array.isArray(prod.colores) && prod.colores.length > 0
-                const d = draft[prod._id] || {}
+              {productosPorCategoria[activeModal.cat]?.map((prod: any, i: number) => {
+  const sizeOptions = normalizeSizes(prod.talles)
+  const hasColors = Array.isArray(prod.colores) && prod.colores.length > 0
+  const d = draft[prod._id] || {}
 
                 return (
                   <div
-                    key={prod._id}
-                    className="flex flex-col rounded-xl border p-3 bg-white min-h-[360px]"
-                  >
+      key={`${prod._id}-${activeModal.cat}-${i}`}
+      className="flex flex-col rounded-xl border p-3 bg-white min-h-[360px]"
+    >
                     <div className="relative w-full aspect-square bg-gray-50 rounded-md overflow-hidden mb-3">
                       <Image
                         src={prod.imagen || "/placeholder.png"}
@@ -351,13 +383,16 @@ export default function PDPComboDetalle({ combo, productosPorCategoria }: PDPCom
                         onChange={(e) => setDraftValue(prod._id, "talle", e.target.value)}
                       >
                         <option value="">Seleccionar talle</option>
-                        {sizeOptions
-                          .filter((t) => t.inStock !== false)
-                          .map((t) => (
-                            <option key={t.label} value={t.label}>
-                              {t.label}
-                            </option>
-                          ))}
+                        {sizeOptions.map((t) => (
+                          <option
+                            key={t.label}
+                            value={t.label}
+                            disabled={getStockRestante(prod, t.label) <= 0}
+                          >
+                            {t.label}{" "}
+                            {getStockRestante(prod, t.label) <= 0 ? "(Sin stock)" : ""}
+                          </option>
+                        ))}
                       </select>
                     )}
 
@@ -388,7 +423,9 @@ function normalizeSizes(raw: any): { label: string; inStock?: boolean }[] {
   if (!raw) return []
   if (Array.isArray(raw)) {
     return raw.map((t) =>
-      typeof t === "string" ? { label: t, inStock: true } : { label: t.label, inStock: t.inStock }
+      typeof t === "string"
+        ? { label: t, inStock: true }
+        : { label: t.label, inStock: t.inStock }
     )
   }
   return []
