@@ -19,7 +19,7 @@
     "lucide-react": "^0.544.0",
     "mercadopago": "^2.9.0",
     "next": "15.4.3",
-    "next-sanity": "^10.0.15",
+    "next-sanity": "^10.1.4",
     "react": "19.1.0",
     "react-dom": "19.1.0",
     "react-icons": "^5.5.0",
@@ -28,7 +28,7 @@
   "devDependencies": {
     "@eslint/eslintrc": "^3",
     "@next/eslint-plugin-next": "^16.0.0",
-    "@sanity/vision": "^4.6.0",
+    "@sanity/vision": "^4.11.0",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",

@@ -23,7 +23,6 @@ export default function Navbar() {
 
   const ayudaLinks = [
     { href: '/guia-de-talles', label: 'Guía de talles' },
-    { href: '/cuidado-de-tus-prendas', label: 'Cuidado de tus prendas' },
     { href: '/politica-de-cambios', label: 'Política de Cambios' },
   ]
 
