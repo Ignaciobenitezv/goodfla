@@ -227,7 +227,7 @@ export default function Navbar() {
           <li>
             <button onClick={() => setAyudaOpen(!ayudaOpen)} className="w-full text-left py-1">Ayuda ▾</button>
             {ayudaOpen && (
-              <ul className="ml-4 mt-1 space-y-1 text-marca-crema bg-marca-blanco p-2 rounded-md">
+              <ul className="ml-4 mt-1 space-y-1 text-marca-black bg-marca-blanco p-2 rounded-md">
                 {ayudaLinks.map((item) => (
                   <li key={item.href}>
                     <Link href={item.href} onClick={() => setMenuOpen(false)}>{item.label}</Link>
