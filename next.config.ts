@@ -1,15 +1,17 @@
 // next.config.ts
-import type { NextConfig } from 'next';
+import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   images: {
-    remotePatterns: [{ protocol: 'https', hostname: 'cdn.sanity.io' }],
+    remotePatterns: [
+      // CDN clásico de Sanity
+      { protocol: "https", hostname: "cdn.sanity.io", pathname: "/**" },
+      // Algunos proyectos nuevos usan este host
+      { protocol: "https", hostname: "images.sanitycdn.com", pathname: "/**" },
+    ],
+    formats: ["image/avif", "image/webp"],
   },
-  // 👉 evita que `next build` falle por ESLint
   eslint: { ignoreDuringBuilds: true },
-
-  // (opcional de emergencia) si querés compilar aunque haya type errors:
-  // typescript: { ignoreBuildErrors: true },
 };
 
 export default nextConfig;
