@@ -14,6 +14,7 @@
     "@portabletext/react": "^3.2.1",
     "@sanity/client": "^7.8.1",
     "@sanity/image-url": "^1.2.0",
+    "clsx": "^2.1.1",
     "framer-motion": "^12.23.9",
     "groq": "^4.6.0",
     "lucide-react": "^0.544.0",
