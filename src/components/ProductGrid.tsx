@@ -10,16 +10,17 @@ export default function ProductGrid({ productos }: { productos: Producto[] }) {
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-8 max-w-7xl mx-auto">
         {productos.map((producto, index) => (
   <ProductCard
-    key={
+    key={`${String(
       (producto as any)._id ??
       (producto as any).id ??
       (producto as any).slug ??
-      `${producto.nombre}-${index}`
-    }
+      producto.nombre
+    )}__grid__${index}`}
     product={producto}
     view="grid3"
   />
 ))}
+
 
 
       </div>

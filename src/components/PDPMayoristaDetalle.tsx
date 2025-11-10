@@ -6,6 +6,7 @@ import ZoomImage from "./ZoomImage";
 import ServiciosDiferencia from "./ServiciosDiferencia";
 import AccordionInfo from "./AccordionInfo";
 import { useCart } from "@/context/CartContext";
+import { useUi } from "@/context/UiContext"; // 👈 NUEVO
 
 type MayoristaProducto = {
   _id?: string;
@@ -28,6 +29,7 @@ export default function PDPMayoristaDetalle({ producto }: { producto: MayoristaP
   const [zoomOpen, setZoomOpen] = useState(false);
 
   const { addItem } = useCart();
+  const { showAddedDialog } = useUi(); // 👈 NUEVO
 
   const handleCantidad = (n: number) => {
     const nueva = cantidad + n;
@@ -37,15 +39,19 @@ export default function PDPMayoristaDetalle({ producto }: { producto: MayoristaP
   const handleAddToCart = () => {
     // para mayorista no hay talle; agregamos por pack
     addItem({
-  productId: (producto as any)?._id ?? (producto as any)?.slug ?? producto.nombre,
-  nombre: producto.nombre,
-  precio: producto.precioActual,
-  cantidad,
-  imagen: producto.galeria?.[0],
-  slug: (producto as any)?.slug,
-} as any)
+      productId: (producto as any)?._id ?? (producto as any)?.slug ?? producto.nombre,
+      nombre: producto.nombre,
+      precio: producto.precioActual,
+      cantidad,
+      imagen: imagenActiva || producto.galeria?.[0], // 👈 usa la imagen activa si existe
+      slug: (producto as any)?.slug,
+    } as any);
 
-    alert("✅ Pack añadido al carrito");
+    // 👇 Abrimos el diálogo de "Agregado al carrito"
+    showAddedDialog({
+      title: producto.nombre,
+      image: imagenActiva || producto.galeria?.[0],
+    });
   };
 
   return (
@@ -117,6 +123,7 @@ export default function PDPMayoristaDetalle({ producto }: { producto: MayoristaP
             <h3 className="font-medium mb-2 text-lg">Cantidad</h3>
             <div className="flex items-center border rounded-md w-48">
               <button
+                type="button"
                 onClick={() => handleCantidad(-1)}
                 disabled={cantidad <= 1}
                 className="px-4 py-2 text-xl"
@@ -124,7 +131,7 @@ export default function PDPMayoristaDetalle({ producto }: { producto: MayoristaP
                 –
               </button>
               <span className="flex-1 text-center">{cantidad}</span>
-              <button onClick={() => handleCantidad(1)} className="px-4 py-2 text-xl">
+              <button type="button" onClick={() => handleCantidad(1)} className="px-4 py-2 text-xl">
                 +
               </button>
             </div>
@@ -132,6 +139,7 @@ export default function PDPMayoristaDetalle({ producto }: { producto: MayoristaP
 
           {/* Botón carrito */}
           <button
+            type="button" // 👈 evita un submit accidental
             onClick={handleAddToCart}
             className="w-full bg-black text-white py-4 rounded-md font-medium text-lg"
           >

@@ -6,6 +6,7 @@ import Image from 'next/image'
 import CartDrawer from "./CartDrawer"
 import { useUi } from "@/context/UiContext"
 import { useCart } from "@/context/CartContext"
+import AddedToCartDialog from './AddedToCartDialog'
 
 export default function Navbar() {
   const [menuOpen, setMenuOpen] = useState(false)
@@ -76,14 +77,40 @@ export default function Navbar() {
           />
         </Link>
 
-        {/* Botón hamburguesa móvil */}
-        <div className="md:hidden">
-          <button
-            onClick={() => setMenuOpen(!menuOpen)}
-            className="text-black text-2xl focus:outline-none">
-            ☰
-          </button>
-        </div>
+       {/* Acciones derechas en MOBILE: carrito + hamburguesa */}
+<div className="flex items-center gap-3 md:hidden">
+  {/* 🛒 Carrito SIEMPRE visible fuera del menú */}
+  <button
+    type="button"
+    onClick={openCart}
+    className="relative hover:opacity-80 transition"
+    aria-label="Abrir carrito"
+  >
+    <Image
+      src="/carrito.png"
+      alt="Carrito"
+      width={24}
+      height={24}
+      className="w-6 h-6"
+      priority={false}
+    />
+    {items.length > 0 && (
+      <span className="absolute -top-2 -right-3 bg-red-600 text-white text-xs px-2 py-0.5 rounded-full">
+        {items.length}
+      </span>
+    )}
+  </button>
+
+  {/* ☰ Hamburguesa */}
+  <button
+    type="button"
+    onClick={() => setMenuOpen(!menuOpen)}
+    className="text-black text-2xl focus:outline-none"
+    aria-label="Abrir menú"
+  >
+    ☰
+  </button>
+</div>
 
         {/* Menú desktop */}
         <ul className="hidden md:flex gap-6 font-semibold items-center relative z-[100]">
@@ -237,34 +264,13 @@ export default function Navbar() {
             )}
           </li>
 
-          {/* 🛒 Carrito en móvil */}
-          <li>
-            <button
-  onClick={() => { setMenuOpen(false); openCart(); }}
-  className="relative flex items-center gap-2"
-  aria-label="Abrir carrito"
->
-  <Image
-    src="/carrito.png"
-    alt="Carrito"
-    width={20}
-    height={20}
-    className="w-5 h-5"
-  />
-  <span>Carrito</span>
-  {items.length > 0 && (
-    <span className="ml-2 bg-red-600 text-white text-xs px-2 py-0.5 rounded-full">
-      {items.length}
-    </span>
-  )}
-</button>
-
-          </li>
         </ul>
       )}
 
       {/* Drawer del carrito */}
       <CartDrawer />
+
+      <AddedToCartDialog />
     </nav>
   )
 }

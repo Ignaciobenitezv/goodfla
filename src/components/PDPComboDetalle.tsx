@@ -6,6 +6,7 @@ import Modal from "@/components/Modal"
 import ServiciosDiferencia from "@/components/ServiciosDiferencia"
 import AccordionInfo from "@/components/AccordionInfo"
 import { useCart } from "@/context/CartContext"
+import { useUi } from "@/context/UiContext" // 👈 NUEVO
 
 interface PDPComboDetalleProps {
   combo: any
@@ -20,6 +21,7 @@ export default function PDPComboDetalle({ combo, productosPorCategoria }: PDPCom
   const [draft, setDraft] = useState<DraftSelections>({})
 
   const { addItem, items } = useCart() // usamos items para chequear stock
+  const { showAddedDialog } = useUi()   // 👈 NUEVO
 
   const setDraftValue = (prodId: string, key: "talle" | "color", value: string) =>
     setDraft((d) => ({ ...d, [prodId]: { ...(d[prodId] || {}), [key]: value } }))
@@ -30,14 +32,14 @@ export default function PDPComboDetalle({ combo, productosPorCategoria }: PDPCom
     const t = prod.talles.find((x: any) => x.label === talle)
     if (!t) return 0
 
-   const enCarrito = items.find((i: any) => {
-  const itemKey = i._id ?? i.productId ?? i.slug ?? i.nombre
-  const prodKey = String(prod._id ?? prod.slug ?? prod.nombre)
-  return (
-    (String(itemKey) === prodKey || String(itemKey).startsWith(prodKey)) &&
-    i.talle === talle
-  )
-})
+    const enCarrito = items.find((i: any) => {
+      const itemKey = i._id ?? i.productId ?? i.slug ?? i.nombre
+      const prodKey = String(prod._id ?? prod.slug ?? prod.nombre)
+      return (
+        (String(itemKey) === prodKey || String(itemKey).startsWith(prodKey)) &&
+        i.talle === talle
+      )
+    })
 
     return t.stock - (enCarrito?.cantidad || 0)
   }
@@ -125,7 +127,7 @@ export default function PDPComboDetalle({ combo, productosPorCategoria }: PDPCom
             )}
           </div>
 
-          <button className="mb-6 underline text-sm text-marca-gris">📏 Guía de talles</button>
+          <button type="button" className="mb-6 underline text-sm text-marca-gris">📏 Guía de talles</button>
 
           {/* Cajas de selección */}
           <div className="grid grid-cols-3 gap-6 max-w-[800px] mx-auto mb-12">
@@ -134,7 +136,7 @@ export default function PDPComboDetalle({ combo, productosPorCategoria }: PDPCom
                 const seleccionado = selected[cat.categoria.slug]?.[i]
                 return (
                   <div
-                    key={`${cat.categoria.slug}-${i}`}
+                    key={`${String(cat?.categoria?.slug ?? "sin-cat")}__box__${i}`}
                     className="border-2 border-dashed border-gray-400 rounded-lg flex flex-col items-center justify-center aspect-square cursor-pointer hover:border-black transition"
                     onClick={() => setActiveModal({ cat: cat.categoria.slug, index: i })}
                   >
@@ -142,6 +144,7 @@ export default function PDPComboDetalle({ combo, productosPorCategoria }: PDPCom
                       <div className="relative w-full h-full flex flex-col">
                         {/* Botón X */}
                         <button
+                          type="button"
                           onClick={(e) => {
                             e.stopPropagation()
                             const nuevos = [...(selected[cat.categoria.slug] || [])]
@@ -186,6 +189,7 @@ export default function PDPComboDetalle({ combo, productosPorCategoria }: PDPCom
 
           {/* Botón pagar */}
           <button
+            type="button"
             disabled={!allWithStock}
             onClick={() => {
               if (!allWithStock) {
@@ -196,19 +200,22 @@ export default function PDPComboDetalle({ combo, productosPorCategoria }: PDPCom
               const itemsCombo = Object.values(selected).flat().filter(Boolean)
 
               itemsCombo.forEach((prod: any) => {
-  addItem({
-    productId: prod._id ?? prod.slug ?? prod.nombre, // clave estable
-    nombre: `${prod.nombre}${prod.talle ? ` (Talle ${prod.talle})` : ""}`,
-    precio: combo.precio / itemsCombo.length,        // prorratea el total
-    cantidad: 1,
-    imagen: prod.imagen || "/placeholder.png",
-    slug: prod.slug ?? undefined,
-    talle: prod.talle ?? undefined,
-  } as any)
-})
+                addItem({
+                  productId: prod._id ?? prod.slug ?? prod.nombre, // clave estable
+                  nombre: `${prod.nombre}${prod.talle ? ` (Talle ${prod.talle})` : ""}`,
+                  precio: combo.precio / itemsCombo.length,        // prorratea el total
+                  cantidad: 1,
+                  imagen: prod.imagen || "/placeholder.png",
+                  slug: prod.slug ?? undefined,
+                  talle: prod.talle ?? undefined,
+                } as any)
+              })
 
-
-              alert("✅ Combo añadido al carrito")
+              // ✅ Mostrar modal de “Agregado al carrito”
+              showAddedDialog({
+                title: combo.nombre,
+                image: combo.galeria?.[0],
+              })
             }}
             className={`w-full mt-6 py-3 rounded-lg font-bold text-white ${
               allSelected ? "bg-black hover:bg-gray-800" : "bg-gray-400 cursor-not-allowed"
@@ -329,7 +336,7 @@ export default function PDPComboDetalle({ combo, productosPorCategoria }: PDPCom
               {combo.categoriasIncluidas.flatMap((cat: any) =>
                 Array.from({ length: cat.cantidad }).map((_, i) => (
                   <button
-                    key={`${cat.categoria.slug}-${i}`}
+                    key={`${String(cat?.categoria?.slug ?? "sin-cat")}__tab__${i}`}
                     className={`px-3 py-2 text-sm rounded-full border ${
                       activeModal.cat === cat.categoria.slug && activeModal.index === i
                         ? "bg-black text-white"
@@ -346,15 +353,15 @@ export default function PDPComboDetalle({ combo, productosPorCategoria }: PDPCom
             {/* Grid responsive */}
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
               {productosPorCategoria[activeModal.cat]?.map((prod: any, i: number) => {
-  const sizeOptions = normalizeSizes(prod.talles)
-  const hasColors = Array.isArray(prod.colores) && prod.colores.length > 0
-  const d = draft[prod._id] || {}
+                const sizeOptions = normalizeSizes(prod.talles)
+                const hasColors = Array.isArray(prod.colores) && prod.colores.length > 0
+                const d = draft[prod._id] || {}
 
                 return (
                   <div
-      key={`${prod._id}-${activeModal.cat}-${i}`}
-      className="flex flex-col rounded-xl border p-3 bg-white min-h-[360px]"
-    >
+                    key={`${String(prod._id ?? prod.slug ?? prod.nombre)}__${activeModal.cat}__${i}`}
+                    className="flex flex-col rounded-xl border p-3 bg-white min-h-[360px]"
+                  >
                     <div className="relative w-full aspect-square bg-gray-50 rounded-md overflow-hidden mb-3">
                       <Image
                         src={prod.imagen || "/placeholder.png"}
@@ -405,6 +412,7 @@ export default function PDPComboDetalle({ combo, productosPorCategoria }: PDPCom
                     )}
 
                     <button
+                      type="button"
                       className="mt-auto bg-black text-white px-3 py-2 rounded w-full"
                       onClick={() => handleAddToCombo(activeModal.cat, activeModal.index, prod)}
                     >

@@ -74,8 +74,8 @@ export default function ProductFilter({ categoria }: Props) {
       {/* Productos */}
       <div className="w-3/4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
         {productos.length ? (
-          productos.map((producto) => (
-            <div key={producto.nombre} className="border rounded-md overflow-hidden">
+          productos.map((producto, i) => (
+            <div key={`${String(producto.nombre)}__${categoria}__${i}`} className="border rounded-md overflow-hidden">
               <Image
                 src={producto.imagen}
                 alt={producto.nombre}

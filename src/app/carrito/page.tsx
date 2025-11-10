@@ -21,10 +21,8 @@ export default function CarritoPage() {
           {items.map((item, idx) => {
             // 👇 evitar error de tipos: casteo sólo para armar la key
             const anyItem = item as any
-            const key =
-              anyItem._id ??
-              anyItem.slug ??
-              `${item.nombre}-${(anyItem.talle ?? "")}-${(anyItem.color ?? "")}-${idx}`
+            const key = item.cartKey ?? `${item.productId}__${item.talle ?? "default"}__${idx}`
+
 
             return (
               <div key={key} className="flex gap-3 items-center border-b pb-3">
