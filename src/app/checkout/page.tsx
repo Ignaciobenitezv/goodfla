@@ -75,7 +75,9 @@ export default function CheckoutPage() {
     }
   }
 
-  const puedeContinuarContacto = nombre && apellido && telefono
+  const puedeContinuarContacto =
+  [nombre, apellido, telefono].every((v) => v.trim() !== "")
+
 
   // 🔹 MercadoPago actualizado
   const handleMercadoPago = async () => {
@@ -112,93 +114,159 @@ localStorage.setItem("lastOrder", JSON.stringify(lastOrderPayload))
 
     // ✅ NUEVO: selección y refs del Brick
   const [payMethod, setPayMethod] = useState<"transfer"|"cash"|"mp_redirect"|"card_inline"|null>(null)
-  const cardContainerRef = useRef<HTMLDivElement>(null)
   const cardBrickRef = useRef<any>(null)
   const [cardLoading, setCardLoading] = useState(false)
   const [cardMsg, setCardMsg] = useState("")
+// ✅ Montar el Card Brick cuando elijan “Tarjeta (pagar acá mismo)”
+useEffect(() => {
+  if (step !== "pago" || payMethod !== "card_inline") return;
 
-  // ✅ Montar el Card Brick cuando elijan “Tarjeta (pagar acá mismo)”
-  useEffect(() => {
-    if (step !== "pago" || payMethod !== "card_inline") return
+  const containerId = "card-payment-brick";
 
-    const mount = () => {
-  if (!window.MercadoPago) return;
+  const mount = () => {
+    console.log("[BRICK] mount llamado");
 
-  // ✅ leer y validar la public key como string
-  const PUBLIC_KEY = String(process.env.NEXT_PUBLIC_MP_PUBLIC_KEY || "").trim();
-  console.log("MP PUBLIC KEY:", PUBLIC_KEY); // debería mostrar TEST-xxxx...
-  if (!PUBLIC_KEY) {
-    console.error("Falta NEXT_PUBLIC_MP_PUBLIC_KEY");
-    setCardMsg("No se pudo cargar el formulario de tarjeta.");
-    return;
-  }
-
-  // ✅ asegurá que el monto sea numérico
-  const amount = Number(total);
-  console.log("amount:", amount, typeof amount); // debería ser number
-
-  const mp = new window.MercadoPago(PUBLIC_KEY, { locale: "es-AR" });
-  const bricks = mp.bricks();
-
-  bricks.create("cardPayment", cardContainerRef.current!, {
-    initialization: { amount },
-    customization: { paymentMethods: { maxInstallments: 6 } },
-    callbacks: {
-      onReady: () => setCardLoading(false),
-      onError: (err:any) => {
-        console.error("Brick error ▶", err);
-        setCardMsg("No se pudo cargar el formulario de tarjeta.");
-      },
-      onSubmit: async (data:any) => {
-        setCardMsg(""); setCardLoading(true);
-
-        const payload = {
-          token: String(data.token),
-          issuer_id: data.issuer_id != null ? String(data.issuer_id) : undefined,
-          payment_method_id: String(data.paymentMethodId || data.payment_method_id),
-          installments: Number(data.installments ?? 1),
-          email: data.payer?.email ? String(data.payer.email) : undefined,
-          identification: data.payer?.identification
-            ? { type: String(data.payer.identification.type), number: String(data.payer.identification.number) }
-            : undefined,
-        };
-
-        const res = await fetch("/api/payments/card", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        });
-
-        const json = await res.json();
-        setCardLoading(false);
-
-        if (!res.ok || !json.ok) {
-          setCardMsg(json.error || "Error procesando el pago");
-          throw new Error(json.error || "Pago rechazado");
-        }
-
-        alert("¡Pago aprobado! ID: " + json.id);
-      },
-    },
-  }).then((brick:any) => (cardBrickRef.current = brick));
-};
-
-
-    // Cargar SDK si no está
-    let s = document.getElementById("mp-sdk") as HTMLScriptElement | null
-    if (!s) {
-      s = document.createElement("script")
-      s.id = "mp-sdk"
-      s.src = "https://sdk.mercadopago.com/js/v2"
-      s.async = true
-      s.onload = mount
-      document.body.appendChild(s)
-    } else {
-      mount()
+    const containerElement = document.getElementById(containerId);
+    if (!containerElement) {
+      console.error("[BRICK] No se encontró el contenedor con id", containerId);
+      setCardMsg("No se pudo encontrar el contenedor del formulario.");
+      setCardLoading(false);
+      return;
     }
 
-    return () => { cardBrickRef.current?.unmount?.() }
-  }, [step, payMethod, total])
+    if (!window.MercadoPago) {
+      console.error("[BRICK] window.MercadoPago no está disponible");
+      setCardMsg("No se pudo cargar el formulario de tarjeta (SDK no disponible).");
+      setCardLoading(false);
+      return;
+    }
+
+    const PUBLIC_KEY = String(process.env.NEXT_PUBLIC_MP_PUBLIC_KEY || "").trim();
+    console.log("[BRICK] MP PUBLIC KEY:", PUBLIC_KEY);
+
+    if (!PUBLIC_KEY) {
+      console.error("[BRICK] Falta NEXT_PUBLIC_MP_PUBLIC_KEY");
+      setCardMsg("No se pudo cargar el formulario de tarjeta (falta clave pública).");
+      setCardLoading(false);
+      return;
+    }
+
+    const amount = Number(total);
+    console.log("[BRICK] amount:", amount, typeof amount);
+
+    if (!amount || amount <= 0) {
+      console.error("[BRICK] Monto inválido para el Brick");
+      setCardMsg("No se pudo cargar el formulario (monto inválido).");
+      setCardLoading(false);
+      return;
+    }
+
+    const mp = new window.MercadoPago(PUBLIC_KEY, { locale: "es-AR" });
+    const bricks = mp.bricks();
+
+    setCardLoading(true);
+    setCardMsg("");
+
+    bricks
+      .create("cardPayment", containerId, {
+        initialization: { amount },
+        customization: { paymentMethods: { maxInstallments: 6 } },
+        callbacks: {
+          onReady: () => {
+            console.log("[BRICK] onReady");
+            setCardLoading(false);
+          },
+          onError: (err: any) => {
+            console.error("[BRICK] onError ▶", err);
+            setCardMsg("No se pudo cargar el formulario de tarjeta.");
+            setCardLoading(false);
+          },
+          onSubmit: async (data: any) => {
+            console.log("[BRICK] onSubmit data:", data);
+
+            setCardMsg("");
+            setCardLoading(true);
+
+            const payload = {
+              token: String(data.token),
+              issuer_id:
+                data.issuer_id != null ? String(data.issuer_id) : undefined,
+              payment_method_id: String(
+                data.paymentMethodId || data.payment_method_id
+              ),
+              installments: Number(data.installments ?? 1),
+              email: data.payer?.email
+                ? String(data.payer.email)
+                : undefined,
+              identification: data.payer?.identification
+                ? {
+                    type: String(data.payer.identification.type),
+                    number: String(data.payer.identification.number),
+                  }
+                : undefined,
+              amount: Number(total),
+            };
+
+            const res = await fetch("/api/payments/card", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(payload),
+            });
+
+            const json = await res.json();
+            setCardLoading(false);
+
+            if (!res.ok || !json.ok) {
+              console.error("[BRICK] Error de pago:", json);
+              setCardMsg(json.error || "Error procesando el pago");
+              throw new Error(json.error || "Pago rechazado");
+            }
+
+            alert("¡Pago aprobado! ID: " + json.id);
+          },
+        },
+      })
+      .then((brick: any) => {
+        console.log("[BRICK] creado OK");
+        cardBrickRef.current = brick;
+      })
+      .catch((err: any) => {
+        console.error("[BRICK] Error en create():", err);
+        setCardMsg("No se pudo cargar el formulario de tarjeta.");
+        setCardLoading(false);
+      });
+  };
+
+  // Cargar SDK si no está
+  let s = document.getElementById("mp-sdk") as HTMLScriptElement | null;
+  if (!s) {
+    console.log("[BRICK] Inyectando script de MercadoPago");
+    s = document.createElement("script");
+    s.id = "mp-sdk";
+    s.src = "https://sdk.mercadopago.com/js/v2";
+    s.async = true;
+    s.onload = () => {
+      console.log("[BRICK] SDK cargado");
+      mount();
+    };
+    s.onerror = () => {
+      console.error("[BRICK] Error cargando el SDK");
+      setCardMsg("No se pudo cargar el SDK de MercadoPago.");
+      setCardLoading(false);
+    };
+    document.body.appendChild(s);
+  } else {
+    console.log("[BRICK] SDK ya presente, monto directamente");
+    mount();
+  }
+
+  return () => {
+    console.log("[BRICK] cleanup / unmount");
+    cardBrickRef.current?.unmount?.();
+  };
+}, [step, payMethod, total]);
+
+
 
 
   return (
@@ -213,28 +281,44 @@ localStorage.setItem("lastOrder", JSON.stringify(lastOrderPayload))
         </div>
 
         {/* Paso 1 */}
-        {step === "contacto" && (
-          <>
-            <section>
-              <h2 className="text-lg font-bold mb-4 uppercase">Datos de contacto</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <ValidatedInput placeholder="Nombre" value={nombre} onChange={setNombre} />
-                <ValidatedInput placeholder="Apellido" value={apellido} onChange={setApellido} />
-              </div>
-              <ValidatedInput placeholder="Teléfono" value={telefono} onChange={setTelefono} />
-            </section>
+{step === "contacto" && (
+  <>
+    <section>
+      <h2 className="text-lg font-bold mb-4 uppercase">Datos de contacto</h2>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <ValidatedInput
+          placeholder="Nombre"
+          value={nombre}
+          onChange={setNombre}
+          required
+        />
+        <ValidatedInput
+          placeholder="Apellido"
+          value={apellido}
+          onChange={setApellido}
+          required
+        />
+      </div>
+      <ValidatedInput
+        placeholder="Teléfono"
+        value={telefono}
+        onChange={setTelefono}
+        required
+      />
+    </section>
 
-            <button
-              disabled={!puedeContinuarContacto}
-              onClick={() => setStep("entrega")}
-              className={`w-full py-3 rounded mt-6 text-white ${
-                puedeContinuarContacto ? "bg-black" : "bg-gray-300 cursor-not-allowed"
-              }`}
-            >
-              Continuar
-            </button>
-          </>
-        )}
+    <button
+      disabled={!puedeContinuarContacto}
+      onClick={() => setStep("entrega")}
+      className={`w-full py-3 rounded mt-6 text-white ${
+        puedeContinuarContacto ? "bg-black" : "bg-gray-300 cursor-not-allowed"
+      }`}
+    >
+      Continuar
+    </button>
+  </>
+)}
+
 
         {/* Paso 2 */}
         {step === "entrega" && (
@@ -313,17 +397,34 @@ localStorage.setItem("lastOrder", JSON.stringify(lastOrderPayload))
         )}
 
         {/* Paso 3 */}
-        {step === "pago" && (
+                {step === "pago" && (
           <section>
             <h2 className="text-lg font-bold mb-4 uppercase">Finalizar compra</h2>
+
+            {/* Si hay envío a domicilio, datos de dirección (esto ya lo tenías) */}
             {envio === "domicilio" && (
               <div className="mb-6 space-y-3">
                 <h3 className="font-semibold">Datos de envío</h3>
-                <ValidatedInput placeholder="Calle" value={destinatario.calle} onChange={(v: string) => handleChangeDestinatario("calle", v)} />
-<ValidatedInput placeholder="Número" value={destinatario.numero} onChange={(v: string) => handleChangeDestinatario("numero", v)} />
-<ValidatedInput placeholder="Barrio (opcional)" value={destinatario.barrio} onChange={(v: string) => handleChangeDestinatario("barrio", v)} />
-<ValidatedInput placeholder="Ciudad" value={destinatario.ciudad} onChange={(v: string) => handleChangeDestinatario("ciudad", v)} />
-
+                <ValidatedInput
+                  placeholder="Calle"
+                  value={destinatario.calle}
+                  onChange={(v: string) => handleChangeDestinatario("calle", v)}
+                />
+                <ValidatedInput
+                  placeholder="Número"
+                  value={destinatario.numero}
+                  onChange={(v: string) => handleChangeDestinatario("numero", v)}
+                />
+                <ValidatedInput
+                  placeholder="Barrio (opcional)"
+                  value={destinatario.barrio}
+                  onChange={(v: string) => handleChangeDestinatario("barrio", v)}
+                />
+                <ValidatedInput
+                  placeholder="Ciudad"
+                  value={destinatario.ciudad}
+                  onChange={(v: string) => handleChangeDestinatario("ciudad", v)}
+                />
               </div>
             )}
 
@@ -332,13 +433,28 @@ localStorage.setItem("lastOrder", JSON.stringify(lastOrderPayload))
               {/* Transferencia */}
               <label
                 onClick={() => {
+                  setPayMethod("transfer")
                   const phone = "5493624545344"
-                  const message = `Hola! Quiero pagar por *Transferencia/Depósito*.\n\nPedido:\n${items.map(
-                    (i) => `- ${i.nombre} x${i.cantidad} = $${(i.precio * i.cantidad).toLocaleString("es-AR")}`
-                  ).join("\n")}\nTotal: $${total.toLocaleString("es-AR")}\n\n${
-                    envio === "domicilio" ? `Dirección: ${destinatario.calle} ${destinatario.numero}, ${destinatario.barrio || ""}, ${destinatario.ciudad}` : "Retiro en sucursal"
+                  const message = `Hola! Quiero pagar por *Transferencia/Depósito*.\n\nPedido:\n${items
+                    .map(
+                      (i) =>
+                        `- ${i.nombre} x${i.cantidad} = $${(
+                          i.precio * i.cantidad
+                        ).toLocaleString("es-AR")}`
+                    )
+                    .join("\n")}\nTotal: $${total.toLocaleString(
+                    "es-AR"
+                  )}\n\n${
+                    envio === "domicilio"
+                      ? `Dirección: ${destinatario.calle} ${destinatario.numero}, ${
+                          destinatario.barrio || ""
+                        }, ${destinatario.ciudad}`
+                      : "Retiro en sucursal"
                   }`
-                  window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, "_blank")
+                  window.open(
+                    `https://wa.me/${phone}?text=${encodeURIComponent(message)}`,
+                    "_blank"
+                  )
                 }}
                 className="flex items-center justify-between border rounded p-4 cursor-pointer hover:border-black transition"
               >
@@ -352,13 +468,28 @@ localStorage.setItem("lastOrder", JSON.stringify(lastOrderPayload))
               {/* Efectivo */}
               <label
                 onClick={() => {
+                  setPayMethod("cash")
                   const phone = "5493624545344"
-                  const message = `Hola! Quiero pagar en *Efectivo*.\n\nPedido:\n${items.map(
-                    (i) => `- ${i.nombre} x${i.cantidad} = $${(i.precio * i.cantidad).toLocaleString("es-AR")}`
-                  ).join("\n")}\nTotal: $${total.toLocaleString("es-AR")}\n\n${
-                    envio === "domicilio" ? `Dirección: ${destinatario.calle} ${destinatario.numero}, ${destinatario.barrio || ""}, ${destinatario.ciudad}` : "Retiro en sucursal"
+                  const message = `Hola! Quiero pagar en *Efectivo*.\n\nPedido:\n${items
+                    .map(
+                      (i) =>
+                        `- ${i.nombre} x${i.cantidad} = $${(
+                          i.precio * i.cantidad
+                        ).toLocaleString("es-AR")}`
+                    )
+                    .join("\n")}\nTotal: $${total.toLocaleString(
+                    "es-AR"
+                  )}\n\n${
+                    envio === "domicilio"
+                      ? `Dirección: ${destinatario.calle} ${destinatario.numero}, ${
+                          destinatario.barrio || ""
+                        }, ${destinatario.ciudad}`
+                      : "Retiro en sucursal"
                   }`
-                  window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, "_blank")
+                  window.open(
+                    `https://wa.me/${phone}?text=${encodeURIComponent(message)}`,
+                    "_blank"
+                  )
                 }}
                 className="flex items-center justify-between border rounded p-4 cursor-pointer hover:border-black transition"
               >
@@ -369,29 +500,38 @@ localStorage.setItem("lastOrder", JSON.stringify(lastOrderPayload))
                 <span className="text-lg">💵</span>
               </label>
 
- {/* ✅ NUEVO: Tarjeta (pagar acá mismo) */}
+              {/* Tarjeta (pagar acá mismo) */}
               <label
                 onClick={() => setPayMethod("card_inline")}
-                className="flex items-center justify-between border rounded p-4 cursor-pointer hover:border-black transition"
+                className={`flex items-center justify-between border rounded p-4 cursor-pointer transition ${
+                  payMethod === "card_inline"
+                    ? "border-blue-600 bg-blue-50"
+                    : "hover:border-black"
+                }`}
               >
                 <div>
                   <p className="font-medium">Tarjeta (pagar acá mismo)</p>
-                  <p className="text-sm text-gray-500">Visa / Mastercard / débito (si aplica)</p>
+                  <p className="text-sm text-gray-500">
+                    Visa / Mastercard / débito (si aplica)
+                  </p>
                 </div>
-                <span className="text-lg">🧱</span>
+                <span className="text-lg">💳</span>
               </label>
-{/* Contenedor del Brick (se muestra solo cuando elegís Tarjeta) */}
-{payMethod === "card_inline" && (
+
+              {/* Contenedor del Brick */}
+              {payMethod === "card_inline" && (
   <div className="border rounded-2xl p-4 mt-2">
-    <div ref={cardContainerRef} />
-    {cardLoading && <p className="text-sm text-gray-500 mt-2">Procesando…</p>}
-    {!!cardMsg && <p className="text-sm mt-2">{cardMsg}</p>}
+    {/* Contenedor que va a usar el Brick */}
+    <div id="card-payment-brick" />
+    {cardLoading && (
+      <p className="text-sm text-gray-500 mt-2">Procesando…</p>
+    )}
+    {!!cardMsg && <p className="text-sm mt-2 text-red-600">{cardMsg}</p>}
   </div>
 )}
 
 
-
-              {/* MercadoPago */}
+              {/* MercadoPago clásico (redirect) – opcional, podés dejarlo o quitarlo */}
               <label
                 onClick={handleMercadoPago}
                 className="flex items-center justify-between border rounded p-4 cursor-pointer hover:border-black transition bg-blue-600 text-white hover:bg-blue-700"
@@ -405,6 +545,7 @@ localStorage.setItem("lastOrder", JSON.stringify(lastOrderPayload))
             </div>
           </section>
         )}
+
       </div>
 
       {/* --------- RESUMEN --------- */}

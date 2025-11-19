@@ -1,4 +1,6 @@
 // app/api/payments/card/route.ts
+export const runtime = "nodejs";
+
 import { NextResponse } from "next/server";
 import crypto from "crypto";
 
@@ -10,19 +12,25 @@ type BrickPayload = {
   installments?: number | string; // cuotas
   email?: string;
   identification?: { type: string; number: string };
-  // Opcionalmente podrías mandar un orderId del cliente para idempotencia
   orderId?: string;
+  amount?: number;                 // 👈 monto total enviado por el front
 };
 
 export async function POST(req: Request) {
   try {
     const body = (await req.json()) as BrickPayload;
 
-    // 1) Normalizar/validar mínimos
+    // 1) Normalizar datos mínimos
     const token = body.token;
-    const payment_method_id = body.payment_method_id || body.paymentMethodId;
-    const issuer_id = body.issuer_id ? String(body.issuer_id) : undefined;
+    const payment_method_id =
+      body.payment_method_id || body.paymentMethodId;
+
+    const issuer_id = body.issuer_id
+      ? String(body.issuer_id)
+      : undefined;
+
     const installments = Number(body.installments ?? 1);
+    const amount = Number(body.amount ?? 0);
 
     if (!token || !payment_method_id) {
       return NextResponse.json(
@@ -31,36 +39,42 @@ export async function POST(req: Request) {
       );
     }
 
-    // 2) Calcular el monto en el servidor (ejemplo estático; reemplazá por tu cálculo real)
-    //    Ej: leer carrito de la sesión/DB y sumar total
-    const amount = await getServerAmount(); // <- implementá tu lógica
-    if (amount <= 0) {
+    if (!amount || amount <= 0) {
       return NextResponse.json(
         { ok: false, error: "Monto inválido." },
         { status: 400 }
       );
     }
 
-    // 3) Construir payload para MP
+    // 2) Construir payload para Mercado Pago
     const mpPayload = {
       token,
-      transaction_amount: Number(amount),
+      transaction_amount: amount,
       description: "Compra en la tienda",
       installments,
       payment_method_id,
       issuer_id,
       payer: {
         email: body.email,
-        identification: body.identification, // { type: "DNI", number: "12345678" }
+        identification: body.identification,
       },
       capture: true,
     };
 
-    // 4) Idempotencia (recomendado)
+    // 3) Idempotencia (recomendado)
     const idemKey =
       body.orderId ||
-      crypto.createHash("sha256").update(JSON.stringify({ mpPayload, ts: Date.now() / (1000 * 60) | 0 })).digest("hex");
+      crypto
+        .createHash("sha256")
+        .update(
+          JSON.stringify({
+            mpPayload,
+            minute: Math.floor(Date.now() / 60000),
+          })
+        )
+        .digest("hex");
 
+    // 4) Crear pago en Mercado Pago
     const res = await fetch("https://api.mercadopago.com/v1/payments", {
       method: "POST",
       headers: {
@@ -73,8 +87,8 @@ export async function POST(req: Request) {
 
     const data = await res.json();
 
+    // 5) Si Mercado Pago devuelve error → lo devolvemos claro
     if (!res.ok) {
-      // Devolvé mensaje claro al front
       return NextResponse.json(
         {
           ok: false,
@@ -85,22 +99,18 @@ export async function POST(req: Request) {
       );
     }
 
-    // Respuesta minimal y útil
+    // 6) ÉXITO
     return NextResponse.json({
       ok: true,
       id: data.id,
-      status: data.status,                // approved | in_process | rejected
-      status_detail: data.status_detail,  // accredited | cc_rejected_insufficient_amount | etc.
+      status: data.status,               // approved | in_process | rejected
+      status_detail: data.status_detail, // accredited | cc_rejected_... etc.
     });
   } catch (err: any) {
     console.error("❌ Error en /api/payments/card:", err);
-    return NextResponse.json({ ok: false, error: "Error interno" }, { status: 500 });
+    return NextResponse.json(
+      { ok: false, error: "Error interno" },
+      { status: 500 }
+    );
   }
-}
-
-// Ejemplo de cálculo del total en servidor
-async function getServerAmount(): Promise<number> {
-  // TODO: Traer carrito/orden desde DB o sesión y sumar precios + envío + descuentos
-  // Por ahora, fijo para pruebas:
-  return 19999;
 }
