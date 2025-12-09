@@ -19,7 +19,7 @@
     "groq": "^4.6.0",
     "lucide-react": "^0.544.0",
     "mercadopago": "^2.9.0",
-    "next": "15.4.3",
+    "next": "15.4.8",
     "next-sanity": "^10.1.4",
     "react": "19.1.0",
     "react-dom": "19.1.0",
