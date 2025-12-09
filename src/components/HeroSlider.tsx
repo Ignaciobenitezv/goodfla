@@ -5,7 +5,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 import AnimatedButton from '@/components/AnimatedButton'
 
-const IMGS = ['/BANER1.jpeg', '/BANER2.jpeg', '/BANER3.jpeg', '/BANER4.jpeg', '/BANER5.jpeg']
+const IMGS = ['/J1.jpg', '/J2.jpg', '/J3.jpg', '/J4.jpg', '/J5.jpg']
 
 export default function HeroSlider() {
   const [idx, setIdx] = useState(0)

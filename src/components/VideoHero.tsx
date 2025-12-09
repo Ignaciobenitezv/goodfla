@@ -14,7 +14,7 @@ export default function VideoHero() {
     playsInline
     preload="auto"
   >
-    <source src="/rukawe.mp4?v=2" type="video/mp4" />
+    <source src="/11.mp4?v=2" type="video/mp4" />
     {/* opcional: <source src="/rukawe.webm" type="video/webm" /> */}
   </video>
   <div className="absolute inset-0 bg-black/25" />

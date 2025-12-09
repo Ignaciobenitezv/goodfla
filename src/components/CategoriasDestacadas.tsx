@@ -5,9 +5,9 @@ import Image from 'next/image'
 import AnimatedFadeDown from './AnimatedFadeDown'
 
 const categorias = [
-  { titulo: 'MAYORISTA', imagen: '/remeras.jpeg', link: '/mayorista' },
-  { titulo: 'COMBOS', imagen: '/jeans.jpeg', link: '/productos/combos' },
-  { titulo: 'ZAPATILLAS 2X1', imagen: '/combos.jpeg', link: '/productos/zapatillas' },
+  { titulo: 'MAYORISTA', imagen: '/mayo.jpg', link: '/mayorista' },
+  { titulo: 'COMBOS', imagen: '/fd.jpg', link: '/productos/combos' },
+  { titulo: 'ZAPATILLAS 2X1', imagen: '/zapas.jpg', link: '/productos/zapatillas' },
 ]
 
 export default function CategoriasDestacadas() {
