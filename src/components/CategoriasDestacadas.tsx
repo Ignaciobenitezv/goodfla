@@ -5,7 +5,7 @@ import Image from 'next/image'
 import AnimatedFadeDown from './AnimatedFadeDown'
 
 const categorias = [
-  { titulo: 'MAYORISTA', imagen: '/mayo.jpg', link: '/mayorista' },
+  { titulo: 'MAYORISTA', imagen: '/may.jpg', link: '/mayorista' },
   { titulo: 'COMBOS', imagen: '/fd.jpg', link: '/productos/combos' },
   { titulo: 'ZAPATILLAS 2X1', imagen: '/zapas.jpg', link: '/productos/zapatillas' },
 ]
