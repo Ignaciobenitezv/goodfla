@@ -1,60 +1,138 @@
 'use client'
 
+import Link from 'next/link'
+import { FaWhatsapp } from 'react-icons/fa'
+
+const WHATSAPP_MAYORISTA =
+  'https://wa.me/5493624545344?text=Hola%20quiero%20unirme%20al%20grupo%20mayorista%20de%20Goodfla'
+
 export default function FooterSeccion() {
   return (
-    <section className="bg-marca-crema text-marca-gris py-20 px-6">
-      <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-12 text-center md:text-left">
-        {/* Columna 1 */}
+    <section
+      className="
+        relative
+        -mt-8
+        bg-[url('/glow.png')]     /* Fondo desde /public */
+        bg-cover
+        bg-center
+        bg-no-repeat
+
+        before:absolute before:inset-0
+        before:bg-black/75        /* Overlay negro */
+        before:backdrop-blur-lg
+
+        border-t border-white/15
+        text-white
+        py-12 md:py-16
+        px-6
+      "
+    >
+      {/* CONTENIDO — se mantiene igual, solo agrego z-10 para que quede arriba del overlay */}
+      <div className="relative z-10 max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-10 md:gap-16 text-center md:text-left">
+        
+        {/* COLUMNA 1 – CUIDADOS Y DETALLES */}
         <div>
-          <h3 className="uppercase font-semibold tracking-widest mb-4">Cuidados y detalles</h3>
-          <ul className="space-y-2 text-sm">
-            <li><a href="#" className="hover:underline">Preguntas frecuentes</a></li>
-            <li><a href="#" className="hover:underline">Cuidado de las prendas</a></li>
-            <li><a href="#" className="hover:underline">Términos y condiciones</a></li>
-            <li><a href="#" className="hover:underline">Política de privacidad</a></li>
-            <li><a href="#" className="hover:underline">Política de envíos</a></li>
-            <li><a href="#" className="hover:underline">Política de devoluciones</a></li>
+          <h3 className="uppercase font-semibold tracking-[0.18em] text-xs md:text-sm mb-4">
+            Cuidados y detalles
+          </h3>
+          <ul className="space-y-2 text-sm text-white/80">
+            <li>
+              <Link href="/cuidado-prendas" className="hover:text-marca-amarillo transition">
+                Cuidado de las prendas
+              </Link>
+            </li>
+            <li>
+              <Link href="/guia-de-talles" className="hover:text-marca-amarillo transition">
+                Guía de talles
+              </Link>
+            </li>
+            <li>
+              <Link href="/politica-de-devoluciones" className="hover:text-marca-amarillo transition">
+                Política de devoluciones
+              </Link>
+            </li>
           </ul>
         </div>
 
-        {/* Columna 2 */}
+        {/* COLUMNA 2 – GOODFLA CLUB */}
         <div>
-          <h3 className="uppercase font-semibold tracking-widest mb-4">GoodFla Club</h3>
-          <p className="text-sm mb-4">
-            <strong className="block text-base mb-1">SUSCRIBITE</strong>
-            Sé el primero en recibir las novedades, ofertas especiales y mucho más.
+          <h3 className="uppercase font-semibold tracking-[0.18em] text-xs md:text-sm mb-4">
+            Goodfla Club
+          </h3>
+
+          <p className="text-sm text-white/80 mb-4 max-w-sm mx-auto md:mx-0">
+            <span className="block text-base font-semibold mb-1">Suscribite</span>
+            Unite a nuestro grupo exclusivo de mayoristas en WhatsApp para recibir
+            lanzamientos, reposiciones y ofertas antes que nadie.
           </p>
-          <form className="space-y-4">
-            <input
-              type="email"
-              placeholder="email"
-              className="w-full border-b border-black bg-transparent py-2 px-1 focus:outline-none text-sm"
-            />
-            <input
-              type="text"
-              placeholder="nombre"
-              className="w-full border-b border-black bg-transparent py-2 px-1 focus:outline-none text-sm"
-            />
-            <button
-              type="submit"
-              className="block mx-auto md:mx-0 mt-2 underline text-sm font-semibold hover:text-marca-piedra transition"
-            >
-              Desbloquear descuento
-            </button>
-          </form>
+
+          <a
+            href={WHATSAPP_MAYORISTA}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="
+              inline-flex items-center justify-center gap-2
+              rounded-full
+              border border-marca-amarillo/80
+              bg-black/40
+              px-5 py-2.5
+              text-xs md:text-sm font-semibold tracking-wide
+              text-marca-amarillo
+              hover:bg-marca-amarillo hover:text-black
+              hover:shadow-lg
+              transition
+            "
+          >
+            <FaWhatsapp className="w-4 h-4" />
+            Unirme al grupo mayorista
+          </a>
         </div>
 
-        {/* Columna 3 */}
+        {/* COLUMNA 3 – CONECTAR */}
         <div>
-          <h3 className="uppercase font-semibold tracking-widest mb-4">Conectar</h3>
-          <ul className="space-y-2 text-sm">
-            <li><a href="#" className="hover:underline">Sobre nosotros</a></li>
-            <li><a href="#" className="hover:underline">Contactanos</a></li>
-            <li><a href="#" className="hover:underline">Encontranos aquí</a></li>
-            <li><a href="#" className="hover:underline">Instagram</a></li>
-            <li><a href="#" className="hover:underline">Tik Tok</a></li>
+          <h3 className="uppercase font-semibold tracking-[0.18em] text-xs md:text-sm mb-4">
+            Conectar
+          </h3>
+          <ul className="space-y-2 text-sm text-white/80">
+            <li>
+              <Link href="/contacto" className="hover:text-marca-amarillo transition">
+                Contacto
+              </Link>
+            </li>
+            <li className="hover:text-marca-amarillo transition">
+              Encontranos en:
+              <br />
+              <span className="text-white/70 text-xs">
+                Av. Ejemplo 123, Resistencia, Chaco
+              </span>
+            </li>
+            <li>
+              <a
+                href="https://www.instagram.com/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hover:text-marca-amarillo transition"
+              >
+                Instagram
+              </a>
+            </li>
+            <li>
+              <a
+                href="https://www.tiktok.com/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hover:text-marca-amarillo transition"
+              >
+                Tik Tok
+              </a>
+            </li>
           </ul>
         </div>
+      </div>
+
+      {/* Línea inferior */}
+      <div className="relative z-10 mt-10 text-center text-[11px] text-white/40">
+        © {new Date().getFullYear()} Goodfla. Todos los derechos reservados.
       </div>
     </section>
   )

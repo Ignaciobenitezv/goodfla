@@ -63,7 +63,18 @@ export default function Navbar() {
   }, [ayudaOpen])
 
   return (
-    <nav className="bg-white text-black shadow-md px-0 py-4 sticky top-0 z-[100]">
+    <nav
+  className="
+    fixed top-0 left-0 right-0
+    z-[1000]
+    bg-black/30 backdrop-blur-lg
+    border-b border-white/10
+    text-white
+    shadow-md
+    px-0 py-4
+  "
+>
+
       <div className="flex justify-between items-center w-full max-w-none mx-0 px-2 md:px-4">
         {/* Logo */}
         <Link href="/" className="flex items-center gap-3">

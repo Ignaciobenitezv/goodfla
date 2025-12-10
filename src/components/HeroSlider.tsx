@@ -30,7 +30,7 @@ export default function HeroSlider() {
   }
 
   return (
-    <section className="relative h-[90vh] overflow-hidden">
+    <section className="relative h-[90vh] overflow-hidden mt-10">
       {/* Track */}
       <div
         className={`absolute inset-0 flex h-full ${
