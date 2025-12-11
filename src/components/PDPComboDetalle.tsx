@@ -1,12 +1,15 @@
+// src/components/PDPComboDetalle.tsx
 "use client"
 
 import { useState } from "react"
 import Image from "next/image"
+import Link from "next/link"
 import Modal from "@/components/Modal"
 import ServiciosDiferencia from "@/components/ServiciosDiferencia"
 import AccordionInfo from "@/components/AccordionInfo"
+import ZoomImage from "./ZoomImage"
 import { useCart } from "@/context/CartContext"
-import { useUi } from "@/context/UiContext" // 👈 NUEVO
+import { useUi } from "@/context/UiContext"
 
 interface PDPComboDetalleProps {
   combo: any
@@ -16,19 +19,28 @@ interface PDPComboDetalleProps {
 type DraftSelections = Record<string, { talle?: string; color?: string }>
 
 export default function PDPComboDetalle({ combo, productosPorCategoria }: PDPComboDetalleProps) {
+  // ================= GALERÍA (igual que mayorista) =================
+  const galeria =
+    combo.galeria && combo.galeria.length > 0 ? combo.galeria : ["/placeholder.jpg"]
+
+  const [activeIndex, setActiveIndex] = useState(0)
+  const imagenActiva = galeria[activeIndex]
+  const [zoomOpen, setZoomOpen] = useState(false)
+
+  // ================= ESTADOS COMBO =================
   const [selected, setSelected] = useState<{ [key: string]: any[] }>({})
   const [activeModal, setActiveModal] = useState<{ cat: string; index: number } | null>(null)
   const [draft, setDraft] = useState<DraftSelections>({})
 
-  const { addItem, items } = useCart() // usamos items para chequear stock
-  const { showAddedDialog } = useUi()   // 👈 NUEVO
+  const { addItem, items } = useCart()
+  const { showAddedDialog } = useUi()
 
   const setDraftValue = (prodId: string, key: "talle" | "color", value: string) =>
     setDraft((d) => ({ ...d, [prodId]: { ...(d[prodId] || {}), [key]: value } }))
 
-  // 🔹 Calcula el stock restante (considerando lo que ya está en carrito)
+  // Stock restante considerando carrito
   const getStockRestante = (prod: any, talle?: string) => {
-    if (!prod.talles) return 1 // si no tiene talles, asumimos que hay stock
+    if (!prod.talles) return 1
     const t = prod.talles.find((x: any) => x.label === talle)
     if (!t) return 0
 
@@ -57,7 +69,6 @@ export default function PDPComboDetalle({ combo, productosPorCategoria }: PDPCom
       return
     }
 
-    // chequeo stock antes de agregar
     if (d.talle && getStockRestante(prod, d.talle) <= 0) {
       alert("❌ No hay stock disponible para este talle.")
       return
@@ -69,14 +80,14 @@ export default function PDPComboDetalle({ combo, productosPorCategoria }: PDPCom
     setActiveModal(null)
   }
 
-  // 🔹 Todos seleccionados
+  // Todos seleccionados
   const allSelected = combo.categoriasIncluidas.every(
     (cat: any) =>
       selected[cat.categoria.slug]?.length === cat.cantidad &&
       selected[cat.categoria.slug].every((v: any) => v)
   )
 
-  // 🔹 Todos con stock
+  // Todos con stock
   const allWithStock = allSelected
     ? Object.values(selected)
         .flat()
@@ -85,33 +96,68 @@ export default function PDPComboDetalle({ combo, productosPorCategoria }: PDPCom
         )
     : false
 
+  // ================= RENDER =================
   return (
     <>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
-        {/* Galería izquierda */}
-        <div className="flex flex-col gap-3 items-center">
-          {combo.galeria?.map((img: string, idx: number) =>
-            img ? (
-              <Image
-                key={idx}
-                src={img}
-                alt={combo.nombre}
-                width={500}
-                height={500}
-                className="rounded-lg object-cover max-w-full h-auto"
-              />
-            ) : (
-              <div
-                key={idx}
-                className="w-full aspect-square max-w-[500px] bg-gray-200 flex items-center justify-center text-sm text-gray-500"
-              >
-                Sin imagen
+      {/* CONTENEDOR CENTRAL IGUAL QUE MAYORISTA */}
+      <main className="max-w-[1300px] mx-auto px-6 py-12 grid grid-cols-1 md:grid-cols-2 gap-12 items-start text-base leading-relaxed mt-20">
+        {/* ===== GALERÍA IZQUIERDA (MISMOS ESTILOS QUE MAYORISTA) ===== */}
+        <div className="flex flex-col h-full">
+          <div className="sticky top-24">
+            <div className="flex gap-6">
+              {/* Miniaturas */}
+              <div className="flex flex-col gap-3 w-24">
+                {galeria.map((img, i) => {
+                  const isActive = activeIndex === i
+                  return (
+                    <button
+                      type="button"
+                      key={`${combo._id || combo.nombre}-img-${i}`}
+                      onClick={() => setActiveIndex(i)}
+                      className={`
+                        group relative overflow-hidden rounded-md border-2 
+                        transition-all duration-200
+                        ${
+                          isActive
+                            ? "border-black shadow-[0_0_0_1px_rgba(0,0,0,0.4)]"
+                            : "border-gray-200 hover:border-gray-400"
+                        }
+                      `}
+                      aria-pressed={isActive}
+                    >
+                      <Image
+                        src={img}
+                        alt={`${combo.nombre} ${i + 1}`}
+                        width={90}
+                        height={120}
+                        className="object-cover"
+                      />
+                    </button>
+                  )
+                })}
               </div>
-            )
-          )}
+
+              {/* Imagen principal */}
+              <div className="flex-1 flex items-start justify-center">
+                <div
+                  className="overflow-hidden rounded-md cursor-zoom-in"
+                  onClick={() => setZoomOpen(true)}
+                >
+                  <Image
+                    key={imagenActiva}
+                    src={imagenActiva}
+                    alt={combo.nombre}
+                    width={600}
+                    height={800}
+                    className="object-cover transition-transform duration-500 ease-in-out hover:scale-110"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
 
-        {/* Detalle derecha */}
+        {/* ===== DETALLE DERECHA (SIN CAMBIAR LA LÓGICA) ===== */}
         <div>
           <h1 className="text-2xl md:text-3xl font-bold mb-2">{combo.nombre}</h1>
 
@@ -127,7 +173,16 @@ export default function PDPComboDetalle({ combo, productosPorCategoria }: PDPCom
             )}
           </div>
 
-          <button type="button" className="mb-6 underline text-sm text-marca-gris">📏 Guía de talles</button>
+          {/* 👉 Guía de talles como Link */}
+          <div className="mb-6">
+            <Link
+              href="/guia-de-talles"
+              className="inline-flex items-center gap-2 text-sm text-marca-gris hover:text-marca-gris/80 underline-offset-2 hover:underline"
+            >
+              <span aria-hidden="true">📏</span>
+              <span>Guía de talles</span>
+            </Link>
+          </div>
 
           {/* Cajas de selección */}
           <div className="grid grid-cols-3 gap-6 max-w-[800px] mx-auto mb-12">
@@ -175,7 +230,9 @@ export default function PDPComboDetalle({ combo, productosPorCategoria }: PDPCom
                       </div>
                     ) : (
                       <>
-                        <span className="text-2xl md:text-3xl font-bold text-gray-500">+</span>
+                        <span className="text-2xl md:text-3xl font-bold text-gray-500">
+                          +
+                        </span>
                         <span className="text-xs text-gray-500 text-center">
                           Agregar {cat.categoria.titulo} {i + 1}
                         </span>
@@ -201,9 +258,9 @@ export default function PDPComboDetalle({ combo, productosPorCategoria }: PDPCom
 
               itemsCombo.forEach((prod: any) => {
                 addItem({
-                  productId: prod._id ?? prod.slug ?? prod.nombre, // clave estable
+                  productId: prod._id ?? prod.slug ?? prod.nombre,
                   nombre: `${prod.nombre}${prod.talle ? ` (Talle ${prod.talle})` : ""}`,
-                  precio: combo.precio / itemsCombo.length,        // prorratea el total
+                  precio: combo.precio / itemsCombo.length,
                   cantidad: 1,
                   imagen: prod.imagen || "/placeholder.png",
                   slug: prod.slug ?? undefined,
@@ -211,7 +268,6 @@ export default function PDPComboDetalle({ combo, productosPorCategoria }: PDPCom
                 } as any)
               })
 
-              // ✅ Mostrar modal de “Agregado al carrito”
               showAddedDialog({
                 title: combo.nombre,
                 image: combo.galeria?.[0],
@@ -232,23 +288,32 @@ export default function PDPComboDetalle({ combo, productosPorCategoria }: PDPCom
                   title: "Origen y Cuidados",
                   content: (
                     <div className="space-y-3 text-base leading-relaxed">
-                      <p><strong>Origen</strong></p>
                       <p>
-                        Nuestras prendas son 100% argentinas tanto en su materia prima como en su elaboración artesanal.
-                        Creemos en el valor de lo hecho a mano, y al no ser un proceso mecanizado,
-                        cada prenda puede contar con pequeñas diferencias o imperfecciones.
+                        <strong>Origen</strong>
                       </p>
-                      <p><strong>Cuidados*</strong></p>
+                      <p>
+                        Nuestras prendas son 100% argentinas tanto en su materia prima
+                        como en su elaboración artesanal. Creemos en el valor de lo hecho
+                        a mano, y al no ser un proceso mecanizado, cada prenda puede
+                        contar con pequeñas diferencias o imperfecciones.
+                      </p>
+                      <p>
+                        <strong>Cuidados*</strong>
+                      </p>
                       <ul className="list-disc ml-6 space-y-1">
                         <li>Lavado a máquina en agua fría (máx. 30ºC), del revés.</li>
-                        <li>Secado al aire libre; evitar la secadora o usar ciclo frío y retirar al 80% seco.</li>
+                        <li>
+                          Secado al aire libre; evitar la secadora o usar ciclo frío y
+                          retirar al 80% seco.
+                        </li>
                         <li>Plancha a baja temperatura (máx. 110ºC), del revés.</li>
                         <li>No usar lavandina ni cloro.</li>
                         <li>Lavar con colores similares; evitar limpieza en seco.</li>
                       </ul>
                       <p className="italic text-gray-500">
-                        Aclaraciones: Nuestros productos no se encuentran prelavados (a excepción de los de Jean),
-                        por lo que aquellos que contienen algodón pueden encoger hasta un 5%.
+                        Aclaraciones: Nuestros productos no se encuentran prelavados (a
+                        excepción de los de Jean), por lo que aquellos que contienen
+                        algodón pueden encoger hasta un 5%.
                       </p>
                     </div>
                   ),
@@ -259,27 +324,40 @@ export default function PDPComboDetalle({ combo, productosPorCategoria }: PDPCom
                     <div className="space-y-3 text-base leading-relaxed">
                       <p>Enviamos a todo el país excepto Tierra del Fuego.</p>
                       <p>
-                        Nuestros tiempos de despacho son de 48hs a 72hs hábiles luego de acreditado el pago.
+                        Nuestros tiempos de despacho son de 48hs a 72hs hábiles luego de
+                        acreditado el pago.
                       </p>
-                      <p><strong>Tipos de envío:</strong></p>
-                      <p><strong>Retiros</strong></p>
                       <p>
-                        Podés hacer tu pedido en la web y retirarlo en nuestra ubicación en Resistencia, Chaco
-                        ni bien se acredite tu pago.
+                        <strong>Tipos de envío:</strong>
+                      </p>
+                      <p>
+                        <strong>Retiros</strong>
+                      </p>
+                      <p>
+                        Podés hacer tu pedido en la web y retirarlo en nuestra ubicación
+                        en Resistencia, Chaco ni bien se acredite tu pago.
                       </p>
                       <ul className="list-disc ml-6 space-y-1">
-                        <li>Hace tu pedido y pagalo antes de las 11 am y recibilo en el día, sino al día siguiente hábil.</li>
+                        <li>
+                          Hace tu pedido y pagalo antes de las 11 am y recibilo en el
+                          día, sino al día siguiente hábil.
+                        </li>
                         <li>Entrega en 24 hs luego de acreditado el pago* y despachado.</li>
-                        <li><strong>Correo Argentino:</strong> A domicilio o a sucursal en todo el país.</li>
+                        <li>
+                          <strong>Correo Argentino:</strong> A domicilio o a sucursal en
+                          todo el país.
+                        </li>
                       </ul>
                       <p className="italic text-gray-500">
-                        Aclaraciones: Una vez despachado, los tiempos dependen 100% de la empresa de logística.
-                        Mercado Pago se acredita automáticamente, transferencia puede demorar hasta 48hs.
+                        Aclaraciones: Una vez despachado, los tiempos dependen 100% de la
+                        empresa de logística. Mercado Pago se acredita automáticamente,
+                        transferencia puede demorar hasta 48hs.
                       </p>
                       <p className="italic text-gray-500">
-                        Importante sobre envíos con Correo Argentino: Los envíos no cuentan con seguro,
-                        ya que este servicio no es ofrecido por dicha empresa. Ante cualquier inconveniente
-                        comprobable que sea responsabilidad de Correo Argentino, los costos derivados no
+                        Importante sobre envíos con Correo Argentino: Los envíos no
+                        cuentan con seguro, ya que este servicio no es ofrecido por dicha
+                        empresa. Ante cualquier inconveniente comprobable que sea
+                        responsabilidad de Correo Argentino, los costos derivados no
                         serán asumidos por Goodfla.
                       </p>
                     </div>
@@ -290,36 +368,44 @@ export default function PDPComboDetalle({ combo, productosPorCategoria }: PDPCom
                   content: (
                     <div className="space-y-3 text-base leading-relaxed">
                       <p>
-                        Nuestro sistema automatizado facilita el proceso de cambios a domicilio,
-                        con un plazo de aprobación de 24 a 72 horas hábiles desde que se completa la solicitud.
-                        Si hay alguna diferencia de pago o inconveniente, se le dará prioridad para que se resuelva lo antes posible.
+                        Nuestro sistema automatizado facilita el proceso de cambios a
+                        domicilio, con un plazo de aprobación de 24 a 72 horas hábiles
+                        desde que se completa la solicitud.
                       </p>
                       <p>
-                        Tenés hasta 30 días desde la recepción del pedido para solicitar un cambio,
-                        y recibirás confirmación por email en cada etapa del proceso.
-                      </p>
-                      <p><strong>Cambios</strong></p>
-                      <p>
-                        Los cambios se realizan a través de la logística OCA, y el costo de este servicio
-                        es más alto que un envío convencional.
-                      </p>
-                      <p><strong>Devoluciones</strong></p>
-                      <p>
-                        Para devoluciones, contamos con un proceso automatizado y eficiente.
-                        Cualquier inconveniente recibirá prioridad urgente para asegurar una solución rápida.
+                        Tenés hasta 30 días desde la recepción del pedido para solicitar
+                        un cambio, y recibirás confirmación por email en cada etapa del
+                        proceso.
                       </p>
                       <p>
-                        Disponés de 30 días desde la recepción del pedido para realizar la devolución,
-                        y recibirás notificaciones por email.
+                        <strong>Cambios</strong>
+                      </p>
+                      <p>
+                        Los cambios se realizan a través de la logística OCA, y el costo
+                        de este servicio es más alto que un envío convencional.
+                      </p>
+                      <p>
+                        <strong>Devoluciones</strong>
+                      </p>
+                      <p>
+                        Para devoluciones, contamos con un proceso automatizado y
+                        eficiente. Cualquier inconveniente recibirá prioridad urgente
+                        para asegurar una solución rápida.
+                      </p>
+                      <p>
+                        Disponés de 30 días desde la recepción del pedido para realizar
+                        la devolución, y recibirás notificaciones por email.
                       </p>
                       <p>
                         Los retiros de paquetes por devolución se realizan mediante OCA,
                         y este servicio tiene un costo mayor que un envío estándar.
                       </p>
-                      <p><strong>Política de Descuentos en Cambios y Devoluciones</strong></p>
                       <p>
-                        Los descuentos aplicados al pedido original también se aplicarán en caso de
-                        devoluciones o cambios solicitados.
+                        <strong>Política de Descuentos en Cambios y Devoluciones</strong>
+                      </p>
+                      <p>
+                        Los descuentos aplicados al pedido original también se aplicarán
+                        en caso de devoluciones o cambios solicitados.
                       </p>
                     </div>
                   ),
@@ -329,7 +415,7 @@ export default function PDPComboDetalle({ combo, productosPorCategoria }: PDPCom
           </div>
         </div>
 
-        {/* Modal productos */}
+        {/* Modal productos (sin cambios) */}
         {activeModal && (
           <Modal onClose={() => setActiveModal(null)}>
             <div className="flex justify-center gap-2 sm:gap-4 mb-6 flex-wrap">
@@ -350,7 +436,6 @@ export default function PDPComboDetalle({ combo, productosPorCategoria }: PDPCom
               )}
             </div>
 
-            {/* Grid responsive */}
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
               {productosPorCategoria[activeModal.cat]?.map((prod: any, i: number) => {
                 const sizeOptions = normalizeSizes(prod.talles)
@@ -424,12 +509,40 @@ export default function PDPComboDetalle({ combo, productosPorCategoria }: PDPCom
             </div>
           </Modal>
         )}
-      </div>
+      </main>
 
       {/* Servicios que marcan la diferencia */}
       <div className="mt-16">
         <ServiciosDiferencia />
       </div>
+
+      {/* Modal zoom de la imagen principal */}
+      {zoomOpen && (
+        <div
+          className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center"
+          onClick={() => setZoomOpen(false)}
+        >
+          <div
+            className="relative bg-white rounded-lg p-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              onClick={() => setZoomOpen(false)}
+              className="absolute top-2 right-2 text-black text-2xl"
+            >
+              ×
+            </button>
+            <ZoomImage
+              src={imagenActiva}
+              alt={combo.nombre}
+              width={500}
+              height={700}
+              zoom={2.5}
+              lens={200}
+            />
+          </div>
+        </div>
+      )}
     </>
   )
 }

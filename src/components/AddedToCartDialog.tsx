@@ -11,16 +11,21 @@ export default function AddedToCartDialog() {
   if (!addedDialogOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[9999]">
-      {/* fondo */}
+    <div
+      className="
+        fixed inset-0 z-[9999]
+        flex items-center justify-center
+        bg-black/60 backdrop-blur-[2px]
+      "
+      onClick={hideAddedDialog} // click fuera cierra
+    >
+      {/* Caja del modal */}
       <div
-        className="absolute inset-0 bg-black/50"
-        onClick={hideAddedDialog}
-      />
-      {/* caja */}
-      <div
-        className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2
-                   w-[92vw] max-w-sm rounded-2xl bg-white shadow-2xl p-4"
+        className="
+          w-[92vw] max-w-sm
+          rounded-2xl bg-white shadow-2xl p-4
+        "
+        onClick={(e) => e.stopPropagation()} // click dentro NO cierra
       >
         <div className="flex items-center gap-3">
           {addedDialogData?.image && (
@@ -35,7 +40,9 @@ export default function AddedToCartDialog() {
           <div className="flex-1">
             <h3 className="text-base font-semibold">¡Agregado al carrito!</h3>
             {addedDialogData?.title && (
-              <p className="text-sm text-gray-600">{addedDialogData.title}</p>
+              <p className="text-sm text-gray-600">
+                {addedDialogData.title}
+              </p>
             )}
           </div>
         </div>

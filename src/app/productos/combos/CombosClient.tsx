@@ -3,6 +3,8 @@
 import { useState, useMemo, useEffect } from "react"
 import Image from "next/image"
 import Link from "next/link"
+import SectionTitle from "@/components/SectionTitle" // ajustá la ruta si es distinta
+
 
 export default function CombosClient({
   combos,
@@ -32,6 +34,9 @@ export default function CombosClient({
   const [inStock, setInStock] = useState(false)
   const [view, setView] = useState<"list" | "grid2" | "grid3" | "grid4">("grid3")
 
+  // Mostrar / ocultar filtros en MOBILE (acordeón)
+  const [showMobileFilters, setShowMobileFilters] = useState(false)
+
   const combosFiltrados = useMemo(() => {
     let data = [...safeCombos]
 
@@ -45,10 +50,14 @@ export default function CombosClient({
 
     switch (sort) {
       case "precio-asc":
-        data.sort((a, b) => (Number(a.precio) || Infinity) - (Number(b.precio) || Infinity))
+        data.sort(
+          (a, b) => (Number(a.precio) || Infinity) - (Number(b.precio) || Infinity)
+        )
         break
       case "precio-desc":
-        data.sort((a, b) => (Number(b.precio) || -Infinity) - (Number(a.precio) || -Infinity))
+        data.sort(
+          (a, b) => (Number(b.precio) || -Infinity) - (Number(a.preccio) || -Infinity)
+        )
         break
       case "alfabetico":
         data.sort((a, b) =>
@@ -84,10 +93,167 @@ export default function CombosClient({
   return (
     <div className="min-h-screen bg-slate-200 py-10">
       <main className="max-w-[1400px] mx-auto px-4 mt-20">
+        <SectionTitle basePath={basePath} />
+        {/* BOTÓN FILTROS SOLO MOBILE */}
+        <div className="md:hidden flex justify-end mb-3">
+          <button
+            onClick={() => setShowMobileFilters((v) => !v)}
+            className="px-4 py-2 rounded-xl bg-white shadow-md border border-slate-200 text-sm font-medium text-slate-800"
+          >
+            {showMobileFilters ? "Ocultar filtros" : "Filtrar por"}
+          </button>
+        </div>
+
+        {/* PANEL DE FILTROS MOBILE EN ACORDEÓN */}
+        {showMobileFilters && (
+          <div className="md:hidden mb-6 rounded-2xl bg-white/90 backdrop-blur-lg border border-white/70 shadow-[0_18px_45px_rgba(15,23,42,0.18)] p-6">
+            {/* Header filtros mobile */}
+            <div className="flex items-start justify-between gap-3 mb-4">
+              <div>
+                <p className="text-[11px] uppercase tracking-[0.25em] text-slate-500">
+                  Filtrar por
+                </p>
+                <h2 className="mt-1 font-semibold text-lg text-slate-900">
+                  Preferencias
+                </h2>
+                <p className="text-xs text-slate-500 mt-1">
+                  Ajustá la vista para encontrar el combo ideal.
+                </p>
+              </div>
+              <button
+                onClick={limpiarFiltros}
+                className="text-xs font-medium text-slate-600 hover:text-slate-900 hover:underline"
+              >
+                Limpiar
+              </button>
+            </div>
+
+            <div className="h-px bg-gradient-to-r from-transparent via-slate-200 to-transparent mb-4" />
+
+            {/* Disponibilidad */}
+            <div className="space-y-2 mb-6">
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Disponibilidad
+              </h3>
+              <label className="flex items-center justify-between gap-4 cursor-pointer">
+                <span className="text-sm text-slate-800">
+                  Mostrar solo productos en stock
+                </span>
+
+                <span className="relative inline-flex items-center">
+                  <input
+                    type="checkbox"
+                    checked={inStock}
+                    onChange={(e) => setInStock(e.target.checked)}
+                    className="peer sr-only"
+                  />
+                  <span className="w-10 h-5 rounded-full bg-slate-300 peer-checked:bg-emerald-500 transition-colors" />
+                  <span className="absolute left-0.5 top-0.5 w-4 h-4 rounded-full bg-white shadow-sm transform peer-checked:translate-x-5 transition-transform" />
+                </span>
+              </label>
+            </div>
+
+            {/* Precio */}
+            <div className="space-y-3 mb-6">
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    Rango de precio
+                  </h3>
+                  <p className="text-[11px] text-slate-500">
+                    Deslizá para ajustar el mínimo y máximo.
+                  </p>
+                </div>
+                <div className="flex flex-col items-end text-[11px] text-slate-600">
+                  <span>Mín: ${minPrice.toLocaleString("es-AR")}</span>
+                  <span>Máx: ${maxPrice.toLocaleString("es-AR")}</span>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <div className="flex flex-col gap-2">
+                  <input
+                    type="range"
+                    min={0}
+                    max={priceMaxFromData}
+                    value={minPrice}
+                    onChange={(e) => setMinPrice(Number(e.target.value))}
+                    className="w-full accent-black"
+                  />
+                  <input
+                    type="range"
+                    min={0}
+                    max={priceMaxFromData}
+                    value={maxPrice}
+                    onChange={(e) => setMaxPrice(Number(e.target.value))}
+                    className="w-full accent-black"
+                  />
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMinPrice(0)
+                      setMaxPrice(priceMaxFromData)
+                    }}
+                    className="px-3 py-1 rounded-full text-[11px] border border-slate-300 bg-white/80 text-slate-700 hover:border-slate-600 hover:text-slate-900"
+                  >
+                    Todos
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMinPrice(0)
+                      setMaxPrice(Math.round(priceMaxFromData * 0.5))
+                    }}
+                    className="px-3 py-1 rounded-full text-[11px] border border-slate-300 bg-white/80 text-slate-700 hover:border-slate-600 hover:text-slate-900"
+                  >
+                    Más económicos
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMinPrice(Math.round(priceMaxFromData * 0.5))
+                      setMaxPrice(priceMaxFromData)
+                    }}
+                    className="px-3 py-1 rounded-full text-[11px] border border-slate-300 bg-white/80 text-slate-700 hover:border-slate-600 hover:text-slate-900"
+                  >
+                    Premium
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Tipo de producto */}
+            <div className="space-y-3 mb-4">
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Tipo de producto
+              </h3>
+              <div className="flex flex-wrap gap-2">
+                <label className="inline-flex items-center gap-2 cursor-pointer px-3 py-1.5 rounded-full bg-white/90 border border-slate-200 hover:border-slate-400 text-xs text-slate-700">
+                  <input
+                    type="checkbox"
+                    className="w-3.5 h-3.5 accent-black rounded border-gray-400"
+                  />
+                  <span>Producto</span>
+                </label>
+              </div>
+            </div>
+
+            <button
+              onClick={() => setShowMobileFilters(false)}
+              className="w-full mt-1 py-3 rounded-xl bg-black text-white text-sm font-medium"
+            >
+              Aplicar filtros
+            </button>
+          </div>
+        )}
+
+        {/* GRID PRINCIPAL (sidebar + productos) */}
         <div className="grid grid-cols-1 md:grid-cols-[260px,1fr] gap-10">
-          {/* ==== SIDEBAR FILTROS (NUEVO DISEÑO) ==== */}
-          <aside className="space-y-8 p-6 rounded-2xl bg-white/70 backdrop-blur-lg border border-white/70 shadow-[0_18px_45px_rgba(15,23,42,0.18)]">
-            {/* Header filtros */}
+          {/* ==== SIDEBAR DESKTOP ==== */}
+          <aside className="hidden md:block space-y-8 p-6 rounded-2xl bg-white/70 backdrop-blur-lg border border-white/70 shadow-[0_18px_45px_rgba(15,23,42,0.18)]">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <p className="text-[11px] uppercase tracking-[0.25em] text-slate-500">
@@ -110,7 +276,7 @@ export default function CombosClient({
 
             <div className="h-px bg-gradient-to-r from-transparent via-slate-200 to-transparent" />
 
-            {/* Disponibilidad - switch moderno */}
+            {/* Disponibilidad */}
             <div className="space-y-2">
               <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                 Disponibilidad
@@ -120,7 +286,6 @@ export default function CombosClient({
                   Mostrar solo productos en stock
                 </span>
 
-                {/* Switch */}
                 <span className="relative inline-flex items-center">
                   <input
                     type="checkbox"
@@ -173,7 +338,6 @@ export default function CombosClient({
                   />
                 </div>
 
-                {/* Presets rápidos */}
                 <div className="flex flex-wrap gap-2">
                   <button
                     type="button"
@@ -211,7 +375,7 @@ export default function CombosClient({
 
             <div className="h-px bg-slate-100" />
 
-            {/* Tipo de producto (de momento solo 1, pero con look de chips) */}
+            {/* Tipo de producto */}
             <div className="space-y-3">
               <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                 Tipo de producto
@@ -228,9 +392,9 @@ export default function CombosClient({
             </div>
           </aside>
 
-          {/* ==== MAIN PRODUCTOS ==== */}
+          {/* ==== PRODUCTOS ==== */}
           <section>
-            {/* Barra superior */}
+            {/* Barra superior productos */}
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6 gap-4">
               <div className="flex items-center gap-2">
                 <span className="text-sm font-medium text-slate-700">
@@ -328,7 +492,6 @@ export default function CombosClient({
               </div>
             </div>
 
-            {/* Lista productos */}
             {combosFiltrados.length === 0 && (
               <p className="text-gray-600">No se encontraron resultados.</p>
             )}

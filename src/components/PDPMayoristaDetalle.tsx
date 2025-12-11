@@ -1,12 +1,14 @@
+// src/components/PDPMayoristaDetalle.tsx
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { useState } from "react";
 import ZoomImage from "./ZoomImage";
 import ServiciosDiferencia from "./ServiciosDiferencia";
 import AccordionInfo from "./AccordionInfo";
 import { useCart } from "@/context/CartContext";
-import { useUi } from "@/context/UiContext"; // 👈 NUEVO
+import { useUi } from "@/context/UiContext";
 
 type MayoristaProducto = {
   _id?: string;
@@ -14,7 +16,7 @@ type MayoristaProducto = {
   precioActual: number;
   precioAntes?: number | null;
   descripcion?: string;
-  galeria?: string[]; // portada + galería ya mapeadas como array de urls
+  galeria?: string[];
   slug?: string;
 };
 
@@ -24,12 +26,15 @@ export default function PDPMayoristaDetalle({ producto }: { producto: MayoristaP
       ? producto.galeria
       : ["/placeholder.jpg"];
 
-  const [imagenActiva, setImagenActiva] = useState(galeria[0]);
+  // 👉 ahora usamos índice, no URL
+  const [activeIndex, setActiveIndex] = useState(0);
+  const imagenActiva = galeria[activeIndex];
+
   const [cantidad, setCantidad] = useState(1);
   const [zoomOpen, setZoomOpen] = useState(false);
 
   const { addItem } = useCart();
-  const { showAddedDialog } = useUi(); // 👈 NUEVO
+  const { showAddedDialog } = useUi();
 
   const handleCantidad = (n: number) => {
     const nueva = cantidad + n;
@@ -37,17 +42,15 @@ export default function PDPMayoristaDetalle({ producto }: { producto: MayoristaP
   };
 
   const handleAddToCart = () => {
-    // para mayorista no hay talle; agregamos por pack
     addItem({
       productId: (producto as any)?._id ?? (producto as any)?.slug ?? producto.nombre,
       nombre: producto.nombre,
       precio: producto.precioActual,
       cantidad,
-      imagen: imagenActiva || producto.galeria?.[0], // 👈 usa la imagen activa si existe
+      imagen: imagenActiva || producto.galeria?.[0],
       slug: (producto as any)?.slug,
     } as any);
 
-    // 👇 Abrimos el diálogo de "Agregado al carrito"
     showAddedDialog({
       title: producto.nombre,
       image: imagenActiva || producto.galeria?.[0],
@@ -56,31 +59,41 @@ export default function PDPMayoristaDetalle({ producto }: { producto: MayoristaP
 
   return (
     <>
-      <main className="max-w-[1300px] mx-auto px-6 py-12 grid grid-cols-1 md:grid-cols-2 gap-12 items-start text-base leading-relaxed">
+      <main className="max-w-[1300px] mx-auto px-6 py-12 grid grid-cols-1 md:grid-cols-2 gap-12 items-start text-base leading-relaxed mt-20">
         {/* GALERÍA */}
         <div className="flex flex-col h-full">
           <div className="sticky top-24">
             <div className="flex gap-6">
               {/* Miniaturas */}
               <div className="flex flex-col gap-3 w-24">
-                {galeria.map((img, i) => (
-                  <button
-                    type="button"
-                    key={`${producto._id || producto.nombre}-img-${i}`}
-                    onClick={() => setImagenActiva(img)}
-                    className={`border rounded-md overflow-hidden ${
-                      imagenActiva === img ? "ring-2 ring-black" : ""
-                    }`}
-                  >
-                    <Image
-                      src={img}
-                      alt={`${producto.nombre} ${i + 1}`}
-                      width={90}
-                      height={120}
-                      className="object-cover"
-                    />
-                  </button>
-                ))}
+                {galeria.map((img, i) => {
+                  const isActive = activeIndex === i;
+                  return (
+                    <button
+                      type="button"
+                      key={`${producto._id || producto.nombre}-img-${i}`}
+                      onClick={() => setActiveIndex(i)}
+                      className={`
+                        group relative overflow-hidden rounded-md border-2 
+                        transition-all duration-200
+                        ${
+                          isActive
+                            ? "border-black shadow-[0_0_0_1px_rgba(0,0,0,0.4)]"
+                            : "border-gray-200 hover:border-gray-400"
+                        }
+                      `}
+                      aria-pressed={isActive}
+                    >
+                      <Image
+                        src={img}
+                        alt={`${producto.nombre} ${i + 1}`}
+                        width={90}
+                        height={120}
+                        className="object-cover"
+                      />
+                    </button>
+                  );
+                })}
               </div>
 
               {/* Imagen principal */}
@@ -90,6 +103,7 @@ export default function PDPMayoristaDetalle({ producto }: { producto: MayoristaP
                   onClick={() => setZoomOpen(true)}
                 >
                   <Image
+                    key={imagenActiva}
                     src={imagenActiva}
                     alt={producto.nombre}
                     width={600}
@@ -116,6 +130,17 @@ export default function PDPMayoristaDetalle({ producto }: { producto: MayoristaP
                 ${producto.precioActual.toLocaleString("es-AR")}
               </p>
             </div>
+
+            {/* 👉 Enlace a Guía de talles */}
+            <div className="mt-3">
+              <Link
+                href="/guia-de-talles"
+                className="inline-flex items-center gap-2 text-sm text-amber-600 hover:text-amber-700 underline-offset-2 hover:underline"
+              >
+                <span aria-hidden="true">✏️</span>
+                <span>Guía de talles</span>
+              </Link>
+            </div>
           </div>
 
           {/* Cantidad */}
@@ -131,7 +156,11 @@ export default function PDPMayoristaDetalle({ producto }: { producto: MayoristaP
                 –
               </button>
               <span className="flex-1 text-center">{cantidad}</span>
-              <button type="button" onClick={() => handleCantidad(1)} className="px-4 py-2 text-xl">
+              <button
+                type="button"
+                onClick={() => handleCantidad(1)}
+                className="px-4 py-2 text-xl"
+              >
                 +
               </button>
             </div>
@@ -139,7 +168,7 @@ export default function PDPMayoristaDetalle({ producto }: { producto: MayoristaP
 
           {/* Botón carrito */}
           <button
-            type="button" // 👈 evita un submit accidental
+            type="button"
             onClick={handleAddToCart}
             className="w-full bg-black text-white py-4 rounded-md font-medium text-lg"
           >

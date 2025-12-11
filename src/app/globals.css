@@ -88,3 +88,25 @@ button {
   animation: pulse-whatsapp 2s infinite;
 }
 
+
+
+
+
+@keyframes cart-wiggle {
+  0%, 100% {
+    transform: rotate(0deg);
+  }
+  25% {
+    transform: rotate(6deg);
+  }
+  50% {
+    transform: rotate(-6deg);
+  }
+  75% {
+    transform: rotate(4deg);
+  }
+}
+
+.cart-wiggle {
+  animation: cart-wiggle 1.2s ease-in-out infinite;
+}
