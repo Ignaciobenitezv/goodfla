@@ -107,7 +107,7 @@ export default function PDPComboDetalle({ combo, productosPorCategoria }: PDPCom
             <div className="flex gap-6">
               {/* Miniaturas */}
               <div className="flex flex-col gap-3 w-24">
-                {galeria.map((img, i) => {
+                {galeria.map((img: string, i: number) => {
                   const isActive = activeIndex === i
                   return (
                     <button
