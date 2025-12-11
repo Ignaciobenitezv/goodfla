@@ -5,6 +5,10 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { ChevronLeft, ChevronRight } from "lucide-react"
 
+interface SectionTitleProps {
+  basePath?: string; // ahora acepta esta prop (la usamos solo para typing)
+}
+
 // Orden de navegación circular
 const SECTIONS = [
   {
@@ -33,7 +37,7 @@ const pulseAnimation = `
   }
 `
 
-export default function SectionTitle() {
+export default function SectionTitle({ basePath: _basePath }: SectionTitleProps) {
   const pathname = usePathname() || "/"
 
   // Buscar la sección actual según la URL
