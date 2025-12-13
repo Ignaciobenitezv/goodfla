@@ -5,56 +5,191 @@ import Image from "next/image"
 import { useRouter } from "next/navigation"
 
 export default function CarritoPage() {
-  const { items } = useCart()
+  const { items, addItem, removeItem } = useCart()
   const router = useRouter()
 
-  const total = items.reduce((sum, i) => sum + i.precio * i.cantidad, 0)
+  const total = items.reduce(
+    (sum, i) => sum + i.precio * i.cantidad,
+    0
+  )
 
   return (
-    <main className="max-w-4xl mx-auto p-6 space-y-6">
-      <h1 className="text-2xl font-bold">Tu carrito</h1>
+    <main className="max-w-5xl mx-auto px-4 py-10 mt-20">
+      <h1 className="text-3xl font-semibold mb-8">Tu carrito</h1>
 
       {items.length === 0 ? (
-        <p className="text-gray-500">Tu carrito está vacío 🛒</p>
+        <div className="text-center py-20 text-gray-500">
+          <p className="text-lg">Tu carrito está vacío 🛒</p>
+        </div>
       ) : (
-        <>
-          {items.map((item, idx) => {
-            // 👇 evitar error de tipos: casteo sólo para armar la key
-            const anyItem = item as any
-            const key = item.cartKey ?? `${item.productId}__${item.talle ?? "default"}__${idx}`
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-10">
+          {/* ================= LISTA PRODUCTOS ================= */}
+          <section className="space-y-6">
+            {items.map((item, idx) => {
+              const key =
+                item.cartKey ??
+                `${item.productId}__${item.talle ?? "default"}__${idx}`
 
+              return (
+                <div
+                  key={key}
+                  className="
+                    flex gap-4 items-center
+                    rounded-xl
+                    bg-white/80
+                    backdrop-blur-lg
+                    border border-gray-200
+                    p-4
+                    shadow-sm
+                  "
+                >
+                  {/* Imagen */}
+                  <Image
+                    src={item.imagen}
+                    alt={item.nombre}
+                    width={90}
+                    height={120}
+                    className="rounded-md object-cover"
+                  />
 
-            return (
-              <div key={key} className="flex gap-3 items-center border-b pb-3">
-                <Image
-                  src={item.imagen}
-                  alt={item.nombre}
-                  width={70}
-                  height={90}
-                  className="rounded object-cover"
-                />
-                <div className="flex-1">
-                  <p className="font-medium">{item.nombre}</p>
-                  <p className="text-sm text-gray-500">
-                    ${item.precio} × {item.cantidad}
-                  </p>
+                  {/* Info */}
+                  <div className="flex-1">
+                    <p className="font-medium text-base">
+                      {item.nombre}
+                    </p>
+
+                    {item.talle && (
+                      <p className="text-xs text-gray-500">
+                        Talle: {item.talle}
+                      </p>
+                    )}
+
+                    <p className="text-sm text-gray-600 mt-1">
+                      ${item.precio.toLocaleString("es-AR")}
+                    </p>
+
+                    {/* Cantidad */}
+                    <div className="flex items-center gap-3 mt-3">
+                      <button
+                        onClick={() =>
+                          addItem({
+                            ...item,
+                            cantidad: -1,
+                          } as any)
+                        }
+                        className="w-8 h-8 rounded-full border flex items-center justify-center"
+                        disabled={item.cantidad <= 1}
+                      >
+                        −
+                      </button>
+
+                      <span className="min-w-[24px] text-center">
+                        {item.cantidad}
+                      </span>
+
+                      <button
+                        onClick={() =>
+                          addItem({
+                            ...item,
+                            cantidad: 1,
+                          } as any)
+                        }
+                        className="w-8 h-8 rounded-full border flex items-center justify-center"
+                      >
+                        +
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Subtotal + eliminar */}
+                  <div className="flex flex-col items-end justify-between h-full">
+                    <button
+                      onClick={() => removeItem(key)}
+                      className="text-xs text-gray-400 hover:text-red-600"
+                    >
+                      Eliminar
+                    </button>
+
+                    <p className="font-semibold">
+                      $
+                      {(item.precio * item.cantidad).toLocaleString(
+                        "es-AR"
+                      )}
+                    </p>
+                  </div>
                 </div>
-              </div>
-            )
-          })}
+              )
+            })}
+          </section>
 
-          <div className="flex justify-between font-bold text-lg mt-4">
-            <span>Total:</span>
-            <span>${total}</span>
-          </div>
-
-          <button
-            className="w-full bg-black text-white py-3 rounded mt-6"
-            onClick={() => router.push("/checkout")}
+          {/* ================= RESUMEN ================= */}
+          <aside
+            className="
+              rounded-2xl
+              bg-white/80
+              backdrop-blur-lg
+              border border-gray-200
+              p-6
+              h-fit
+              shadow-md
+              sticky top-28
+            "
           >
-            Finalizar compra
-          </button>
-        </>
+            <h2 className="text-xl font-semibold mb-4">
+              Resumen de compra
+            </h2>
+
+            <div className="flex justify-between text-sm mb-2">
+              <span>Productos</span>
+              <span>{items.length}</span>
+            </div>
+
+            <div className="flex justify-between text-sm mb-4">
+              <span>Envío</span>
+              <span className="text-gray-500">
+                A calcular
+              </span>
+            </div>
+
+            <div className="h-px bg-gray-200 mb-4" />
+
+            <div className="flex justify-between text-lg font-bold mb-6">
+              <span>Total</span>
+              <span>
+                ${total.toLocaleString("es-AR")}
+              </span>
+            </div>
+
+            <button
+              onClick={() => router.push("/checkout")}
+              className="
+                w-full
+                bg-black
+                text-white
+                py-3
+                rounded-lg
+                font-medium
+                hover:bg-gray-800
+                transition
+              "
+            >
+              Finalizar compra
+            </button>
+
+            <button
+              onClick={() => router.push("/")}
+              className="
+                w-full
+                mt-3
+                text-sm
+                text-gray-600
+                hover:underline
+              "
+            >
+              Seguir comprando
+            </button>
+          </aside>
+        </div>
       )}
     </main>
   )

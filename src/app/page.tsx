@@ -27,11 +27,18 @@ export default async function Home() {
       <VideoHero />
 <LogoMarquee />
 
-      <section className="relative h-[60vh] bg-cover bg-center" style={{ backgroundImage: 'url(/filagod.png)' }}>
-        <div className="absolute inset-0 bg-black/20 flex items-center justify-center text-white text-center">
-          <h2 className="text-4xl md:text-5xl font-bold">#GoodflaClub</h2>
-        </div>
-      </section>
+  <section
+  className="relative h-[60vh] bg-cover"
+  style={{
+    backgroundImage: "url(/gudclub.jpg)",
+    backgroundPosition: "center 20%",
+  }}
+>
+  <div className="absolute inset-0 bg-black/40 flex items-center justify-center text-white text-center">
+    <h2 className="text-4xl md:text-5xl font-bold">#GoodflaClub</h2>
+  </div>
+</section>
+
 
       <FooterSeccion />
     </>

@@ -270,7 +270,7 @@ useEffect(() => {
 
 
   return (
-    <main className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-8 p-6">
+    <main className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-8 p-6 mt-20">
       {/* --------- FORM PRINCIPAL --------- */}
       <div className="md:col-span-2 space-y-10">
         {/* Stepper */}

@@ -1,5 +1,6 @@
 'use client'
 
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import AnimatedFadeDown from './AnimatedFadeDown'
@@ -10,12 +11,38 @@ const categorias = [
   { titulo: 'ZAPATILLAS 2X1', imagen: '/zapas.jpg', link: '/productos/zapatillas' },
 ]
 
+// 🎯 Posiciones DESKTOP
+const POSITIONS_DESKTOP: Record<string, string> = {
+  '/mayo.jpg': 'center 45%',
+  '/fd.jpg': 'center 35%',
+  '/zapas.jpg': 'center 50%',
+}
+
+// 📱 Posiciones MOBILE
+const POSITIONS_MOBILE: Record<string, string> = {
+  '/mayo.jpg': '50% 15%',
+  '/fd.jpg': '60% 40%',
+  '/zapas.jpg': '50% 85%',
+}
+
 export default function CategoriasDestacadas() {
+  // Detectar mobile correctamente
+  const [isMobile, setIsMobile] = useState(false)
+
+  useEffect(() => {
+    const media = window.matchMedia('(max-width: 767px)')
+    const update = () => setIsMobile(media.matches)
+
+    update()
+    media.addEventListener('change', update)
+    return () => media.removeEventListener('change', update)
+  }, [])
+
   return (
     <section
       className="
-        grid grid-cols-1        /* mobile: apiladas una debajo de la otra */
-        md:grid-cols-3          /* desktop: 3 columnas */
+        grid grid-cols-1
+        md:grid-cols-3
         w-full max-w-none
       "
     >
@@ -24,7 +51,7 @@ export default function CategoriasDestacadas() {
           key={i}
           className="
             relative group
-            h-[33vh] md:h-[90vh] /* altura: más chica en mobile, grande en desktop */
+            h-[33vh] md:h-[90vh]
             overflow-hidden
           "
         >
@@ -36,6 +63,11 @@ export default function CategoriasDestacadas() {
             priority={i === 0}
             sizes="(min-width:768px) 33vw, 100vw"
             className="object-cover transition-transform duration-300 group-hover:scale-105"
+            style={{
+              objectPosition: isMobile
+                ? POSITIONS_MOBILE[cat.imagen] ?? 'center'
+                : POSITIONS_DESKTOP[cat.imagen] ?? 'center',
+            }}
             draggable={false}
           />
 

@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { FaWhatsapp } from 'react-icons/fa'
 
 const WHATSAPP_MAYORISTA =
-  'https://wa.me/5493624545344?text=Hola%20quiero%20unirme%20al%20grupo%20mayorista%20de%20Goodfla'
+  'https://wa.me/5493624934353?text=Hola%20quiero%20unirme%20al%20grupo%20mayorista%20de%20Goodfla'
 
 export default function FooterSeccion() {
   return (
@@ -47,7 +47,7 @@ export default function FooterSeccion() {
               </Link>
             </li>
             <li>
-              <Link href="/politica-de-devoluciones" className="hover:text-marca-amarillo transition">
+              <Link href="/politica-de-cambios" className="hover:text-marca-amarillo transition">
                 Política de devoluciones
               </Link>
             </li>
@@ -103,12 +103,12 @@ export default function FooterSeccion() {
               Encontranos en:
               <br />
               <span className="text-white/70 text-xs">
-                Av. Ejemplo 123, Resistencia, Chaco
+                Julio Argentino Roca 67, Resistencia, Chaco
               </span>
             </li>
             <li>
               <a
-                href="https://www.instagram.com/"
+                href="https://www.instagram.com/goodflaa?igsh=OGI1MWlrNDF3MG54"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="hover:text-marca-amarillo transition"
@@ -118,7 +118,7 @@ export default function FooterSeccion() {
             </li>
             <li>
               <a
-                href="https://www.tiktok.com/"
+                href="https://www.tiktok.com/@goodflaa?_r=1&_t=ZS-92CRTRFKr6T"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="hover:text-marca-amarillo transition"

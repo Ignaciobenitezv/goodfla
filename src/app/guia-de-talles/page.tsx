@@ -95,7 +95,7 @@ export default function GuiaDeTallesPage() {
   ];
 
   return (
-    <main className="mx-auto max-w-5xl px-4 py-10">
+    <main className="mx-auto max-w-5xl px-4 py-10 mt-10">
       {/* HERO / CABECERA FULL-WIDTH */}
       <section className="relative left-1/2 right-1/2 -ml-[50vw] -mr-[50vw] w-screen overflow-hidden bg-marca-amarillo/90">
         <div className="mx-auto flex max-w-5xl flex-col items-center gap-3 px-4 py-10 md:flex-row md:justify-between md:py-12">
@@ -103,7 +103,7 @@ export default function GuiaDeTallesPage() {
             <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-black/70">
               Guía de talles
             </p>
-            <h1 className="text-3xl md:text-4xl font-semibold tracking-[0.18em] text-black">
+            <h1 className="text-3xl md:text-4xl font-semibold text-black">
               Elegí tu talle ideal
             </h1>
             <p className="mt-1 max-w-xl text-sm md:text-base text-black/80">
