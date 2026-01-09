@@ -16,6 +16,14 @@ interface PDPComboDetalleProps {
   productosPorCategoria: Record<string, any[]>
 }
 
+interface PDPComboDetalleProps {
+  combo: any
+  productosPorCategoria: Record<string, any[]>
+}
+
+// 🔹 helper para detectar videos
+const isVideoUrl = (url: string) => /\.(mp4|webm|mov)$/i.test(url)
+
 type DraftSelections = Record<string, { talle?: string; color?: string }>
 
 export default function PDPComboDetalle({ combo, productosPorCategoria }: PDPComboDetalleProps) {
@@ -24,8 +32,10 @@ export default function PDPComboDetalle({ combo, productosPorCategoria }: PDPCom
     combo.galeria && combo.galeria.length > 0 ? combo.galeria : ["/placeholder.jpg"]
 
   const [activeIndex, setActiveIndex] = useState(0)
-  const imagenActiva = galeria[activeIndex]
-  const [zoomOpen, setZoomOpen] = useState(false)
+const mediaActiva = galeria[activeIndex]
+const esVideoActivo = isVideoUrl(mediaActiva)
+const [zoomOpen, setZoomOpen] = useState(false)
+
 
   // ================= ESTADOS COMBO =================
   const [selected, setSelected] = useState<{ [key: string]: any[] }>({})
@@ -125,13 +135,23 @@ export default function PDPComboDetalle({ combo, productosPorCategoria }: PDPCom
                       `}
                       aria-pressed={isActive}
                     >
-                      <Image
-                        src={img}
-                        alt={`${combo.nombre} ${i + 1}`}
-                        width={90}
-                        height={120}
-                        className="object-cover"
-                      />
+                      {isVideoUrl(img) ? (
+  <video
+    src={img}
+    muted
+    playsInline
+    className="w-[90px] h-[120px] object-cover"
+  />
+) : (
+  <Image
+    src={img}
+    alt={`${combo.nombre} ${i + 1}`}
+    width={90}
+    height={120}
+    className="object-cover"
+  />
+)}
+
                     </button>
                   )
                 })}
@@ -140,18 +160,31 @@ export default function PDPComboDetalle({ combo, productosPorCategoria }: PDPCom
               {/* Imagen principal */}
               <div className="flex-1 flex items-start justify-center">
                 <div
-                  className="overflow-hidden rounded-md cursor-zoom-in"
-                  onClick={() => setZoomOpen(true)}
-                >
-                  <Image
-                    key={imagenActiva}
-                    src={imagenActiva}
-                    alt={combo.nombre}
-                    width={600}
-                    height={800}
-                    className="object-cover transition-transform duration-500 ease-in-out hover:scale-110"
-                  />
-                </div>
+  className={`overflow-hidden rounded-md ${esVideoActivo ? "" : "cursor-zoom-in"}`}
+  onClick={() => {
+    if (!esVideoActivo) setZoomOpen(true)
+  }}
+>
+  {esVideoActivo ? (
+    <video
+      key={mediaActiva}
+      src={mediaActiva}
+      controls
+      playsInline
+      className="w-full h-auto object-cover"
+    />
+  ) : (
+    <Image
+      key={mediaActiva}
+      src={mediaActiva}
+      alt={combo.nombre}
+      width={600}
+      height={800}
+      className="object-cover transition-transform duration-500 ease-in-out hover:scale-110"
+    />
+  )}
+</div>
+
               </div>
             </div>
           </div>
@@ -517,7 +550,8 @@ export default function PDPComboDetalle({ combo, productosPorCategoria }: PDPCom
       </div>
 
       {/* Modal zoom de la imagen principal */}
-      {zoomOpen && (
+      {zoomOpen && !esVideoActivo && (
+
         <div
           className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center"
           onClick={() => setZoomOpen(false)}
@@ -533,7 +567,7 @@ export default function PDPComboDetalle({ combo, productosPorCategoria }: PDPCom
               ×
             </button>
             <ZoomImage
-              src={imagenActiva}
+              src={mediaActiva}
               alt={combo.nombre}
               width={500}
               height={700}

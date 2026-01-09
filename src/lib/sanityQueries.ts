@@ -32,10 +32,16 @@ export const Q_PRODUCTO_BY_SLUG = groq`
   descripcion,
   precio,
   "imagen": imagen.asset->url,
-  "galeria": coalesce(galeria[].asset->url, [imagen.asset->url]),
+
+  galeria[]{
+    tipo,
+    "imagenUrl": imagen.asset->url,
+    "videoUrl": video.asset->url
+  },
+
   talles[]{label, stock},
-  esCombo,                 // 👈 necesario para 2x1
-  comboCantidad,           // 👈 necesario para 2x1
+  esCombo,
+  comboCantidad,
   "categoria": categoria->slug.current,
   "slug": slug.current
 }`
@@ -50,8 +56,13 @@ export const Q_COMBOS = groq`
   precio,
   "slug": slug.current,
   "imagen": imagen.asset->url,
-  "galeria": coalesce(galeria[].asset->url, [imagen.asset->url]),
-  // 🔹 agregamos categoría fija
+
+  galeria[]{
+    tipo,
+    "imagenUrl": imagen.asset->url,
+    "videoUrl": video.asset->url
+  },
+
   "categoria": "combos",
   categoriasIncluidas[] {
     cantidad,
@@ -63,6 +74,7 @@ export const Q_COMBOS = groq`
   }
 }`
 
+
 export const Q_COMBO_BY_SLUG = groq`
 *[_type == "combo" && slug.current == $slug][0]{
   _id,
@@ -72,7 +84,13 @@ export const Q_COMBO_BY_SLUG = groq`
   precio,
   "slug": slug.current,
   "imagen": imagen.asset->url,
-  "galeria": coalesce(galeria[].asset->url, [imagen.asset->url]),
+
+  galeria[]{
+    tipo,
+    "imagenUrl": imagen.asset->url,
+    "videoUrl": video.asset->url
+  },
+
   categoriasIncluidas[] {
     cantidad,
     categoria->{
@@ -81,8 +99,8 @@ export const Q_COMBO_BY_SLUG = groq`
       "slug": slug.current
     }
   }
-}
-`
+}`
+
 export const Q_PRODUCTOS_BY_CATEGORIA = groq`
 *[_type=="producto" && categoria->slug.current == $slug] | order(_createdAt desc){
   _id,
@@ -122,7 +140,13 @@ export const Q_ZAPATILLAS = groq`
   nombre,
   precio,
   "imagen": imagen.asset->url,
-  "galeria": coalesce(galeria[].asset->url, [imagen.asset->url]),
+
+  galeria[]{
+    tipo,
+    "imagenUrl": imagen.asset->url,
+    "videoUrl": video.asset->url
+  },
+
   "slug": slug.current,
   talles[]{label, stock}
 }`
@@ -138,8 +162,15 @@ export const Q_ZAPA2X1_LIST = groq`
   precioAntes,
   precioActual,
   "slug": slug.current,
-  "portada": portada.asset->{url},
-  "galeria": galeria[].asset->{url},
+
+  "portadaUrl": portada.asset->url,
+
+  galeria[]{
+    tipo,
+    "imagenUrl": imagen.asset->url,
+    "videoUrl": video.asset->url
+  },
+
   categoriasIncluidas[]{
     cantidad,
     categoria->{ _id, titulo, "slug": slug.current }
@@ -147,6 +178,7 @@ export const Q_ZAPA2X1_LIST = groq`
   _createdAt
 }
 `
+
 
 export const Q_MAYORISTA_LIST = groq`
 *[_type == "packMayorista" && activo == true] | order(title asc){
@@ -157,10 +189,16 @@ export const Q_MAYORISTA_LIST = groq`
   precioAntes,
   precioActual,
   "portada": portada.asset->{ url, _id, metadata{ lqip, dimensions } },
-  "galeria": galeria[].asset->{ url, _id, metadata{ lqip, dimensions } },
+
+  galeria[]{
+    tipo,
+    "imagenUrl": imagen.asset->url,
+    "videoUrl": video.asset->url
+  },
+
   _createdAt
-}
-`
+}`
+
 
 
 export const Q_MAYORISTA_BY_SLUG = groq`
@@ -171,14 +209,15 @@ export const Q_MAYORISTA_BY_SLUG = groq`
   descripcion,
   precioAntes,
   precioActual,
-  "portada": portada.asset->{
-    url, _id, metadata{ lqip, dimensions }
-  },
-  "galeria": galeria[].asset->{
-    url, _id, metadata{ lqip, dimensions }
+  "portada": portada.asset->{ url, _id, metadata{ lqip, dimensions } },
+
+  galeria[]{
+    tipo,
+    "imagenUrl": imagen.asset->url,
+    "videoUrl": video.asset->url
   }
-}
-`
+}`
+
 
 
 export const Q_COMBOS_ZAPATILLAS_2X1 = groq`
@@ -195,7 +234,12 @@ export const Q_COMBOS_ZAPATILLAS_2X1 = groq`
   "slug": slug.current,
   // portada/galería como en Q_COMBOS
   "imagen": imagen.asset->url,
-  "galeria": coalesce(galeria[].asset->url, [imagen.asset->url]),
+  galeria[]{
+  tipo,
+  "imagenUrl": imagen.asset->url,
+  "videoUrl": video.asset->url
+},
+
   categoriasIncluidas[] {
     cantidad,
     categoria->{
@@ -222,7 +266,11 @@ export const Q_ZAPATILLAS_2X1 = groq`
   precio,
   "slug": slug.current,
   "imagen": imagen.asset->url,
-  "galeria": coalesce(galeria[].asset->url, [imagen.asset->url]),
+  galeria[]{
+  tipo,
+  "imagenUrl": imagen.asset->url,
+  "videoUrl": video.asset->url
+},
   categoriasIncluidas[]{
     cantidad,
     categoria->{ _id, titulo, "slug": slug.current }
@@ -238,8 +286,15 @@ export const Q_ZAPA2X1_BY_SLUG = groq`
   precioAntes,
   precioActual,
   "slug": slug.current,
-  "portada": portada.asset->{url},
-  "galeria": galeria[].asset->{url},
+
+  "portadaUrl": portada.asset->url,
+
+  galeria[]{
+    tipo,
+    "imagenUrl": imagen.asset->url,
+    "videoUrl": video.asset->url
+  },
+
   categoriasIncluidas[]{
     cantidad,
     categoria->{ _id, titulo, "slug": slug.current }
