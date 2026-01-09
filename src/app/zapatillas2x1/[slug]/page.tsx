@@ -14,10 +14,17 @@ export default async function Zapa2x1Page({ params }: { params: Promise<Params> 
   // Traemos el "combo" de zapatillas 2x1
   const combo = await sanityClient.fetch(Q_ZAPA2X1_BY_SLUG, { slug })
   if (!combo) return notFound()
-    // Normalizamos la galería (imagen o video)
+ // Normalizamos la galería (soporta mediaItem o urls directas)
 const galeriaUrls = (combo.galeria || [])
-  .map((m: any) => m?.videoUrl || m?.imagenUrl)
-  .filter(Boolean)
+  .map((m: any) => {
+    // caso 1: mediaItem { videoUrl, imagenUrl }
+    if (m && typeof m === "object") return m.videoUrl || m.imagenUrl
+    // caso 2: ya viene como string url
+    if (typeof m === "string") return m
+    return null
+  })
+  .filter(Boolean) as string[]
+
 
 
   // Armamos productosPorCategoria tal como usa PDPComboDetalle
@@ -39,7 +46,7 @@ const galeriaUrls = (combo.galeria || [])
     precioAnterior: combo.precioAntes ?? null,
     precio: combo.precioActual,
     slug: combo.slug,
-    imagen: combo.portadaUrl || galeriaUrls[0] || "",
+    imagen: combo.portada?.url || combo.portadaUrl || galeriaUrls[0] || "",
     galeria: galeriaUrls,
     categoriasIncluidas: combo.categoriasIncluidas || [],
   }

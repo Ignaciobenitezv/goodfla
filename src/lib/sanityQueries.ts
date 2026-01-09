@@ -163,10 +163,10 @@ export const Q_ZAPA2X1_LIST = groq`
   precioActual,
   "slug": slug.current,
 
-  // ✅ lo que necesita tu card para mostrar la imagen
+  // clave: una imagen directa para la card
   "imagen": portada.asset->url,
 
-  // (opcional) si querés seguir trayendo galería como mediaItem
+  // y si querés la galería completa:
   galeria[]{
     tipo,
     "imagenUrl": imagen.asset->url,
@@ -291,8 +291,10 @@ export const Q_ZAPA2X1_BY_SLUG = groq`
   precioActual,
   "slug": slug.current,
 
+  // portada como URL simple
   "portadaUrl": portada.asset->url,
 
+  // galería como mediaItem
   galeria[]{
     tipo,
     "imagenUrl": imagen.asset->url,
