@@ -163,11 +163,15 @@ export const Q_ZAPA2X1_LIST = groq`
   precioActual,
   "slug": slug.current,
 
-  // ✅ ESTE es el campo que tu card seguramente espera:
-  "imagen": coalesce(
-    portada.asset->url,
-    galeria[0].imagen.asset->url
-  ),
+  // ✅ lo que necesita tu card para mostrar la imagen
+  "imagen": portada.asset->url,
+
+  // (opcional) si querés seguir trayendo galería como mediaItem
+  galeria[]{
+    tipo,
+    "imagenUrl": imagen.asset->url,
+    "videoUrl": video.asset->url
+  },
 
   categoriasIncluidas[]{
     cantidad,
@@ -176,6 +180,7 @@ export const Q_ZAPA2X1_LIST = groq`
   _createdAt
 }
 `
+
 
 
 

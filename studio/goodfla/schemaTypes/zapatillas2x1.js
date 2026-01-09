@@ -92,12 +92,13 @@ export default {
     }
   ],
   preview: {
-  select: { title: 'title', media: 'portada', precio: 'precioActual' },
-  prepare: (value) => ({
-    title: value.title,
-    subtitle: value.precio != null ? `$${value.precio}` : '',
-    media: value.media,
+  select: { title: 'nombre', media: 'portada', precio: 'precioActual' },
+  prepare: ({ title, media, precio }) => ({
+    title,
+    subtitle: precio != null ? `$${precio}` : '',
+    media,
   }),
 }
+
 
 }
