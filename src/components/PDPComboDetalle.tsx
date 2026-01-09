@@ -138,11 +138,15 @@ const [zoomOpen, setZoomOpen] = useState(false)
                       {isVideoUrl(img) ? (
   <video
     src={img}
+    autoPlay
+    loop
     muted
     playsInline
+    preload="metadata"
     className="w-[90px] h-[120px] object-cover"
   />
 ) : (
+
   <Image
     src={img}
     alt={`${combo.nombre} ${i + 1}`}
@@ -166,14 +170,19 @@ const [zoomOpen, setZoomOpen] = useState(false)
   }}
 >
   {esVideoActivo ? (
-    <video
-      key={mediaActiva}
-      src={mediaActiva}
-      controls
-      playsInline
-      className="w-full h-auto object-cover"
-    />
-  ) : (
+  <video
+    key={mediaActiva}
+    src={mediaActiva}
+    autoPlay
+    loop
+    muted
+    playsInline
+    preload="auto"
+    controls={false}
+    className="w-full h-auto object-cover"
+  />
+) : (
+
     <Image
       key={mediaActiva}
       src={mediaActiva}
