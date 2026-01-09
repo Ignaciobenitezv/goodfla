@@ -163,10 +163,10 @@ export const Q_ZAPA2X1_LIST = groq`
   precioActual,
   "slug": slug.current,
 
-  // clave: una imagen directa para la card
+  // ✅ este es el campo que tu grid probablemente espera
   "imagen": portada.asset->url,
 
-  // y si querés la galería completa:
+  // opcional por si querés mostrar miniaturas mixtas
   galeria[]{
     tipo,
     "imagenUrl": imagen.asset->url,
@@ -180,6 +180,7 @@ export const Q_ZAPA2X1_LIST = groq`
   _createdAt
 }
 `
+
 
 
 
