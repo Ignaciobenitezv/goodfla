@@ -136,17 +136,22 @@ const [zoomOpen, setZoomOpen] = useState(false)
                       aria-pressed={isActive}
                     >
                       {isVideoUrl(img) ? (
-  <video
-    src={img}
-    autoPlay
-    loop
-    muted
-    playsInline
-    preload="metadata"
-    className="w-[90px] h-[120px] object-cover"
-  />
+  <div className="relative w-[90px] h-[120px]">
+    <video
+      src={img}
+      muted
+      playsInline
+      preload="metadata"
+      className="w-[90px] h-[120px] object-cover"
+    />
+    {/* Icono play para indicar que es video */}
+    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+      <div className="bg-black/50 text-white text-xs px-2 py-1 rounded">
+        VIDEO
+      </div>
+    </div>
+  </div>
 ) : (
-
   <Image
     src={img}
     alt={`${combo.nombre} ${i + 1}`}
@@ -155,6 +160,7 @@ const [zoomOpen, setZoomOpen] = useState(false)
     className="object-cover"
   />
 )}
+
 
                     </button>
                   )
