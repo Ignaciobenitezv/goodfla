@@ -35,11 +35,12 @@ export default {
       validation: (Rule) => Rule.required()
     },
     {
-      name: 'galeria',
-      title: 'Galería de imágenes',
-      type: 'array',
-      of: [{ type: 'image', options: { hotspot: true } }]
-    },
+  name: 'galeria',
+  title: 'Galería',
+  type: 'array',
+  of: [{ type: 'mediaItem' }],
+  options: { layout: 'grid' },
+},
     {
       // igual que "combos": permite definir slots/cantidades por categoría
       name: 'categoriasIncluidas',

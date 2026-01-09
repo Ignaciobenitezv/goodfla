@@ -24,12 +24,12 @@ export default {
 
     // Galería de imágenes
     {
-      name: 'galeria',
-      title: 'Galería',
-      type: 'array',
-      of: [{ type: 'image', options: { hotspot: true } }],
-      options: { layout: 'grid' },
-    },
+  name: 'galeria',
+  title: 'Galería',
+  type: 'array',
+  of: [{ type: 'mediaItem' }],
+  options: { layout: 'grid' },
+},
 
     // 🔹 Talles con stock numérico
     {

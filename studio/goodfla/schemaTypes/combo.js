@@ -33,11 +33,12 @@ export default {
       options: { hotspot: true },
     },
     {
-      name: "galeria",
-      title: "Galería de imágenes",
-      type: "array",
-      of: [{ type: "image", options: { hotspot: true } }],
-    },
+  name: 'galeria',
+  title: 'Galería',
+  type: 'array',
+  of: [{ type: 'mediaItem' }],
+  options: { layout: 'grid' },
+},
     {
       name: "categoriasIncluidas",
       title: "Categorías incluidas",

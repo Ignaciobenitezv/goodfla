@@ -1,7 +1,7 @@
 // schemaTypes/mayorista.js
 export default {
   name: 'packMayorista',
-  title: 'Pack Mayorista',
+  title: 'Pack Mayoristaa',
   type: 'document',
   fields: [
     {
@@ -42,12 +42,12 @@ export default {
       validation: (Rule) => Rule.required(),
     },
     {
-      name: 'galeria',
-      title: 'Galería de imágenes',
-      type: 'array',
-      of: [{ type: 'image' }],
-      options: { layout: 'grid' },
-    },
+  name: 'galeria',
+  title: 'Galería',
+  type: 'array',
+  of: [{ type: 'mediaItem' }],
+  options: { layout: 'grid' },
+},
     {
       name: 'activo',
       title: 'Activo',
