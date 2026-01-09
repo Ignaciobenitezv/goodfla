@@ -25,6 +25,7 @@ export default function Navbar() {
 
   const pathname = usePathname()
 
+  
   const ayudaLinks = [
     { href: '/guia-de-talles', label: 'Guía de talles' },
     { href: '/politica-de-cambios', label: 'Política de Cambios' },
