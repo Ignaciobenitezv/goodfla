@@ -40,6 +40,7 @@ export default function ProductosPage() {
           (prod) =>
             prod.categoria?.toLowerCase() === categoriaSeleccionada.toLowerCase()
         )
+         
 
   return (
     <section className="px-4 py-16 max-w-7xl mx-auto">

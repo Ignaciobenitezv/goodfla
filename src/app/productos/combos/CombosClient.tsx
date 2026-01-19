@@ -5,6 +5,16 @@ import Image from "next/image"
 import Link from "next/link"
 import SectionTitle from "@/components/SectionTitle" // ajustá la ruta si es distinta
 
+const BADGE_MAP: Record<string, string> = {
+  MAS_VENDIDO: "MÁS VENDIDO",
+  NUEVO: "NUEVO",
+  OFERTA: "OFERTA",
+  LIMITADA: "EDICIÓN LIMITADA",
+  ULTIMAS: "ÚLTIMAS UNIDADES",
+  NONE: "",
+}
+
+
 
 export default function CombosClient({
   combos,
@@ -41,7 +51,7 @@ export default function CombosClient({
     let data = [...safeCombos]
 
     data = data.filter((c) => {
-      const p = Number(c.precio)
+      const p = Number(c.precio ?? c.precioActual ?? 0)
       if (!Number.isFinite(p)) return true
       return p >= minPrice && p <= maxPrice
     })
@@ -51,12 +61,14 @@ export default function CombosClient({
     switch (sort) {
       case "precio-asc":
         data.sort(
-          (a, b) => (Number(a.precio) || Infinity) - (Number(b.precio) || Infinity)
+          (a, b) => (Number(a.precio ?? a.precioActual) || Infinity) - (Number(b.precio ?? b.precioActual) || Infinity)
+
         )
         break
       case "precio-desc":
         data.sort(
-          (a, b) => (Number(b.precio) || -Infinity) - (Number(a.preccio) || -Infinity)
+          (a, b) => (Number(a.precio ?? a.precioActual) || Infinity) - (Number(b.precio ?? b.precioActual) || Infinity)
+
         )
         break
       case "alfabetico":
@@ -76,14 +88,15 @@ export default function CombosClient({
     setInStock(false)
   }
 
-  const gridClass =
-    view === "list"
-      ? "flex flex-col gap-6"
-      : view === "grid2"
-      ? "grid grid-cols-2 gap-4"
-      : view === "grid3"
-      ? "grid grid-cols-3 gap-4"
-      : "grid grid-cols-4 gap-4"
+ const gridClass =
+  view === "list"
+    ? "flex flex-col gap-6"
+    : view === "grid2"
+    ? "grid grid-cols-2 gap-4"
+    : view === "grid3"
+    ? "grid grid-cols-2 sm:grid-cols-3 gap-4 items-stretch"
+    : "grid grid-cols-2 sm:grid-cols-4 gap-4"
+
 
   const imageSizes =
     view === "list"
@@ -497,55 +510,135 @@ export default function CombosClient({
             )}
 
             <div className={gridClass}>
-              {combosFiltrados.map((combo: any) => (
-                <Link
-                  key={combo._id}
-                  href={`${basePath}/${combo.slug}`}
-                  className="
-                    group
-                    block 
-                    rounded-2xl 
-                    overflow-hidden 
-                    bg-white/70 
-                    backdrop-blur-xl 
-                    border border-white/20 
-                    shadow-[0_18px_45px_rgba(0,0,0,0.15)]
-                    transition-transform duration-300 
-                    hover:-translate-y-1 
-                    hover:shadow-[0_24px_60px_rgba(0,0,0,0.25)]
-                  "
-                >
-                  <div className="relative w-full aspect-[4/5] bg-black/10 overflow-hidden">
-                    {combo.imagen ? (
-                      <Image
-                        src={combo.imagen}
-                        alt={combo.nombre}
-                        fill
-                        sizes={imageSizes}
-                        className="object-cover transition-transform duration-500 group-hover:scale-[1.03]"
-                      />
-                    ) : (
-                      <span className="absolute inset-0 flex items-center justify-center text-gray-400 text-sm">
-                        Sin imagen
-                      </span>
-                    )}
-                  </div>
+  {combosFiltrados.map((combo: any) => {
+    console.log("envioGratis raw:", combo._id, combo.envioGratis, typeof combo.envioGratis)
 
-                  <div className="p-4">
-                    <h2 className="font-semibold text-base text-slate-900">
-                      {combo.nombre}
-                    </h2>
-                    {typeof combo.precio === "number" ? (
-                      <p className="text-red-600 font-bold text-lg">
-                        ${combo.precio.toLocaleString("es-AR")}
-                      </p>
-                    ) : (
-                      <p className="text-gray-600 text-sm">Consultar precio</p>
-                    )}
-                  </div>
-                </Link>
-              ))}
+    const precio = Number(combo.precio ?? combo.precioActual ?? 0)
+    const precioViejo = Number(combo.precioAnterior ?? combo.precioAntes ?? 0)
+    const cuota = Math.round(precio / 6)
+
+    const rating = Math.max(0, Math.min(5, Number(combo.rating ?? 0)))
+    const votes = Math.max(0, Number(combo.ratingCount ?? 0))
+    const envioGratis = combo.envioGratis === true
+
+    const badgeCode = String(combo.badge ?? "NONE").trim()
+const badgeText = BADGE_MAP[badgeCode] ?? ""
+
+
+
+    const isDark = false
+
+    return (
+      <Link
+        key={combo._id}
+        href={`${basePath}/${combo.slug}`}
+        className="group block bg-transparent text-zinc-900 flex flex-col h-full"
+      >
+        {/* Imagen */}
+        <div className="relative w-full aspect-[4/5] overflow-hidden bg-transparent">
+          {combo.imagen ? (
+            <Image
+              src={combo.imagen}
+              alt={combo.nombre}
+              fill
+              sizes={imageSizes}
+              className="object-cover transition-transform duration-300 group-hover:scale-[1.03]"
+            />
+          ) : (
+            <span className="absolute inset-0 flex items-center justify-center text-gray-400 text-sm">
+              Sin imagen
+            </span>
+          )}
+
+          {/* ENVÍO GRATIS */}
+          {envioGratis ? (
+            <div className="absolute left-4 top-4 z-10">
+              <span className="inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold border shadow-sm bg-white text-zinc-900 border-zinc-200">
+                🚚 GRATIS
+              </span>
             </div>
+          ) : null}
+        </div>
+
+        {/* Contenido */}
+        <div className="px-3 pb-3 flex flex-col flex-1">
+          {/* BADGE */}
+          <div className="mt-2 min-h-[28px]">
+            {badgeText ? (
+              <span className="inline-flex rounded px-2 py-1 text-[11px] font-bold bg-marca-amarillo text-black">
+                {badgeText}
+              </span>
+            ) : null}
+          </div>
+
+          {/* Título */}
+          <h3 className="mt-1.5 text-[12px] sm:text-[13px] leading-snug font-semibold line-clamp-2 min-h-[30px]">
+            {combo.nombre}
+          </h3>
+
+          {/* Rating */}
+          {(rating > 0 || votes > 0) ? (
+            <div className="mt-1.5 flex items-center gap-1.5">
+              <div className="flex items-center leading-none">
+                {Array.from({ length: 5 }).map((_, idx) => {
+                  const filled = idx < Math.round(rating)
+                  return (
+                    <span
+                      key={idx}
+                      className={filled ? "text-[14px] text-amber-400" : "text-[14px] text-zinc-300"}
+                    >
+                      ★
+                    </span>
+                  )
+                })}
+              </div>
+
+              {votes > 0 ? <span className="text-[12px] text-zinc-500">({votes})</span> : null}
+            </div>
+          ) : null}
+
+          {/* Precio */}
+          <div className="mt-1.5 min-h-[74px]">
+            <div className="flex items-baseline gap-1.5 flex-wrap">
+              <span className="text-[16px] sm:text-[18px] font-extrabold">
+                $ {precio.toLocaleString("es-AR")}
+              </span>
+              <span className={isDark ? "text-[13px] text-white/70" : "text-[13px] text-zinc-500"}>
+                por
+              </span>
+            </div>
+
+            <div className="text-[14px] sm:text-[16px] font-semibold mt-0.5">
+              Transferencia
+            </div>
+
+            {precioViejo > 0 ? (
+              <div className={["mt-1 text-[12px] line-through", isDark ? "text-white/50" : "text-zinc-400"].join(" ")}>
+                $ {precioViejo.toLocaleString("es-AR")}
+              </div>
+            ) : (
+              <div className="mt-1 text-[12px] min-h-[16px]" />
+            )}
+          </div>
+
+          {/* Cuotas */}
+          <div className="mt-1.5 text-[12px] sm:text-[13px] min-h-[18px]">
+            6 x $ {cuota.toLocaleString("es-AR")} sin interés
+          </div>
+
+          {/* Botón */}
+          <div className="mt-auto pt-3">
+            <span className="inline-flex w-full justify-center rounded-full bg-marca-amarillo text-black font-semibold py-2 text-[14px] transition-colors hover:bg-marca-amarillo/50">
+              Comprar
+            </span>
+          </div>
+        </div>
+      </Link>
+    )
+  })}
+</div>
+
+
           </section>
         </div>
       </main>

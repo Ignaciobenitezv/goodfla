@@ -50,12 +50,21 @@ export const Q_PRODUCTO_BY_SLUG = groq`
 export const Q_COMBOS = groq`
 *[_type == "combo"] | order(_createdAt desc){
   _id,
+  _createdAt,
   nombre,
   descripcion,
   precioAnterior,
   precio,
+
+  // ✅ meta dinámico
+  badge,
+  rating,
+  ratingCount,
+  "envioGratis": coalesce(envioGratis, false),
+
   "slug": slug.current,
   "imagen": imagen.asset->url,
+
 
   galeria[]{
     tipo,
@@ -157,11 +166,20 @@ export const Q_ZAPATILLAS = groq`
 export const Q_ZAPA2X1_LIST = groq`
 *[_type == "zapatillas2x1" && defined(slug.current)] | order(_createdAt desc){
   _id,
+  _createdAt,
   nombre,
   descripcion,
   precioAntes,
   precioActual,
+
+  // ✅ meta dinámico
+  badge,
+  rating,
+  ratingCount,
+  "envioGratis": coalesce(envioGratis, false),
+
   "slug": slug.current,
+
 
   // ✅ este es el campo que tu grid probablemente espera
   "imagen": portada.asset->url,
@@ -188,11 +206,19 @@ export const Q_ZAPA2X1_LIST = groq`
 export const Q_MAYORISTA_LIST = groq`
 *[_type == "packMayorista" && activo == true] | order(title asc){
   _id,
+  _createdAt,
   title,
   "slug": slug.current,
   descripcion,
   precioAntes,
   precioActual,
+
+  // ✅ meta dinámico
+  badge,
+  rating,
+  ratingCount,
+  "envioGratis": coalesce(envioGratis, false),
+
   "portada": portada.asset->{ url, _id, metadata{ lqip, dimensions } },
 
   galeria[]{

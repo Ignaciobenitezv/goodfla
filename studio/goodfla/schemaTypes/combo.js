@@ -1,3 +1,5 @@
+import { productMetaFields } from "./productMetaFields"
+
 export default {
   name: "combo",
   title: "Combo",
@@ -14,12 +16,10 @@ export default {
       title: "Descripción",
       type: "text",
     },
-    {
-      name: "precioAnterior",
-      title: "Precio antes (opcional)",
-      type: "number",
-      description: "Si se completa, aparecerá tachado como precio anterior",
-    },
+
+    // 👉 META CAMPOS COMPARTIDOS
+    ...productMetaFields,
+
     {
       name: "precio",
       title: "Precio actual",
@@ -33,12 +33,12 @@ export default {
       options: { hotspot: true },
     },
     {
-  name: 'galeria',
-  title: 'Galería',
-  type: 'array',
-  of: [{ type: 'mediaItem' }],
-  options: { layout: 'grid' },
-},
+      name: "galeria",
+      title: "Galería",
+      type: "array",
+      of: [{ type: "mediaItem" }],
+      options: { layout: "grid" },
+    },
     {
       name: "categoriasIncluidas",
       title: "Categorías incluidas",
