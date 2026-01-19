@@ -515,7 +515,7 @@ export default function CombosClient({
 
     const precio = Number(combo.precio ?? combo.precioActual ?? 0)
     const precioViejo = Number(combo.precioAnterior ?? combo.precioAntes ?? 0)
-    const cuota = Math.round(precio / 6)
+    const cuota = Math.round(precio / 3)
 
     const rating = Math.max(0, Math.min(5, Number(combo.rating ?? 0)))
     const votes = Math.max(0, Number(combo.ratingCount ?? 0))
@@ -623,7 +623,7 @@ const badgeText = BADGE_MAP[badgeCode] ?? ""
 
           {/* Cuotas */}
           <div className="mt-1.5 text-[12px] sm:text-[13px] min-h-[18px]">
-            6 x $ {cuota.toLocaleString("es-AR")} sin interés
+            3 x $ {cuota.toLocaleString("es-AR")} sin interés
           </div>
 
           {/* Botón */}
