@@ -11,18 +11,12 @@ export async function POST(req: Request) {
     console.log("📦 Items recibidos:", body?.items);
 
     // Carrito compacto para metadata
-    const compactCart = (body?.items || []).map((i: any) => {
-      const productId =
-        i?.talle && typeof i?.id === "string"
-          ? i.id.replace(new RegExp(`-${i.talle}$`), "")
-          : i?.id;
-      return {
-        id: i?.id,
-        productId,
-        talle: i?.talle || null,
-        cantidad: Number(i?.cantidad || 1),
-      };
-    });
+    const compactCart = (body?.items || []).map((i: any) => ({
+  productId: i.productId,        // ✅ _id REAL de Sanity
+  talle: i.talle || null,
+  cantidad: Number(i.cantidad || 1),
+}));
+
 
     console.log("🚀 compactCart enviado a MP:", compactCart);
 

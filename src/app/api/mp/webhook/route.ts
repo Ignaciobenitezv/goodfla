@@ -97,13 +97,51 @@ async function handle(req: Request) {
     }
 
     if (!cart.length) {
-      console.log("ℹ️ merchant_order sin cart en metadata");
-      return NextResponse.json({ ok: true, msg: "Sin cart" });
-    }
+  console.log("ℹ️ merchant_order sin cart en metadata");
+  return NextResponse.json({ ok: true, msg: "Sin cart" });
+}
 
-    await descontarStock(cart);
-    return NextResponse.json({ ok: true, from: "merchant_order" });
-  }
+// ✅ PASO A: verificar que exista un pago aprobado
+const approved = Array.isArray(order.payments)
+  ? order.payments.some((p: any) => p.status === "approved")
+  : false;
+
+if (!approved) {
+  console.log("ℹ️ merchant_order sin pago aprobado todavía. No se descuenta stock.", {
+    orderId: order.id,
+    payments: order.payments?.map((p: any) => ({
+      id: p.id,
+      status: p.status,
+    })),
+  });
+  return NextResponse.json({ ok: true, msg: "Not approved yet" });
+}
+
+// ✅ PASO B: idempotencia (evitar doble descuento)
+const markerId = `mp_order_${order.id}`;
+const alreadyProcessed = await sanity.getDocument(markerId);
+
+if (alreadyProcessed) {
+  console.log("↩️ Webhook repetido. Orden ya procesada:", markerId);
+  return NextResponse.json({ ok: true, msg: "Already processed" });
+}
+
+
+
+
+// ⬇️ SOLO SI ESTÁ APPROVED LLEGAMOS ACÁ
+await descontarStock(cart);
+return NextResponse.json({ ok: true, from: "merchant_order" });
+}
+
+// Marcamos la orden como procesada ANTES de descontar
+await sanity.createIfNotExists({
+  _id: markerId,
+  _type: "mpWebhook",
+  orderId: order.id,
+  preferenceId: order.preference_id,
+  createdAt: new Date().toISOString(),
+});
 
   // Si no es merchant_order, lo ignoramos (como antes)
   return NextResponse.json({ ok: true, ignored: true });
