@@ -49,22 +49,68 @@ const [zoomOpen, setZoomOpen] = useState(false)
     setDraft((d) => ({ ...d, [prodId]: { ...(d[prodId] || {}), [key]: value } }))
 
   // Stock restante considerando carrito
-  const getStockRestante = (prod: any, talle?: string) => {
-    if (!prod.talles) return 1
-    const t = prod.talles.find((x: any) => x.label === talle)
-    if (!t) return 0
+  // Stock restante considerando:
+// - stock en Sanity
+// - lo que ya hay en el carrito
+// - lo que ya seleccionaste en ESTE combo (otros slots)
+const getStockRestante = (prod: any, talle?: string) => {
+  const t = prod?.talles?.find((x: any) => x.label === talle)
+  const stock = typeof t?.stock === "number" ? t.stock : 0
 
-    const enCarrito = items.find((i: any) => {
-      const itemKey = i._id ?? i.productId ?? i.slug ?? i.nombre
-      const prodKey = String(prod._id ?? prod.slug ?? prod.nombre)
-      return (
-        (String(itemKey) === prodKey || String(itemKey).startsWith(prodKey)) &&
-        i.talle === talle
-      )
+  // 1) En carrito: mismo productId + mismo talle
+  const enCarrito = items
+    .filter((i: any) => i.productId === prod._id && i.talle === talle)
+    .reduce((acc: number, i: any) => acc + (i.cantidad || 0), 0)
+
+  // 2) En el combo actual (selected): contar cuántas veces ya elegiste este prod+talle
+  const enCombo = Object.values(selected)
+    .flat()
+    .filter(Boolean)
+    .filter((p: any) => p._id === prod._id && p.talle === talle).length
+
+  return stock - enCarrito - enCombo
+}
+
+
+  // 🔹 Stock real por talle (para pasar al carrito)
+const getStockTalle = (prod: any, talle?: string) => {
+  if (!talle) return typeof prod.stock === "number" ? prod.stock : undefined
+
+  const t = prod.talles?.find((x: any) => x.label === talle)
+  return typeof t?.stock === "number" ? t.stock : undefined
+}
+
+  // 🔹 Valida que el combo completo tenga stock suficiente
+const hasStockForCombo = () => {
+  const picks = Object.values(selected).flat().filter(Boolean)
+
+  // agrupar por productId + talle
+  const neededMap = new Map<string, { prod: any; qty: number }>()
+
+  for (const p of picks) {
+    const key = `${p._id}__${p.talle || "default"}`
+    neededMap.set(key, {
+      prod: p,
+      qty: (neededMap.get(key)?.qty || 0) + 1,
     })
-
-    return t.stock - (enCarrito?.cantidad || 0)
   }
+
+  // validar cada grupo contra stock - carrito
+  for (const { prod, qty } of neededMap.values()) {
+    const talle = prod.talle
+    const t = prod?.talles?.find((x: any) => x.label === talle)
+    const stock = typeof t?.stock === "number" ? t.stock : 0
+
+    const enCarrito = items
+      .filter((i: any) => i.productId === prod._id && i.talle === talle)
+      .reduce((acc: number, i: any) => acc + (i.cantidad || 0), 0)
+
+    if (stock - enCarrito < qty) return false
+  }
+
+  return true
+}
+
 
   const handleAddToCombo = (categoriaSlug: string, index: number, prod: any) => {
     const d = draft[prod._id] || {}
@@ -80,9 +126,10 @@ const [zoomOpen, setZoomOpen] = useState(false)
     }
 
     if (d.talle && getStockRestante(prod, d.talle) <= 0) {
-      alert("❌ No hay stock disponible para este talle.")
-      return
-    }
+  alert("❌ No hay stock disponible para este talle.")
+  return
+}
+
 
     const nuevos = [...(selected[categoriaSlug] || [])]
     nuevos[index] = { ...prod, talle: d.talle || null, color: d.color || null }
@@ -98,13 +145,8 @@ const [zoomOpen, setZoomOpen] = useState(false)
   )
 
   // Todos con stock
-  const allWithStock = allSelected
-    ? Object.values(selected)
-        .flat()
-        .every((prod: any) =>
-          prod.talle ? getStockRestante(prod, prod.talle) > 0 : true
-        )
-    : false
+  const allWithStock = allSelected ? hasStockForCombo() : false
+
 
   // ================= RENDER =================
   return (
@@ -305,16 +347,20 @@ const [zoomOpen, setZoomOpen] = useState(false)
               const itemsCombo = Object.values(selected).flat().filter(Boolean)
 
               itemsCombo.forEach((prod: any) => {
-                addItem({
-                  productId: prod._id ?? prod.slug ?? prod.nombre,
-                  nombre: `${prod.nombre}${prod.talle ? ` (Talle ${prod.talle})` : ""}`,
-                  precio: combo.precio / itemsCombo.length,
-                  cantidad: 1,
-                  imagen: prod.imagen || "/placeholder.png",
-                  slug: prod.slug ?? undefined,
-                  talle: prod.talle ?? undefined,
-                } as any)
-              })
+  const stockTalle = getStockTalle(prod, prod.talle)
+
+  addItem({
+    productId: prod._id, // SIEMPRE el _id real de Sanity
+    nombre: `${prod.nombre}${prod.talle ? ` (Talle ${prod.talle})` : ""}`,
+    precio: combo.precio / itemsCombo.length,
+    cantidad: 1,
+    imagen: prod.imagen || "/placeholder.png",
+    slug: prod.slug ?? undefined,
+    talle: prod.talle ?? undefined,
+    stock: stockTalle, // ✅ CLAVE
+  })
+})
+
 
               showAddedDialog({
                 title: combo.nombre,

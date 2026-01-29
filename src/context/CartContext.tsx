@@ -96,14 +96,26 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const clearCart = () => setItems([])
 
   const increaseQuantity = (cartKey: string) => {
-    setItems((prev) =>
-      prev.map((i) =>
-        i.cartKey === cartKey && (i.stock ?? Infinity) > i.cantidad
-          ? { ...i, cantidad: i.cantidad + 1 }
-          : i
-      )
-    )
-  }
+  setItems((prev) =>
+    prev.map((i) => {
+      if (i.cartKey !== cartKey) return i
+
+      if (typeof i.stock !== "number") {
+        alert("No se pudo validar stock. Recargá la página.")
+        return i
+      }
+
+      if (i.cantidad >= i.stock) {
+        alert("No hay más stock disponible")
+        return i
+      }
+
+      return { ...i, cantidad: i.cantidad + 1 }
+    })
+  )
+}
+
+
 
   const decreaseQuantity = (cartKey: string) => {
     setItems((prev) =>
