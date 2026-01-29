@@ -1,8 +1,8 @@
-// app/api/mp/webhook/route.ts
-import { NextResponse } from "next/server";
-import { createClient } from "@sanity/client";
+// src/app/api/mp/webhook/route.ts
+import { NextResponse } from "next/server"
+import { createClient } from "@sanity/client"
 
-export const dynamic = "force-dynamic"; // 👈 evita cache en Vercel/Edge
+export const dynamic = "force-dynamic" // evita cache
 
 const sanity = createClient({
   projectId: process.env.NEXT_PUBLIC_SANITY_PROJECT_ID!,
@@ -10,21 +10,20 @@ const sanity = createClient({
   token: process.env.SANITY_API_WRITE_TOKEN!,
   apiVersion: "2024-01-01",
   useCdn: false,
-});
+})
 
-type CartItem = { productId: string; talle?: string | null; cantidad: number };
+type CartItem = { productId: string; talle?: string | null; cantidad: number }
 
 async function mpGet(url: string) {
-  const token = process.env.MP_ACCESS_TOKEN;
-  if (!token) {
-    throw new Error("Missing MP_ACCESS_TOKEN");
-  }
+  const token = process.env.MP_ACCESS_TOKEN
+  if (!token) throw new Error("Missing MP_ACCESS_TOKEN")
+
   const r = await fetch(url, {
     headers: { Authorization: `Bearer ${token}` },
     cache: "no-store",
-  });
-  if (!r.ok) throw new Error(await r.text());
-  return r.json();
+  })
+  if (!r.ok) throw new Error(await r.text())
+  return r.json()
 }
 
 async function descontarStock(cart: CartItem[]) {
@@ -32,124 +31,118 @@ async function descontarStock(cart: CartItem[]) {
     const prod = await sanity.fetch(
       `*[_type=="producto" && _id==$id][0]{_id, stock, talles}`,
       { id: it.productId }
-    );
-
-    if (!prod) continue;
+    )
+    if (!prod) continue
 
     if (Array.isArray(prod.talles) && it.talle) {
       const newTalles = prod.talles.map((t: any) =>
         t.label === it.talle
           ? { ...t, stock: Math.max(0, (t.stock || 0) - it.cantidad) }
           : t
-      );
-      await sanity.patch(prod._id).set({ talles: newTalles }).commit();
-      console.log(`✅ Stock actualizado talle ${it.talle}`);
+      )
+
+      await sanity.patch(prod._id).set({ talles: newTalles }).commit()
+      console.log(`✅ Stock actualizado talle ${it.talle} (${it.productId})`)
     } else if (typeof prod.stock === "number") {
-      await sanity.patch(prod._id).dec({ stock: it.cantidad }).commit();
-      console.log(`✅ Stock global actualizado`);
+      await sanity.patch(prod._id).dec({ stock: it.cantidad }).commit()
+      console.log(`✅ Stock global actualizado (${it.productId})`)
     }
   }
 }
 
 async function handle(req: Request) {
-  // Intentamos leer body (si viene POST con JSON)
-  let body: any = null;
+  let body: any = null
   try {
-    body = await req.json();
-    console.log("📩 Webhook POST body:", body);
+    body = await req.json()
+    console.log("📩 Webhook POST body:", body)
   } catch {
-    // Si es GET o no trae JSON, no pasa nada
+    // GET o sin JSON
   }
 
-  const url = new URL(req.url);
-  const topic = url.searchParams.get("topic") || body?.topic;
+  const url = new URL(req.url)
+  const topic = url.searchParams.get("topic") || body?.topic
 
-  // Solo procesamos merchant_order (tal como ya hacías)
+  // Procesamos solo merchant_order
   if (topic === "merchant_order") {
     const id =
-      url.searchParams.get("id") ||
-      body?.id ||
-      body?.resource?.split("/")?.pop();
+      url.searchParams.get("id") || body?.id || body?.resource?.split("/")?.pop()
+
     if (!id) {
-      console.warn("⚠️ merchant_order sin id");
-      return NextResponse.json({ ok: false, msg: "Sin id" });
+      console.warn("⚠️ merchant_order sin id")
+      return NextResponse.json({ ok: false, msg: "Sin id" })
     }
 
-    // Traemos merchant order
-    const order = await mpGet(
-      `https://api.mercadopago.com/merchant_orders/${id}`
-    );
+    // 1) Traemos merchant order
+    const order = await mpGet(`https://api.mercadopago.com/merchant_orders/${id}`)
     console.log("🧾 merchant_order:", {
       id: order.id,
       preference_id: order.preference_id,
-    });
+      payments: Array.isArray(order.payments)
+        ? order.payments.map((p: any) => ({ id: p.id, status: p.status }))
+        : [],
+    })
 
-    // Traemos la preferencia para recuperar el metadata.cart
+    // ✅ PASO A: verificar que exista pago aprobado
+    const approved = Array.isArray(order.payments)
+      ? order.payments.some((p: any) => p.status === "approved")
+      : false
+
+    if (!approved) {
+      console.log("ℹ️ merchant_order sin pago aprobado todavía. No se descuenta stock.", {
+        orderId: order.id,
+      })
+      return NextResponse.json({ ok: true, msg: "Not approved yet" })
+    }
+
+    // ✅ PASO B: idempotencia (marker por merchant_order)
+    const markerId = `mp_order_${order.id}`
+    const alreadyProcessed = await sanity.getDocument(markerId)
+
+    if (alreadyProcessed) {
+      console.log("↩️ Webhook repetido. Orden ya procesada:", markerId)
+      return NextResponse.json({ ok: true, msg: "Already processed" })
+    }
+
+    // 2) Traemos preferencia para obtener metadata.cart
     const pref = await mpGet(
       `https://api.mercadopago.com/checkout/preferences/${order.preference_id}`
-    );
+    )
 
-    let cart: CartItem[] = [];
+    let cart: CartItem[] = []
     try {
-      if (pref?.metadata?.cart) cart = JSON.parse(pref.metadata.cart);
+      if (pref?.metadata?.cart) cart = JSON.parse(pref.metadata.cart)
     } catch (e) {
-      console.warn("⚠️ No se pudo parsear metadata.cart", e);
+      console.warn("⚠️ No se pudo parsear metadata.cart", e)
     }
 
     if (!cart.length) {
-  console.log("ℹ️ merchant_order sin cart en metadata");
-  return NextResponse.json({ ok: true, msg: "Sin cart" });
-}
+      console.log("ℹ️ merchant_order sin cart en metadata")
+      return NextResponse.json({ ok: true, msg: "Sin cart" })
+    }
 
-// ✅ PASO A: verificar que exista un pago aprobado
-const approved = Array.isArray(order.payments)
-  ? order.payments.some((p: any) => p.status === "approved")
-  : false;
+    // 3) Descontamos stock
+    await descontarStock(cart)
 
-if (!approved) {
-  console.log("ℹ️ merchant_order sin pago aprobado todavía. No se descuenta stock.", {
-    orderId: order.id,
-    payments: order.payments?.map((p: any) => ({
-      id: p.id,
-      status: p.status,
-    })),
-  });
-  return NextResponse.json({ ok: true, msg: "Not approved yet" });
-}
+    // 4) Marcamos como procesado (después de descontar, más seguro)
+    await sanity.createIfNotExists({
+      _id: markerId,
+      _type: "mpWebhook",
+      orderId: order.id,
+      preferenceId: order.preference_id,
+      createdAt: new Date().toISOString(),
+    })
 
-// ✅ PASO B: idempotencia (evitar doble descuento)
-const markerId = `mp_order_${order.id}`;
-const alreadyProcessed = await sanity.getDocument(markerId);
+    return NextResponse.json({ ok: true, from: "merchant_order" })
+  }
 
-if (alreadyProcessed) {
-  console.log("↩️ Webhook repetido. Orden ya procesada:", markerId);
-  return NextResponse.json({ ok: true, msg: "Already processed" });
-}
-
-
-
-
-// ⬇️ SOLO SI ESTÁ APPROVED LLEGAMOS ACÁ
-await descontarStock(cart);
-return NextResponse.json({ ok: true, from: "merchant_order" });
-}
-
-// Marcamos la orden como procesada ANTES de descontar
-await sanity.createIfNotExists({
-  _id: markerId,
-  _type: "mpWebhook",
-  orderId: order.id,
-  preferenceId: order.preference_id,
-  createdAt: new Date().toISOString(),
-});
-
-  // Si no es merchant_order, lo ignoramos (como antes)
-  return NextResponse.json({ ok: true, ignored: true });
+  // Otros topics: ignorar
+  return NextResponse.json({ ok: true, ignored: true })
 }
 
 export async function GET(req: Request) {
-  return handle(req);
+  return handle(req)
 }
+
 export async function POST(req: Request) {
-  return handle(req);
+  return handle(req)
 }
