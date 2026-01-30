@@ -12,59 +12,56 @@ export default function SuccessClient() {
   const { clearCart } = useCart()
   const [ui, setUi] = useState<UiState>("checking")
 
-  // MP suele enviar estos params
   const paymentId =
     sp.get("payment_id") || sp.get("collection_id") || sp.get("preference_id")
-  const status = sp.get("status") || sp.get("collection_status") || "approved"
+
+  const statusRaw =
+    sp.get("status") || sp.get("collection_status") || "approved"
+
+  const status = String(statusRaw).toLowerCase()
+
   const merchantOrderId = sp.get("merchant_order_id") || ""
   const preferenceId = sp.get("preference_id") || ""
 
   useEffect(() => {
     ;(async () => {
       try {
-        // ✅ Confirmación server-side (más seguro que fiarse del query param)
+        // ✅ Si MP dice approved, limpiamos SIEMPRE (UX) y no dependemos del confirm
+        if (status === "approved") {
+          clearCart()
+          localStorage.setItem("cart", "[]")      // 👈 clave
+          localStorage.removeItem("lastOrder")
+        }
+
+        // Si querés mantener el confirm (recomendado), lo dejamos
         const qs = new URLSearchParams()
         if (merchantOrderId) qs.set("merchant_order_id", merchantOrderId)
         if (preferenceId) qs.set("preference_id", preferenceId)
 
-        // Si MP no mandó ningún id, igual vaciamos solo si status dice approved (fallback)
-        // pero lo ideal es que venga merchant_order_id
-        if (!merchantOrderId && !preferenceId) {
-          if (String(status).toLowerCase() === "approved") {
-            clearCart()
-            localStorage.removeItem("cart")
-            localStorage.removeItem("lastOrder")
-            setUi("cleared")
-          } else {
-            setUi("not_approved")
+        if (qs.toString()) {
+          const res = await fetch(`/api/checkout/confirm?${qs.toString()}`, {
+            cache: "no-store",
+          })
+          const data = await res.json()
+
+          if (!res.ok || !data?.ok) {
+            // ya limpiamos si era approved, así que no rompemos UX
+            console.warn("confirm failed:", data)
+            setUi(status === "approved" ? "cleared" : "error")
+            return
           }
-          return
+
+          if (data.approved === false) {
+            // si no aprobado, NO limpiamos (pero arriba ya chequeamos status)
+            setUi("not_approved")
+            return
+          }
         }
 
-        const res = await fetch(`/api/checkout/confirm?${qs.toString()}`, {
-          cache: "no-store",
-        })
-        const data = await res.json()
-
-        if (!res.ok || !data?.ok) {
-          console.error("confirm failed:", data)
-          setUi("error")
-          return
-        }
-
-        if (data.approved === false) {
-          setUi("not_approved")
-          return
-        }
-
-        // ✅ Pago confirmado: vaciamos carrito real + storage
-        clearCart()
-        localStorage.removeItem("cart")
-        localStorage.removeItem("lastOrder")
-        setUi("cleared")
+        setUi(status === "approved" ? "cleared" : "checking")
       } catch (e) {
-        console.error("error confirmando pago:", e)
-        setUi("error")
+        console.error("error success:", e)
+        setUi(status === "approved" ? "cleared" : "error")
       }
     })()
   }, [merchantOrderId, preferenceId, status, clearCart])
@@ -92,10 +89,8 @@ export default function SuccessClient() {
       <p className="text-gray-600">
         {ui === "checking" && "Confirmando tu pago…"}
         {ui === "cleared" && "Pago confirmado. Tu carrito fue vaciado."}
-        {ui === "not_approved" &&
-          "Tu pago todavía no figura aprobado. Si en unos minutos no cambia, escribinos."}
-        {ui === "error" &&
-          "Hubo un problema confirmando el pago. Si ya te cobraron, escribinos."}
+        {ui === "not_approved" && "Tu pago todavía no figura aprobado."}
+        {ui === "error" && "Hubo un problema confirmando el pago."}
       </p>
 
       <Link

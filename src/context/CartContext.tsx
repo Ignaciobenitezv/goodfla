@@ -30,14 +30,30 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
   // cargar desde localStorage
   useEffect(() => {
+  try {
     const stored = localStorage.getItem("cart")
-    if (stored) setItems(JSON.parse(stored))
-  }, [])
+    if (!stored) return
+    const parsed = JSON.parse(stored)
+    if (Array.isArray(parsed)) setItems(parsed)
+  } catch (e) {
+    console.warn("[Cart] localStorage cart corrupto, lo reseteo", e)
+    localStorage.setItem("cart", "[]")
+    setItems([])
+  }
+}, [])
+
 
   // guardar en localStorage
-  useEffect(() => {
-    localStorage.setItem("cart", JSON.stringify(items))
-  }, [items])
+ useEffect(() => {
+  // Si quedó vacío, persistimos vacío (ok).
+  // Si por alguna razón no existe, lo inicializamos.
+  try {
+    localStorage.setItem("cart", JSON.stringify(items ?? []))
+  } catch (e) {
+    console.warn("[Cart] no pude persistir cart", e)
+  }
+}, [items])
+
 
   const addItem = (item: Omit<CartItem, "cartKey">) => {
     const cartKey = `${item.productId}-${item.talle || "default"}`
@@ -93,7 +109,13 @@ export function CartProvider({ children }: { children: ReactNode }) {
 }
 
 
-  const clearCart = () => setItems([])
+  const clearCart = () => {
+  setItems([])
+  try {
+    localStorage.setItem("cart", "[]")
+  } catch {}
+}
+
 
   const increaseQuantity = (cartKey: string) => {
   setItems((prev) =>
