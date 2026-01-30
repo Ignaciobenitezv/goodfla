@@ -32,7 +32,11 @@ export async function POST(req: Request) {
 
     // Base URL: SITE_URL (prod) o origin de la request
     const { origin } = new URL(req.url)
-    const baseUrl = process.env.SITE_URL || origin || "http://localhost:3000"
+    const baseUrl = process.env.SITE_URL
+if (!baseUrl) {
+  return NextResponse.json({ error: "Missing SITE_URL" }, { status: 500 })
+}
+
 
     // Token server-side obligatorio
     const token = process.env.MP_ACCESS_TOKEN
