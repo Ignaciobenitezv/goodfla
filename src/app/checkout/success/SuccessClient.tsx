@@ -2,7 +2,7 @@
 
 import { useSearchParams } from "next/navigation"
 import Link from "next/link"
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { useCart } from "@/context/CartContext"
 
 type UiState = "checking" | "cleared" | "not_approved" | "error"
@@ -11,6 +11,9 @@ export default function SuccessClient() {
   const sp = useSearchParams()
   const { clearCart } = useCart()
   const [ui, setUi] = useState<UiState>("checking")
+
+  // ✅ evita loops (por re-render + clearCart en deps, etc.)
+  const ran = useRef(false)
 
   const paymentId =
     sp.get("payment_id") || sp.get("collection_id") || sp.get("preference_id")
@@ -24,16 +27,22 @@ export default function SuccessClient() {
   const preferenceId = sp.get("preference_id") || ""
 
   useEffect(() => {
+    if (ran.current) return
+    ran.current = true
+
     ;(async () => {
       try {
-        // ✅ Si MP dice approved, limpiamos SIEMPRE (UX) y no dependemos del confirm
+        // ✅ UX: si MP dice approved, limpiamos siempre el carrito (no dependemos de confirm)
         if (status === "approved") {
           clearCart()
-          localStorage.setItem("cart", "[]")      // 👈 clave
+          localStorage.setItem("cart", "[]")
           localStorage.removeItem("lastOrder")
+          setUi("cleared")
+        } else {
+          setUi("checking")
         }
 
-        // Si querés mantener el confirm (recomendado), lo dejamos
+        // ✅ si EXISTE tu endpoint confirm, lo llamamos (pero si da 404, no rompemos ni bloqueamos UI)
         const qs = new URLSearchParams()
         if (merchantOrderId) qs.set("merchant_order_id", merchantOrderId)
         if (preferenceId) qs.set("preference_id", preferenceId)
@@ -42,29 +51,39 @@ export default function SuccessClient() {
           const res = await fetch(`/api/checkout/confirm?${qs.toString()}`, {
             cache: "no-store",
           })
+
+          // Si no existe (404) u otro error, no generamos loop ni bloqueamos navegación
+          if (!res.ok) {
+            console.warn("confirm not available or failed:", res.status)
+            if (status !== "approved") setUi("error")
+            return
+          }
+
           const data = await res.json()
 
-          if (!res.ok || !data?.ok) {
-            // ya limpiamos si era approved, así que no rompemos UX
+          if (!data?.ok) {
             console.warn("confirm failed:", data)
-            setUi(status === "approved" ? "cleared" : "error")
+            if (status !== "approved") setUi("error")
             return
           }
 
           if (data.approved === false) {
-            // si no aprobado, NO limpiamos (pero arriba ya chequeamos status)
             setUi("not_approved")
             return
           }
-        }
 
-        setUi(status === "approved" ? "cleared" : "checking")
+          // si confirm ok y approved, ya quedó "cleared" arriba
+          if (status === "approved") setUi("cleared")
+        } else {
+          // sin qs, al menos reflejamos el status
+          if (status !== "approved") setUi("checking")
+        }
       } catch (e) {
         console.error("error success:", e)
         setUi(status === "approved" ? "cleared" : "error")
       }
     })()
-  }, [merchantOrderId, preferenceId, status, clearCart])
+  }, [status, merchantOrderId, preferenceId, clearCart])
 
   return (
     <main className="max-w-2xl mx-auto p-8 text-center space-y-6">
