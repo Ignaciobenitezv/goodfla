@@ -1,47 +1,93 @@
 // app/api/checkout/preference/route.ts
 import { NextResponse } from "next/server"
 import { randomUUID } from "crypto"
+import { createClient } from "@sanity/client"
 
-export const runtime = "nodejs" // asegura Node.js runtime (no Edge)
+export const runtime = "nodejs"
+
+const sanity = createClient({
+  projectId: process.env.NEXT_PUBLIC_SANITY_PROJECT_ID!,
+  dataset: process.env.NEXT_PUBLIC_SANITY_DATASET!,
+  token: process.env.SANITY_API_WRITE_TOKEN!,
+  apiVersion: "2024-01-01",
+  useCdn: false,
+})
+
+type CompactCartItem = { productId: string; talle?: string | null; cantidad: number }
+
+async function getStockSnapshot(productId: string) {
+  return sanity.fetch(
+    `*[_type=="producto" && _id==$id][0]{_id, stock, talles}`,
+    { id: productId }
+  )
+}
+
+function getAvailable(prod: any, talle: string | null | undefined) {
+  if (!prod) return 0
+
+  if (Array.isArray(prod.talles) && talle) {
+    const t = prod.talles.find((x: any) => x?.label === talle)
+    return Number(t?.stock ?? 0)
+  }
+
+  return Number(prod.stock ?? 0)
+}
 
 export async function POST(req: Request) {
   try {
     const body = await req.json()
 
-    console.log("📦 Items recibidos:", body?.items)
-
-    // ✅ Carrito compacto para metadata (lo que usa el webhook para descontar stock)
-    // Debe contener productId = _id real de Sanity
-    const compactCart = (body?.items || []).map((i: any) => ({
+    const compactCart: CompactCartItem[] = (body?.items || []).map((i: any) => ({
       productId: i.productId,
       talle: i.talle || null,
       cantidad: Number(i.cantidad || 1),
     }))
 
-    console.log("🚀 compactCart enviado a MP (metadata.cart):", compactCart)
-
-    // ✅ Validación crítica: sin productId real, el webhook NO puede descontar stock
     const invalid = compactCart.find((x: any) => !x.productId)
     if (invalid) {
-      console.error("❌ Item sin productId (Sanity _id). No se crea preferencia:", invalid)
       return NextResponse.json(
         { error: "Item sin productId (Sanity _id)", details: invalid },
         { status: 400 }
       )
     }
 
-    // Base URL: SITE_URL (prod) o origin de la request
+    // ✅ 1.4: Validar stock ANTES de crear preferencia (bloquea oversell)
+    const stockChecks = await Promise.all(
+      compactCart.map(async (it: CompactCartItem) => {
+        const prod = await getStockSnapshot(it.productId)
+        const available = getAvailable(prod, it.talle)
+        return {
+          productId: it.productId,
+          talle: it.talle ?? null,
+          requested: it.cantidad,
+          available,
+          ok: available >= it.cantidad,
+        }
+      })
+    )
+
+    const outOfStock = stockChecks.filter((x) => !x.ok)
+    if (outOfStock.length) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "out_of_stock",
+          message: "No hay stock suficiente para uno o más productos.",
+          details: outOfStock,
+        },
+        { status: 409 }
+      )
+    }
+
     const { origin } = new URL(req.url)
-    const baseUrl = process.env.SITE_URL
-if (!baseUrl) {
-  return NextResponse.json({ error: "Missing SITE_URL" }, { status: 500 })
-}
+    const baseUrl =
+      process.env.SITE_URL ||
+      process.env.PUBLIC_BASE_URL ||
+      origin ||
+      "http://localhost:3000"
 
-
-    // Token server-side obligatorio
     const token = process.env.MP_ACCESS_TOKEN
     if (!token) {
-      console.error("❌ Falta MP_ACCESS_TOKEN en variables de entorno")
       return NextResponse.json({ error: "Missing MP_ACCESS_TOKEN" }, { status: 500 })
     }
 
@@ -54,25 +100,19 @@ if (!baseUrl) {
         Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify({
-        items:
-          (body?.items || []).map((i: any) => ({
-            // ✅ Sumar talle al título ayuda a debuggear / identificar ventas
-            title: `${i?.nombre || "Producto"}${i?.talle ? ` - Talle ${i.talle}` : ""}`,
-            quantity: Number(i?.cantidad || 1),
-            unit_price: Number(i?.precio || 0),
-            currency_id: "ARS",
-          })) ?? [],
+        items: (body?.items || []).map((i: any) => ({
+          title: `${i?.nombre || "Producto"}${i?.talle ? ` - Talle ${i.talle}` : ""}`,
+          quantity: Number(i?.cantidad || 1),
+          unit_price: Number(i?.precio || 0),
+          currency_id: "ARS",
+        })),
         back_urls: {
           success: `${baseUrl}/checkout/success`,
           failure: `${baseUrl}/checkout/failure`,
           pending: `${baseUrl}/checkout/pending`,
         },
         auto_return: "approved",
-
-        // ✅ webhook en producción (Vercel). MP lo llama server-to-server.
         notification_url: `${baseUrl}/api/mp/webhook`,
-
-        // ✅ metadata para que el webhook recupere el carrito y descuente stock
         metadata: {
           orderId,
           cart: JSON.stringify(compactCart),
@@ -82,7 +122,6 @@ if (!baseUrl) {
     })
 
     const data = await res.json()
-    console.log("📥 Respuesta MP:", data)
 
     if (!res.ok) {
       return NextResponse.json({ error: data }, { status: res.status })
@@ -91,6 +130,7 @@ if (!baseUrl) {
     return NextResponse.json({
       id: data.id,
       init_point: data.sandbox_init_point || data.init_point,
+      orderId,
     })
   } catch (error) {
     console.error("❌ Error en servidor:", error)

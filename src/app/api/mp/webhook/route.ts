@@ -5,6 +5,8 @@ import { createClient } from "@sanity/client"
 export const dynamic = "force-dynamic" // evita cache
 
 const sanity = createClient({
+  // Nota: estos NEXT_PUBLIC no son secretos; más adelante en "Seguridad"
+  // conviene moverlos a SANITY_PROJECT_ID / SANITY_DATASET para server-only.
   projectId: process.env.NEXT_PUBLIC_SANITY_PROJECT_ID!,
   dataset: process.env.NEXT_PUBLIC_SANITY_DATASET!,
   token: process.env.SANITY_API_WRITE_TOKEN!,
@@ -13,6 +15,14 @@ const sanity = createClient({
 })
 
 type CartItem = { productId: string; talle?: string | null; cantidad: number }
+
+function respond200(payload: Record<string, any>, startedAt: number) {
+  console.log("✅ webhook_responding_200", {
+    ms: Date.now() - startedAt,
+    ...payload,
+  })
+  return NextResponse.json({ ok: true, ...payload }, { status: 200 })
+}
 
 async function mpGet(url: string) {
   const token = process.env.MP_ACCESS_TOKEN
@@ -34,6 +44,7 @@ async function descontarStock(cart: CartItem[]) {
     )
     if (!prod) continue
 
+    // Talles
     if (Array.isArray(prod.talles) && it.talle) {
       const newTalles = prod.talles.map((t: any) =>
         t.label === it.talle
@@ -43,7 +54,11 @@ async function descontarStock(cart: CartItem[]) {
 
       await sanity.patch(prod._id).set({ talles: newTalles }).commit()
       console.log(`✅ Stock actualizado talle ${it.talle} (${it.productId})`)
-    } else if (typeof prod.stock === "number") {
+      continue
+    }
+
+    // Stock global
+    if (typeof prod.stock === "number") {
       await sanity.patch(prod._id).dec({ stock: it.cantidad }).commit()
       console.log(`✅ Stock global actualizado (${it.productId})`)
     }
@@ -51,92 +66,123 @@ async function descontarStock(cart: CartItem[]) {
 }
 
 async function handle(req: Request) {
-  let body: any = null
+  const startedAt = Date.now()
+
   try {
-    body = await req.json()
-    console.log("📩 Webhook POST body:", body)
-  } catch {
-    // GET o sin JSON
-  }
+    // Parse body (si viene)
+    let body: any = null
+    try {
+      body = await req.json()
+    } catch {
+      // GET o body inválido
+    }
 
-  const url = new URL(req.url)
-  const topic = url.searchParams.get("topic") || body?.topic
-
-  // Procesamos solo merchant_order
-  if (topic === "merchant_order") {
+    const url = new URL(req.url)
+    const topic = url.searchParams.get("topic") || body?.topic
     const id =
       url.searchParams.get("id") || body?.id || body?.resource?.split("/")?.pop()
 
-    if (!id) {
-      console.warn("⚠️ merchant_order sin id")
-      return NextResponse.json({ ok: false, msg: "Sin id" })
-    }
-
-    // 1) Traemos merchant order
-    const order = await mpGet(`https://api.mercadopago.com/merchant_orders/${id}`)
-    console.log("🧾 merchant_order:", {
-      id: order.id,
-      preference_id: order.preference_id,
-      payments: Array.isArray(order.payments)
-        ? order.payments.map((p: any) => ({ id: p.id, status: p.status }))
-        : [],
+    // Log de entrada (minimalista, sin volcar todo el body)
+    console.log("📩 webhook_received", {
+      method: req.method,
+      topic,
+      id,
+      hasBody: !!body,
     })
 
-    // ✅ PASO A: verificar que exista pago aprobado
-    const approved = Array.isArray(order.payments)
-      ? order.payments.some((p: any) => p.status === "approved")
-      : false
+    // Procesamos solo merchant_order
+    if (topic === "merchant_order") {
+      if (!id) {
+        console.warn("⚠️ merchant_order sin id")
+        return respond200({ msg: "merchant_order_without_id" }, startedAt)
+      }
 
-    if (!approved) {
-      console.log("ℹ️ merchant_order sin pago aprobado todavía. No se descuenta stock.", {
-        orderId: order.id,
+      // 1) Traemos merchant order
+      const order = await mpGet(`https://api.mercadopago.com/merchant_orders/${id}`)
+      console.log("🧾 merchant_order:", {
+        id: order.id,
+        preference_id: order.preference_id,
+        payments: Array.isArray(order.payments)
+          ? order.payments.map((p: any) => ({ id: p.id, status: p.status }))
+          : [],
       })
-      return NextResponse.json({ ok: true, msg: "Not approved yet" })
+
+      // ✅ Obtener el pago aprobado (idempotencia por payment.id)
+      const approvedPayment = Array.isArray(order.payments)
+        ? order.payments.find((p: any) => p.status === "approved")
+        : null
+
+      if (!approvedPayment?.id) {
+        console.log("ℹ️ Sin pago aprobado todavía. No se descuenta stock.", {
+          orderId: order.id,
+        })
+        return respond200({ msg: "not_approved_yet", orderId: order.id }, startedAt)
+      }
+
+      const paymentId = String(approvedPayment.id)
+      const markerId = `mp_payment_${paymentId}`
+
+      const alreadyProcessed = await sanity.getDocument(markerId)
+      if (alreadyProcessed) {
+        console.log("↩️ Webhook repetido. Pago ya procesado:", markerId)
+        return respond200({ msg: "already_processed", markerId, paymentId }, startedAt)
+      }
+
+      // 2) Traemos preferencia para obtener metadata.cart
+      const pref = await mpGet(
+        `https://api.mercadopago.com/checkout/preferences/${order.preference_id}`
+      )
+
+      let cart: CartItem[] = []
+      try {
+        if (pref?.metadata?.cart) cart = JSON.parse(pref.metadata.cart)
+      } catch (e) {
+        console.warn("⚠️ No se pudo parsear metadata.cart", e)
+      }
+
+      if (!cart.length) {
+        console.log("ℹ️ merchant_order sin cart en metadata", {
+          orderId: order.id,
+          preferenceId: order.preference_id,
+        })
+        return respond200({ msg: "no_cart_metadata", orderId: order.id }, startedAt)
+      }
+
+      // 3) Descontamos stock
+      await descontarStock(cart)
+
+      // 4) Marcamos como procesado (después de descontar)
+      await sanity.createIfNotExists({
+        _id: markerId,
+        _type: "mpWebhook",
+        paymentId,
+        orderId: order.id,
+        preferenceId: order.preference_id,
+        createdAt: new Date().toISOString(),
+      })
+
+      return respond200(
+        {
+          msg: "processed_merchant_order",
+          orderId: order.id,
+          preferenceId: order.preference_id,
+          markerId,
+          paymentId,
+        },
+        startedAt
+      )
     }
 
-    // ✅ PASO B: idempotencia (marker por merchant_order)
-    const markerId = `mp_order_${order.id}`
-    const alreadyProcessed = await sanity.getDocument(markerId)
-
-    if (alreadyProcessed) {
-      console.log("↩️ Webhook repetido. Orden ya procesada:", markerId)
-      return NextResponse.json({ ok: true, msg: "Already processed" })
-    }
-
-    // 2) Traemos preferencia para obtener metadata.cart
-    const pref = await mpGet(
-      `https://api.mercadopago.com/checkout/preferences/${order.preference_id}`
-    )
-
-    let cart: CartItem[] = []
-    try {
-      if (pref?.metadata?.cart) cart = JSON.parse(pref.metadata.cart)
-    } catch (e) {
-      console.warn("⚠️ No se pudo parsear metadata.cart", e)
-    }
-
-    if (!cart.length) {
-      console.log("ℹ️ merchant_order sin cart en metadata")
-      return NextResponse.json({ ok: true, msg: "Sin cart" })
-    }
-
-    // 3) Descontamos stock
-    await descontarStock(cart)
-
-    // 4) Marcamos como procesado (después de descontar, más seguro)
-    await sanity.createIfNotExists({
-      _id: markerId,
-      _type: "mpWebhook",
-      orderId: order.id,
-      preferenceId: order.preference_id,
-      createdAt: new Date().toISOString(),
+    // Otros topics: ignorar
+    return respond200({ ignored: true, topic }, startedAt)
+  } catch (err: any) {
+    // 🚑 CUALQUIER error termina acá (pero respondemos 200 igual)
+    console.error("🔥 webhook_fatal_error", {
+      message: err?.message,
+      stack: err?.stack,
     })
-
-    return NextResponse.json({ ok: true, from: "merchant_order" })
+    return respond200({ msg: "fatal_error" }, startedAt)
   }
-
-  // Otros topics: ignorar
-  return NextResponse.json({ ok: true, ignored: true })
 }
 
 export async function GET(req: Request) {

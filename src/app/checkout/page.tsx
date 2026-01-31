@@ -81,36 +81,50 @@ export default function CheckoutPage() {
 
   // 🔹 MercadoPago actualizado
   const handleMercadoPago = async () => {
-    try {
-      // Guardar orden para updateStock en success
-      // Guardar orden para updateStock en success
-const lastOrderPayload = items.map((i: any, idx: number) => ({
-  // Prioridad: _id real de Sanity → productId → slug → fallback estable
-  productId: i._id ?? i.productId ?? i.slug ?? `${i.nombre}-${i.talle ?? ""}-${i.color ?? ""}-${idx}`,
-  cantidad: i.cantidad,
-}))
-localStorage.setItem("lastOrder", JSON.stringify(lastOrderPayload))
+  try {
+    // Guardar carrito (opcional, para limpieza post-pago)
+    localStorage.setItem("cart", JSON.stringify(items))
 
+    const res = await fetch("/api/checkout/preference", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ items }),
+    })
 
-      // Guardar carrito completo (para limpiar después)
-      localStorage.setItem("cart", JSON.stringify(items))
+    const data = await res.json().catch(() => null)
 
-      const res = await fetch("/api/checkout/preference", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ items }),
-      })
-      const data = await res.json()
-      if (data.init_point) {
-        window.location.href = data.init_point
-      } else {
-        alert("No se pudo generar el link de pago con MercadoPago.")
-      }
-    } catch (err) {
-      console.error("❌ Error con MP:", err)
-      alert("Hubo un problema con MercadoPago.")
+    // 🚫 SIN STOCK → mensaje claro
+    if (res.status === 409 && data?.error === "out_of_stock") {
+      const d = data.details?.[0]
+      const talleTxt = d?.talle ? ` (talle ${d.talle})` : ""
+      alert(
+        `Sin stock${talleTxt}.\n` +
+        `Pediste ${d?.requested} y hay ${d?.available}.\n\n` +
+        `Actualizá tu carrito y probá con otro talle o producto.`
+      )
+      return
     }
+
+    // ❌ Otro error backend
+    if (!res.ok) {
+      alert("No se pudo generar el link de pago. Intentá de nuevo.")
+      return
+    }
+
+    // ✅ OK → redirigir a Mercado Pago
+    if (data?.init_point) {
+      window.location.href = data.init_point
+      return
+    }
+
+    // ❌ Respuesta inesperada
+    alert("No se pudo generar el link de pago con MercadoPago.")
+  } catch (err) {
+    console.error("❌ Error con MP:", err)
+    alert("Hubo un problema con MercadoPago.")
   }
+}
+
 
     // ✅ NUEVO: selección y refs del Brick
   const [payMethod, setPayMethod] = useState<"transfer"|"cash"|"mp_redirect"|"card_inline"|null>(null)
