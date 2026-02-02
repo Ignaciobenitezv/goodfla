@@ -287,6 +287,9 @@ export async function POST(req: Request) {
         identification: body.identification,
       },
       capture: true,
+
+      notification_url: body.identification,
+
       metadata: {
         orderId,
         source: "card_inline",
@@ -305,6 +308,18 @@ export async function POST(req: Request) {
       )
     }
 
+    console.log("💳 [card] creating payment", {
+  orderId,
+  computedTotal,
+  shippingType,
+  shippingPrice,
+  items: cart.map((x) => ({
+    productId: x.productId,
+    talle: x.talle ?? null,
+    cantidad: x.cantidad,
+  })),
+})
+
     // 7) Crear pago en MP
     const res = await fetch("https://api.mercadopago.com/v1/payments", {
       method: "POST",
@@ -317,6 +332,16 @@ export async function POST(req: Request) {
     })
 
     const data = await res.json().catch(() => null)
+
+    console.log("💳 [card] mp response", {
+  ok: res.ok,
+  status: data?.status,
+  status_detail: data?.status_detail,
+  paymentId: data?.id,
+  orderId,
+})
+
+
 
     if (!res.ok) {
       return NextResponse.json(

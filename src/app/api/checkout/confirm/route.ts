@@ -7,8 +7,8 @@ export const runtime = "nodejs"
 const sanity = createClient({
   projectId: process.env.SANITY_PROJECT_ID!,
   dataset: process.env.SANITY_DATASET!,
-  token: process.env.SANITY_API_WRITE_TOKEN!, // para leer marker (y si querés escribir)
-  apiVersion: process.env.SANITY_API_VERSION || '2024-01-01',
+  token: process.env.SANITY_API_WRITE_TOKEN!,
+  apiVersion: process.env.SANITY_API_VERSION || "2024-01-01",
   useCdn: false,
 })
 
@@ -29,6 +29,21 @@ async function mpGet(url: string) {
   return r.json()
 }
 
+async function findSanityByOrderId(orderId: string) {
+  if (!orderId) return null
+
+  // Busca cualquier registro de webhook/marker relacionado a ese orderId
+  // (tu webhook crea _type: "mpWebhook" con campos orderId, paymentId, status, etc.)
+  const doc = await sanity.fetch(
+    `*[_type=="mpWebhook" && orderId==$orderId] | order(createdAt desc)[0]{
+      _id, status, paymentId, preferenceId, orderId, createdAt
+    }`,
+    { orderId }
+  )
+
+  return doc || null
+}
+
 export async function GET(req: Request) {
   try {
     const url = new URL(req.url)
@@ -43,12 +58,14 @@ export async function GET(req: Request) {
       url.searchParams.get("collection_id") ||
       ""
 
-    if (!merchantOrderId && !paymentIdParam) {
+    const orderIdParam = url.searchParams.get("orderId") || ""
+
+    if (!merchantOrderId && !paymentIdParam && !orderIdParam) {
       return NextResponse.json(
         {
           ok: false,
           error: "missing_params",
-          message: "Enviar merchant_order_id o payment_id",
+          message: "Enviar merchant_order_id o payment_id o orderId",
         },
         { status: 400 }
       )
@@ -58,6 +75,7 @@ export async function GET(req: Request) {
     let approvedPaymentId: string | null = null
     let mpStatus: string | null = null
     let preferenceId: string | null = null
+    let resolvedMerchantOrderId: string | null = merchantOrderId || null
 
     if (merchantOrderId) {
       const order = await mpGet(
@@ -66,7 +84,6 @@ export async function GET(req: Request) {
 
       preferenceId = order?.preference_id ? String(order.preference_id) : null
 
-      // Tomamos el último approved si hubiese más de uno
       const approvedPayment = Array.isArray(order?.payments)
         ? [...order.payments].reverse().find((p: any) => p?.status === "approved")
         : null
@@ -75,31 +92,63 @@ export async function GET(req: Request) {
         approvedPaymentId = String(approvedPayment.id)
         mpStatus = "approved"
       } else {
-        // Si no hay approved, devolvemos el "status" más útil que encontremos
-        const last = Array.isArray(order?.payments) ? order.payments[order.payments.length - 1] : null
+        const last = Array.isArray(order?.payments)
+          ? order.payments[order.payments.length - 1]
+          : null
         mpStatus = last?.status ? String(last.status) : "not_approved"
       }
-    } else {
-      // fallback: confirmar por payment_id directo
+    } else if (paymentIdParam) {
+      // confirmar por payment_id directo (ideal para tarjeta inline)
       const pay = await mpGet(`https://api.mercadopago.com/v1/payments/${paymentIdParam}`)
       mpStatus = pay?.status ? String(pay.status) : "unknown"
       if (mpStatus === "approved") approvedPaymentId = String(pay.id)
+
+      // a veces MP devuelve merchant_order_id dentro del pago
+      if (!resolvedMerchantOrderId && pay?.order?.id) {
+        resolvedMerchantOrderId = String(pay.order.id)
+      }
+    } else {
+      // no tenemos MP id, solo orderId (fallback)
+      mpStatus = "unknown"
     }
 
     const approved = mpStatus === "approved" && !!approvedPaymentId
 
-    // 2) Chequear si tu webhook ya lo procesó (marker en Sanity)
+    // 2) processed = marker (por paymentId) O doc por orderId (fallback)
     let processed = false
     let markerId: string | null = null
     let webhookStatus: string | null = null
 
+    // 2.A) Marker por paymentId (lo que ya funcionaba)
     if (approvedPaymentId) {
       markerId = `mp_payment_${approvedPaymentId}`
       const marker = await sanity.getDocument(markerId)
 
       if (marker) {
         processed = true
-        webhookStatus = (marker as any)?.status ? String((marker as any).status) : "processed"
+        webhookStatus = (marker as any)?.status
+          ? String((marker as any).status)
+          : "processed"
+      }
+    }
+
+    // 2.B) Fallback por orderId (si todavía no hay marker o no hubo paymentId)
+    // Esto no rompe nada: solo completa el caso “tarjeta inline” / “sin merchant_order_id”.
+    let orderDoc: any = null
+    if (!processed && orderIdParam) {
+      orderDoc = await findSanityByOrderId(orderIdParam)
+      if (orderDoc?._id) {
+        processed = true
+        webhookStatus = orderDoc?.status ? String(orderDoc.status) : "processed"
+        // Si el doc tiene paymentId, lo devolvemos como ayuda:
+        if (!approvedPaymentId && orderDoc?.paymentId) {
+          approvedPaymentId = String(orderDoc.paymentId)
+        }
+        if (!preferenceId && orderDoc?.preferenceId) {
+          preferenceId = String(orderDoc.preferenceId)
+        }
+        // markerId en este caso puede ser el _id que encontró:
+        if (!markerId) markerId = String(orderDoc._id)
       }
     }
 
@@ -108,11 +157,15 @@ export async function GET(req: Request) {
       approved,
       mpStatus,
       paymentId: approvedPaymentId || (paymentIdParam ? String(paymentIdParam) : null),
-      merchantOrderId: merchantOrderId || null,
+      merchantOrderId: resolvedMerchantOrderId,
       preferenceId,
+      orderId: orderIdParam || null,
+
       processed,
       markerId,
       webhookStatus,
+      // extra útil para debug
+      processedSource: processed ? (markerId?.startsWith("mp_payment_") ? "marker" : "orderId_lookup") : null,
     })
   } catch (err: any) {
     console.error("❌ /api/checkout/confirm error:", err?.message || err)
