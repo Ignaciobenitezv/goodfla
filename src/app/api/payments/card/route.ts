@@ -21,7 +21,6 @@ type BrickPayload = {
   email?: string
   identification?: { type: string; number: string }
 
-  // 👇 nuevo
   items?: CompactItem[]
   amount?: number
   orderId?: string
@@ -38,21 +37,16 @@ const sanity = createClient({
 
 function toMoney(n: any) {
   const v = Number(n || 0)
-  // MP acepta decimales, pero en ARS normalmente trabajás entero
-  // igual dejamos 2 decimales por seguridad
   return Math.round(v * 100) / 100
 }
 
 async function getProductsSnapshot(ids: string[]) {
-  // Traemos lo mínimo para calcular precio + stock
-  // Ajustá campos si tu schema usa otros nombres.
   return sanity.fetch(
     `*[_type=="producto" && _id in $ids]{
       _id,
       nombre,
       stock,
       talles[]{label, stock},
-      // precios comunes:
       precio,
       precioActual
     }`,
@@ -70,14 +64,12 @@ function getAvailable(prod: any, talle: string | null | undefined) {
 }
 
 function getUnitPrice(prod: any) {
-  // Prioridad: precioActual > precio
   const p = prod?.precioActual ?? prod?.precio ?? 0
   return toMoney(p)
 }
 
 async function getShippingPrice(origin: string, cp?: string) {
   if (!cp) return 0
-  // Reutilizamos tu endpoint existente
   const url = `${origin}/api/shipping?cp=${encodeURIComponent(cp)}`
   const res = await fetch(url, { cache: "no-store" })
   if (!res.ok) return 0
@@ -85,11 +77,88 @@ async function getShippingPrice(origin: string, cp?: string) {
   return toMoney(data?.price ?? 0)
 }
 
+type CartItem = { productId: string; talle?: string | null; cantidad: number }
+
+async function checkStock(cart: CartItem[]) {
+  const checks: any[] = []
+
+  for (const it of cart) {
+    const prod = await sanity.fetch(
+      `*[_type=="producto" && _id==$id][0]{_id, stock, talles[]{label, stock}}`,
+      { id: it.productId }
+    )
+
+    if (!prod) {
+      checks.push({
+        productId: it.productId,
+        talle: it.talle ?? null,
+        requested: it.cantidad,
+        available: 0,
+        ok: false,
+        reason: "product_not_found",
+      })
+      continue
+    }
+
+    if (Array.isArray(prod.talles) && it.talle) {
+      const t = prod.talles.find((x: any) => x?.label === it.talle)
+      const available = Number(t?.stock ?? 0)
+      checks.push({
+        productId: it.productId,
+        talle: it.talle,
+        requested: it.cantidad,
+        available,
+        ok: available >= it.cantidad,
+      })
+      continue
+    }
+
+    const available = Number(prod.stock ?? 0)
+    checks.push({
+      productId: it.productId,
+      talle: it.talle ?? null,
+      requested: it.cantidad,
+      available,
+      ok: available >= it.cantidad,
+    })
+  }
+
+  return checks
+}
+
+async function descontarStock(cart: CartItem[]) {
+  for (const it of cart) {
+    const prod = await sanity.fetch(
+      `*[_type=="producto" && _id==$id][0]{_id, stock, talles[]{label, stock}}`,
+      { id: it.productId }
+    )
+    if (!prod) continue
+
+    // Talles
+    if (Array.isArray(prod.talles) && it.talle) {
+      const newTalles = prod.talles.map((t: any) =>
+        t.label === it.talle
+          ? { ...t, stock: Math.max(0, Number(t.stock || 0) - it.cantidad) }
+          : t
+      )
+      await sanity.patch(prod._id).set({ talles: newTalles }).commit()
+      console.log(`✅ [card] Stock actualizado talle ${it.talle} (${it.productId})`)
+      continue
+    }
+
+    // Stock global
+    if (typeof prod.stock === "number") {
+      await sanity.patch(prod._id).dec({ stock: it.cantidad }).commit()
+      console.log(`✅ [card] Stock global actualizado (${it.productId})`)
+    }
+  }
+}
+
 export async function POST(req: Request) {
   try {
     const body = (await req.json()) as BrickPayload
 
-    // 1) Normalizar datos mínimos del pago
+    // 1) Datos mínimos del pago
     const token = body.token
     const payment_method_id = body.payment_method_id || body.paymentMethodId
     const issuer_id = body.issuer_id != null ? String(body.issuer_id) : undefined
@@ -97,60 +166,63 @@ export async function POST(req: Request) {
 
     if (!token || !payment_method_id) {
       return NextResponse.json(
-        { ok: false, error: "missing_payment_data", message: "Faltan datos de la tarjeta (token o método de pago)." },
+        {
+          ok: false,
+          error: "missing_payment_data",
+          message: "Faltan datos de la tarjeta (token o método de pago).",
+        },
         { status: 400 }
       )
     }
 
     // 2) Validar items
-    const items = Array.isArray(body.items) ? body.items : []
-    if (!items.length) {
+    const rawItems = Array.isArray(body.items) ? body.items : []
+    if (!rawItems.length) {
       return NextResponse.json(
         { ok: false, error: "empty_cart", message: "Carrito vacío." },
         { status: 400 }
       )
     }
 
-    // ids reales
-    const ids = items
-      .map((i) => String(i._id ?? i.productId ?? ""))
-      .filter(Boolean)
+    const cart: CartItem[] = rawItems
+      .map((i) => ({
+        productId: String(i._id ?? i.productId ?? "").trim(),
+        talle: i.talle ?? null,
+        cantidad: Number(i.cantidad ?? 1),
+      }))
+      .filter((x) => x.productId && x.cantidad > 0)
 
-    if (!ids.length) {
+    if (!cart.length) {
       return NextResponse.json(
         { ok: false, error: "invalid_cart", message: "Items inválidos (sin productId)." },
         { status: 400 }
       )
     }
 
-    // 3) Traer productos y calcular subtotal + validar stock
+    const ids = cart.map((x) => x.productId)
+
+    // 3) Traer snapshot para subtotal + validar stock (pre-check)
     const prods = await getProductsSnapshot(ids)
     const byId = new Map<string, any>((prods || []).map((p: any) => [String(p._id), p]))
 
     let subtotal = 0
     const stockErrors: any[] = []
 
-    for (const it of items) {
-      const id = String(it._id ?? it.productId ?? "")
-      const qty = Number(it.cantidad ?? 1)
-      const talle = it.talle ?? null
-
-      if (!id || !qty || qty <= 0) continue
-
-      const prod = byId.get(id)
+    for (const it of cart) {
+      const prod = byId.get(it.productId)
       if (!prod) {
-        stockErrors.push({ productId: id, talle, requested: qty, available: 0, ok: false })
+        stockErrors.push({ productId: it.productId, talle: it.talle, requested: it.cantidad, available: 0, ok: false })
         continue
       }
 
-      const available = getAvailable(prod, talle)
-      if (available < qty) {
-        stockErrors.push({ productId: id, talle, requested: qty, available, ok: false })
+      const available = getAvailable(prod, it.talle)
+      if (available < it.cantidad) {
+        stockErrors.push({ productId: it.productId, talle: it.talle, requested: it.cantidad, available, ok: false })
         continue
       }
 
       const unit = getUnitPrice(prod)
-      subtotal += unit * qty
+      subtotal += unit * it.cantidad
     }
 
     if (stockErrors.length) {
@@ -167,14 +239,14 @@ export async function POST(req: Request) {
 
     subtotal = toMoney(subtotal)
 
-    // 4) Calcular envío server-side (si corresponde)
+    // 4) Envío server-side
     const { origin } = new URL(req.url)
     const shippingType = body.shipping?.type === "domicilio" ? "domicilio" : "sucursal"
-    const shippingPrice =
-      shippingType === "domicilio" ? await getShippingPrice(origin, body.shipping?.cp) : 0
+    const shippingPrice = shippingType === "domicilio"
+      ? await getShippingPrice(origin, body.shipping?.cp)
+      : 0
 
     const computedTotal = toMoney(subtotal + shippingPrice)
-
     if (!computedTotal || computedTotal <= 0) {
       return NextResponse.json(
         { ok: false, error: "invalid_amount", message: "Monto inválido calculado." },
@@ -182,12 +254,9 @@ export async function POST(req: Request) {
       )
     }
 
-    // (Opcional) Si querés comparar con el front para detectar diferencias:
     const clientAmount = toMoney(body.amount ?? 0)
     const diff = Math.abs(computedTotal - clientAmount)
-    // tolerancia chica por redondeo
     if (clientAmount > 0 && diff > 1) {
-      // no bloqueamos; cobramos el calculado real
       console.warn("Amount mismatch", { clientAmount, computedTotal, diff })
     }
 
@@ -205,7 +274,7 @@ export async function POST(req: Request) {
         )
         .digest("hex")
 
-    // 6) Armar payload MercadoPago
+    // 6) Payload MP
     const mpPayload: any = {
       token,
       transaction_amount: computedTotal,
@@ -220,14 +289,14 @@ export async function POST(req: Request) {
       capture: true,
       metadata: {
         orderId,
+        source: "card_inline",
         shippingType,
         shippingPrice,
         subtotal,
-        cart: items,
+        cart,
       },
     }
 
-    // 7) Crear pago
     const mpToken = process.env.MP_ACCESS_TOKEN
     if (!mpToken) {
       return NextResponse.json(
@@ -236,6 +305,7 @@ export async function POST(req: Request) {
       )
     }
 
+    // 7) Crear pago en MP
     const res = await fetch("https://api.mercadopago.com/v1/payments", {
       method: "POST",
       headers: {
@@ -261,12 +331,58 @@ export async function POST(req: Request) {
       )
     }
 
-    // 8) OK
+    // 8) Si approved -> descontar stock + marker idempotente (anti doble descuento)
+    const status = String(data?.status || "").toLowerCase()
+    const paymentId = data?.id != null ? String(data.id) : ""
+    const statusDetail = data?.status_detail != null ? String(data.status_detail) : ""
+
+    if (status === "approved" && paymentId) {
+      const markerId = `mp_payment_${paymentId}`
+
+      const already = await sanity.getDocument(markerId)
+      if (already) {
+        console.log("↩️ [card] ya procesado (idempotencia):", markerId)
+      } else {
+        // Re-check de stock justo antes de descontar (blindaje)
+        const recheck = await checkStock(cart)
+        const out = recheck.filter((x: any) => !x.ok)
+
+        if (out.length) {
+          await sanity.createIfNotExists({
+            _id: markerId,
+            _type: "mpWebhook",
+            paymentId,
+            orderId,
+            createdAt: new Date().toISOString(),
+            status: "stock_insufficient",
+            source: "card_inline",
+            detailsJson: JSON.stringify(out),
+          })
+
+          // OJO: pago ya está aprobado, así que esto es para revisión manual
+          console.warn("⚠️ [card] pago aprobado pero sin stock al descontar", out)
+        } else {
+          await descontarStock(cart)
+
+          await sanity.createIfNotExists({
+            _id: markerId,
+            _type: "mpWebhook",
+            paymentId,
+            orderId,
+            createdAt: new Date().toISOString(),
+            status: "processed",
+            source: "card_inline",
+          })
+        }
+      }
+    }
+
+    // 9) OK
     return NextResponse.json({
       ok: true,
-      id: data.id,
-      status: data.status, // approved | in_process | rejected
-      status_detail: data.status_detail,
+      id: paymentId,
+      status, // approved | in_process | rejected
+      status_detail: statusDetail,
       orderId,
       computedTotal,
       subtotal,
