@@ -197,29 +197,44 @@ useEffect(() => {
           },
           onSubmit: async (data: any) => {
             console.log("[BRICK] onSubmit data:", data);
-
+            
             setCardMsg("");
             setCardLoading(true);
 
+            // ✅ PASO 1: armar items a partir del carrito (para stock + monto server-side)
+const compactItems = items.map((i: any) => ({
+  _id: i._id ?? i.productId,          // soporta ambos
+  productId: i.productId ?? i._id,    // soporta ambos
+  talle: i.talle ?? null,
+  cantidad: Number(i.cantidad ?? 1),
+}))
+
+console.log("[BRICK] compactItems:", compactItems)
+
+if (!compactItems.length) {
+  setCardMsg("Carrito vacío. Volvé a agregar productos.")
+  setCardLoading(false)
+  throw new Error("empty_cart")
+}
+
             const payload = {
-              token: String(data.token),
-              issuer_id:
-                data.issuer_id != null ? String(data.issuer_id) : undefined,
-              payment_method_id: String(
-                data.paymentMethodId || data.payment_method_id
-              ),
-              installments: Number(data.installments ?? 1),
-              email: data.payer?.email
-                ? String(data.payer.email)
-                : undefined,
-              identification: data.payer?.identification
-                ? {
-                    type: String(data.payer.identification.type),
-                    number: String(data.payer.identification.number),
-                  }
-                : undefined,
-              amount: Number(total),
-            };
+  token: String(data.token),
+  issuer_id: data.issuer_id != null ? String(data.issuer_id) : undefined,
+  payment_method_id: String(data.paymentMethodId || data.payment_method_id),
+  installments: Number(data.installments ?? 1),
+  email: data.payer?.email ? String(data.payer.email) : undefined,
+  identification: data.payer?.identification
+    ? {
+        type: String(data.payer.identification.type),
+        number: String(data.payer.identification.number),
+      }
+    : undefined,
+
+  // ✅ IMPORTANTE
+  items: compactItems,
+  amount: Number(total),
+}
+
 
             const res = await fetch("/api/payments/card", {
               method: "POST",
@@ -278,7 +293,7 @@ useEffect(() => {
     console.log("[BRICK] cleanup / unmount");
     cardBrickRef.current?.unmount?.();
   };
-}, [step, payMethod, total]);
+}, [step, payMethod, total, items]);
 
 
 
