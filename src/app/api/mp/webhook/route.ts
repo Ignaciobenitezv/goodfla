@@ -36,6 +36,58 @@ async function mpGet(url: string) {
   return r.json()
 }
 
+async function checkStock(cart: CartItem[]) {
+  const checks = []
+
+  for (const it of cart) {
+    const prod = await sanity.fetch(
+      `*[_type=="producto" && _id==$id][0]{_id, stock, talles}`,
+      { id: it.productId }
+    )
+
+    // si no existe producto, lo tratamos como sin stock (bloquea)
+    if (!prod) {
+      checks.push({
+        productId: it.productId,
+        talle: it.talle ?? null,
+        requested: it.cantidad,
+        available: 0,
+        ok: false,
+        reason: "product_not_found",
+      })
+      continue
+    }
+
+    // talle
+    if (Array.isArray(prod.talles) && it.talle) {
+      const t = prod.talles.find((x: any) => x?.label === it.talle)
+      const available = Number(t?.stock ?? 0)
+      checks.push({
+        productId: it.productId,
+        talle: it.talle,
+        requested: it.cantidad,
+        available,
+        ok: available >= it.cantidad,
+      })
+      continue
+    }
+
+    // stock global
+    const available = Number(prod.stock ?? 0)
+    checks.push({
+      productId: it.productId,
+      talle: it.talle ?? null,
+      requested: it.cantidad,
+      available,
+      ok: available >= it.cantidad,
+    })
+  }
+
+  return checks
+}
+
+
+
 async function descontarStock(cart: CartItem[]) {
   for (const it of cart) {
     const prod = await sanity.fetch(
@@ -109,8 +161,9 @@ async function handle(req: Request) {
 
       // ✅ Obtener el pago aprobado (idempotencia por payment.id)
       const approvedPayment = Array.isArray(order.payments)
-        ? order.payments.find((p: any) => p.status === "approved")
-        : null
+  ? [...order.payments].reverse().find((p: any) => p.status === "approved")
+  : null
+
 
       if (!approvedPayment?.id) {
         console.log("ℹ️ Sin pago aprobado todavía. No se descuenta stock.", {
@@ -148,18 +201,51 @@ async function handle(req: Request) {
         return respond200({ msg: "no_cart_metadata", orderId: order.id }, startedAt)
       }
 
-      // 3) Descontamos stock
-      await descontarStock(cart)
+// ✅ 3) Re-check de stock justo antes de descontar (blindaje)
+const stockChecks = await checkStock(cart)
+const outOfStock = stockChecks.filter((x: any) => !x.ok)
+const detailsJson = JSON.stringify(outOfStock)
 
-      // 4) Marcamos como procesado (después de descontar)
-      await sanity.createIfNotExists({
-        _id: markerId,
-        _type: "mpWebhook",
-        paymentId,
-        orderId: order.id,
-        preferenceId: order.preference_id,
-        createdAt: new Date().toISOString(),
-      })
+if (outOfStock.length) {
+  // Marcamos igual para no reintentar infinito
+  await sanity.createIfNotExists({
+    _id: markerId,
+    _type: "mpWebhook",
+    paymentId,
+    orderId: order.id,
+    preferenceId: order.preference_id,
+    createdAt: new Date().toISOString(),
+    status: "stock_insufficient",
+    detailsJson,
+  })
+
+  return respond200(
+    {
+      msg: "stock_insufficient",
+      orderId: order.id,
+      preferenceId: order.preference_id,
+      markerId,
+      paymentId,
+      detailsJson,
+    },
+    startedAt
+  )
+}
+
+// ✅ 4) Stock OK → descontamos
+await descontarStock(cart)
+
+// ✅ 5) Marcamos como procesado (después de descontar)
+await sanity.createIfNotExists({
+  _id: markerId,
+  _type: "mpWebhook",
+  paymentId,
+  orderId: order.id,
+  preferenceId: order.preference_id,
+  createdAt: new Date().toISOString(),
+  status: "processed",
+})
+
 
       return respond200(
         {
