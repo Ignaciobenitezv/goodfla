@@ -1,9 +1,11 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
+import { useRouter } from "next/navigation"
 import { useCart } from "@/context/CartContext"
 import ValidatedInput from "@/components/ValidatedInput"
 import Image from "next/image"
+
 
 declare global {
   interface Window {
@@ -23,6 +25,7 @@ type Quote = {
 
 export default function CheckoutPage() {
   const { items } = useCart()
+    const router = useRouter()
 
   // STEPS: contacto → entrega → pago
   const [step, setStep] = useState<"contacto" | "entrega" | "pago">("contacto")
@@ -275,17 +278,18 @@ export default function CheckoutPage() {
                 if (statusDetail) qs.set("status_detail", statusDetail)
 
                 if (status === "approved") {
-                  window.location.href = `/checkout/success?${qs.toString()}`
-                  return
-                }
+  router.push(`/checkout/success?${qs.toString()}`)
+  return
+}
 
-                if (status === "in_process" || status === "pending") {
-                  window.location.href = `/checkout/pending?${qs.toString()}`
-                  return
-                }
+if (status === "in_process" || status === "pending") {
+  router.push(`/checkout/pending?${qs.toString()}`)
+  return
+}
 
-                // rejected / cancelled / otros
-                window.location.href = `/checkout/failure?${qs.toString()}`
+// rejected / cancelled / otros
+router.push(`/checkout/failure?${qs.toString()}`)
+
               } catch (e) {
                 setCardLoading(false)
                 throw e
@@ -323,7 +327,7 @@ export default function CheckoutPage() {
     return () => {
       cardBrickRef.current?.unmount?.()
     }
-  }, [step, payMethod, total, items, envio, cp])
+  }, [step, payMethod, total, items, envio, cp, router])
 
   return (
     <main className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-8 p-6 mt-20">

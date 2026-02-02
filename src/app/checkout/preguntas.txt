@@ -1,0 +1,50 @@
+¿necesito que me cuenten el problema que quieren resolver con el agente?
+
+filtrar clientes potenciales para cerrar la venta particular .
+
+¿Qué sería para ustedes un resultado exitoso en 60–90 días?-
+(ahorro de tiempo, más ventas, menos consultas humanas, etc.)
+
+
+
+¿Qué tareas específicas debería poder hacer el agente, para saber si solo va a responder dudas, o también va a tomar decisiones, ejecuta acciones?
+(y qué cosas NO debería hacer)
+(agendar, registrar datos, calificar leads, vender)
+
+- agende reuniones .
+- 
+- seguimiento
+
+
+
+¿va a funcionar solo en whatsapp, no ?
+(web, WhatsApp, Instagram, email, otros)
+
+-whatsapp
+
+¿Debe integrarse con algo mas ahora o a futuro ?
+(CRM, Google Sheets, Calendar, ERP, etc.)
+
+- google sheets. calendar . 
+
+
+¿Qué volumen aproximado de consultas creen que tiene que responder por dia/mes?
+
+prmedio 15 por dia
+
+
+¿Qué información tienen hoy para entrenarlo?
+(web, PDFs, documentos, scripts, nada)
+
+pdfs - texto .
+
+
+¿Para cuándo necesitan la implementacion?
+
+
+
+
+¿Esperan una solución más simple para empezar o algo más completo desde el inicio?
+
+simple
+
