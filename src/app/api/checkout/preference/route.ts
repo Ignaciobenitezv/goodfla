@@ -6,8 +6,8 @@ import { createClient } from "@sanity/client"
 export const runtime = "nodejs"
 
 const sanity = createClient({
-  projectId: process.env.NEXT_PUBLIC_SANITY_PROJECT_ID!,
-  dataset: process.env.NEXT_PUBLIC_SANITY_DATASET!,
+  projectId: process.env.SANITY_PROJECT_ID!,
+  dataset: process.env.SANITY_DATASET!,
   token: process.env.SANITY_API_WRITE_TOKEN!,
   apiVersion: "2024-01-01",
   useCdn: false,
@@ -38,10 +38,18 @@ export async function POST(req: Request) {
     const body = await req.json()
 
     const compactCart: CompactCartItem[] = (body?.items || []).map((i: any) => ({
-      productId: i.productId,
-      talle: i.talle || null,
-      cantidad: Number(i.cantidad || 1),
-    }))
+  productId: i._id ?? i.productId,     // ✅ soporta ambos
+  talle: i.talle || null,
+  cantidad: Number(i.cantidad || 1),
+}))
+
+if (!compactCart.length) {
+  return NextResponse.json(
+    { ok: false, error: "empty_cart" },
+    { status: 400 }
+  )
+}
+
 
     const invalid = compactCart.find((x: any) => !x.productId)
     if (invalid) {
