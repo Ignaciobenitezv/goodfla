@@ -144,7 +144,7 @@ export default function PendingPage() {
               href="/ayuda"
               className="inline-flex items-center justify-center rounded-xl border border-slate-300 bg-white px-5 py-2.5 text-sm font-medium hover:bg-slate-50 transition"
             >
-              ¿Qué significa “pendiente”?
+              ¿Qué significa “pendiente.”?
             </Link>
           </div>
         </div>
