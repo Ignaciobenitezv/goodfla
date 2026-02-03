@@ -147,7 +147,7 @@ export default function SuccessClient() {
   }, [merchantOrderId, paymentIdFromUrl, preferenceId, clearCart])
 
   return (
-    <main className="min-h-[100dvh] relative overflow-hidden">
+    <main className="min-h-[100dvh] relative overflow-hidden pt-24 md:pt-28">
       {/* Background wash (tipo MercadoPago) */}
       <div
         className={[
