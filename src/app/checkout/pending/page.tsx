@@ -13,8 +13,8 @@ export default function PendingPage() {
   const [phase, setPhase] = useState<Phase>("checking")
   const [progress, setProgress] = useState<number>(8)
 
+  // 1) Validación inicial + transición a pending
   useEffect(() => {
-    // 1) Animación de validación (sube a ~70%)
     const start = Date.now()
     const checkingMs = 900
     const tickMs = 40
@@ -27,16 +27,31 @@ export default function PendingPage() {
       if (elapsed >= checkingMs) {
         clearInterval(t)
 
-        // 2) Transición a pending (amarillo)
         setPhase("pending")
-
-        // sube a ~85% y queda ahí (estado no final)
+        // sube a ~85% y queda viva con oscilación
         setTimeout(() => setProgress(85), 140)
       }
     }, tickMs)
 
     return () => clearInterval(t)
   }, [])
+
+  // 2) Oscilación suave mientras está pending (82% ↔ 88%)
+  useEffect(() => {
+    if (phase !== "pending") return
+
+    let value = 85
+    let dir: 1 | -1 = 1
+
+    const id = setInterval(() => {
+      value += dir * 1
+      if (value >= 88) dir = -1
+      if (value <= 82) dir = 1
+      setProgress(value)
+    }, 350)
+
+    return () => clearInterval(id)
+  }, [phase])
 
   const isPending = phase === "pending"
 
@@ -95,13 +110,12 @@ export default function PendingPage() {
               <div
                 className={[
                   "h-full rounded-full transition-[width] duration-500 ease-out",
-                  isPending ? "bg-amber-500" : "bg-slate-900",
+                  isPending ? "bg-amber-500 animate-pulse" : "bg-slate-900",
                 ].join(" ")}
                 style={{ width: `${progress}%` }}
               />
             </div>
 
-            {/* Hint sutil de “no final” */}
             <div
               className={[
                 "mt-3 text-xs text-slate-500 transition-opacity duration-300",
@@ -112,7 +126,7 @@ export default function PendingPage() {
             </div>
           </div>
 
-          {/* Acciones: aparecen cuando ya está pending */}
+          {/* Acciones */}
           <div
             className={[
               "mt-7 flex flex-wrap gap-3 justify-center transition-opacity duration-300",
@@ -120,7 +134,7 @@ export default function PendingPage() {
             ].join(" ")}
           >
             <Link
-              href="/"
+              href="/productos"
               className="inline-flex items-center justify-center rounded-xl bg-slate-900 text-white px-5 py-2.5 text-sm font-medium hover:bg-slate-800 transition"
             >
               Volver a la tienda

@@ -12,11 +12,12 @@ function clamp(n: number, min = 0, max = 100) {
 export default function FailurePage() {
   const [phase, setPhase] = useState<Phase>("checking")
   const [progress, setProgress] = useState<number>(8)
+  const [shake, setShake] = useState(false)
 
+  // 1) Validando → fallido
   useEffect(() => {
-    // 1) Animación de validación (sube a ~70%)
     const start = Date.now()
-    const checkingMs = 900 // duración de “validando”
+    const checkingMs = 900
     const tickMs = 40
 
     const t = setInterval(() => {
@@ -27,9 +28,15 @@ export default function FailurePage() {
       if (elapsed >= checkingMs) {
         clearInterval(t)
 
-        // 2) Transición a fallado (rojo)
+        // Paso a fallido
         setPhase("failed")
-        setTimeout(() => setProgress(100), 120) // completa la barra con delay suave
+
+        // Completa barra
+        setTimeout(() => setProgress(100), 120)
+
+        // Shake corto del card
+        setShake(true)
+        setTimeout(() => setShake(false), 500)
       }
     }, tickMs)
 
@@ -50,7 +57,7 @@ export default function FailurePage() {
         ].join(" ")}
       />
 
-      {/* Wipe rojo al fallar (tipo MP) */}
+      {/* Wipe rojo */}
       <div
         className={[
           "absolute inset-0 pointer-events-none",
@@ -63,8 +70,9 @@ export default function FailurePage() {
       <section className="relative max-w-xl mx-auto px-6 py-10">
         <div
           className={[
-            "rounded-3xl bg-white/85 backdrop-blur-md shadow-xl ring-1 p-7 md:p-8 text-center",
+            "rounded-3xl bg-white/85 backdrop-blur-md shadow-xl ring-1 p-7 md:p-8 text-center transition-transform",
             isFailed ? "ring-rose-400/30" : "ring-sky-300/25",
+            shake ? "animate-shake" : "",
           ].join(" ")}
         >
           {/* Header */}
@@ -93,14 +101,16 @@ export default function FailurePage() {
               <div
                 className={[
                   "h-full rounded-full transition-[width] duration-500 ease-out",
-                  isFailed ? "bg-rose-600" : "bg-slate-900",
+                  isFailed
+                    ? "bg-rose-600 animate-pulse"
+                    : "bg-slate-900",
                 ].join(" ")}
                 style={{ width: `${progress}%` }}
               />
             </div>
           </div>
 
-          {/* Acciones: aparecen cuando falla */}
+          {/* Acciones */}
           <div
             className={[
               "mt-7 flex flex-wrap gap-3 justify-center transition-opacity duration-300",
@@ -123,6 +133,21 @@ export default function FailurePage() {
           </div>
         </div>
       </section>
+
+      {/* Animación shake (CSS inline con Tailwind) */}
+      <style jsx>{`
+        @keyframes shake {
+          0% { transform: translateX(0); }
+          20% { transform: translateX(-6px); }
+          40% { transform: translateX(6px); }
+          60% { transform: translateX(-4px); }
+          80% { transform: translateX(4px); }
+          100% { transform: translateX(0); }
+        }
+        .animate-shake {
+          animation: shake 0.45s ease-in-out;
+        }
+      `}</style>
     </main>
   )
 }
