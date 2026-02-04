@@ -110,3 +110,15 @@ button {
 .cart-wiggle {
   animation: cart-wiggle 1.2s ease-in-out infinite;
 }
+
+
+html, body {
+  height: 100%;
+  background: #000; /* evita el blanco del viewport */
+}
+
+body {
+  min-height: 100dvh;               /* iOS: altura real */
+  padding-bottom: env(safe-area-inset-bottom); /* safe-area inferior */
+  overscroll-behavior: none;        /* evita “rebote” mostrando blanco */
+}
