@@ -4,6 +4,7 @@ import { useState, useMemo, useEffect } from "react"
 import Image from "next/image"
 import Link from "next/link"
 import SectionTitle from "@/components/SectionTitle" // ajustá la ruta si es distinta
+import { List, LayoutGrid, Grid3X3, Grid2X2 } from "lucide-react"
 
 const BADGE_MAP: Record<string, string> = {
   MAS_VENDIDO: "MÁS VENDIDO",
@@ -46,6 +47,21 @@ export default function CombosClient({
 
   // Mostrar / ocultar filtros en MOBILE (acordeón)
   const [showMobileFilters, setShowMobileFilters] = useState(false)
+
+
+  /* 🔒 Sync de vista para mobile */
+useEffect(() => {
+  const syncViewForMobile = () => {
+    const isMobile = window.innerWidth < 640 // sm breakpoint
+    if (isMobile && (view === "grid3" || view === "grid4")) {
+      setView("grid2")
+    }
+  }
+
+  syncViewForMobile()
+  window.addEventListener("resize", syncViewForMobile)
+  return () => window.removeEventListener("resize", syncViewForMobile)
+}, [view])
 
   const combosFiltrados = useMemo(() => {
     let data = [...safeCombos]
@@ -104,7 +120,7 @@ export default function CombosClient({
       : "(min-width:1280px) calc((100vw - 250px - 48px)/4), (min-width:1024px) calc((100vw - 250px - 48px)/3), (min-width:640px) calc((100vw - 250px - 32px)/2), 100vw"
 
   return (
-    <div className="min-h-screen bg-slate-200 py-10">
+    <div className="min-h-screen bg-white py-10">
       <main className="max-w-[1400px] mx-auto px-4 mt-20">
         <SectionTitle basePath={basePath} />
         {/* BOTÓN FILTROS SOLO MOBILE */}
@@ -425,85 +441,68 @@ export default function CombosClient({
                 </select>
               </div>
 
-              {/* Botones vista */}
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setView("list")}
-                  className={`p-2 border rounded-md text-sm shadow-sm bg-white/80 ${
-                    view === "list"
-                      ? "border-marca-crema ring-1 ring-marca-crema/50"
-                      : "border-slate-200 text-gray-600"
-                  }`}
-                  title="Lista"
-                  aria-label="Vista lista"
-                >
-                  <Image
-                    src="/g1.png"
-                    alt="Lista"
-                    width={18}
-                    height={18}
-                    className="pointer-events-none select-none"
-                  />
-                </button>
+            <div className="flex items-center gap-2">
+  <button
+    onClick={() => setView("list")}
+    className={`p-2 rounded-md transition-colors ${
+      view === "list"
+        ? "bg-black text-white"
+        : "text-slate-500 hover:text-black"
+    }`}
+    title="Lista"
+    aria-label="Vista lista"
+    type="button"
+  >
+    <List size={18} />
+  </button>
 
-                <button
-                  onClick={() => setView("grid2")}
-                  className={`p-2 border rounded-md text-sm shadow-sm bg-white/80 ${
-                    view === "grid2"
-                      ? "border-marca-crema ring-1 ring-marca-crema/50"
-                      : "border-slate-200 text-gray-600"
-                  }`}
-                  title="2 columnas"
-                  aria-label="Vista 2 columnas"
-                >
-                  <Image
-                    src="/g2.png"
-                    alt="2 columnas"
-                    width={18}
-                    height={18}
-                    className="pointer-events-none select-none"
-                  />
-                </button>
+  <button
+    onClick={() => setView("grid2")}
+    className={`p-2 rounded-md transition-colors ${
+      view === "grid2"
+        ? "bg-black text-white"
+        : "text-slate-500 hover:text-black"
+    }`}
+    title="2 columnas"
+    aria-label="Vista 2 columnas"
+    type="button"
+  >
+    <LayoutGrid size={18} />
+  </button>
 
-                <button
-                  onClick={() => setView("grid3")}
-                  className={`p-2 border rounded-md text-sm shadow-sm bg-white/80 ${
-                    view === "grid3"
-                      ? "border-marca-crema ring-1 ring-marca-crema/50"
-                      : "border-slate-200 text-gray-600"
-                  }`}
-                  title="3 columnas"
-                  aria-label="Vista 3 columnas"
-                >
-                  <Image
-                    src="/g3.png"
-                    alt="3 columnas"
-                    width={18}
-                    height={18}
-                    className="pointer-events-none select-none"
-                  />
-                </button>
+  {/* Solo desktop (sm+) */}
+  <button
+    onClick={() => setView("grid3")}
+    className={`hidden sm:inline-flex p-2 rounded-md transition-colors ${
+      view === "grid3"
+        ? "bg-black text-white"
+        : "text-slate-500 hover:text-black"
+    }`}
+    title="3 columnas"
+    aria-label="Vista 3 columnas"
+    type="button"
+  >
+    <Grid3X3 size={18} />
+  </button>
 
-                <button
-                  onClick={() => setView("grid4")}
-                  className={`p-2 border rounded-md text-sm shadow-sm bg-white/80 ${
-                    view === "grid4"
-                      ? "border-marca-crema ring-1 ring-marca-crema/50"
-                      : "border-slate-200 text-gray-600"
-                  }`}
-                  title="4 columnas"
-                  aria-label="Vista 4 columnas"
-                >
-                  <Image
-                    src="/g4.png"
-                    alt="4 columnas"
-                    width={18}
-                    height={18}
-                    className="pointer-events-none select-none"
-                  />
-                </button>
-              </div>
-            </div>
+  {/* Solo desktop (sm+) */}
+  <button
+    onClick={() => setView("grid4")}
+    className={`hidden sm:inline-flex p-2 rounded-md transition-colors ${
+      view === "grid4"
+        ? "bg-black text-white"
+        : "text-slate-500 hover:text-black"
+    }`}
+    title="4 columnas"
+    aria-label="Vista 4 columnas"
+    type="button"
+  >
+    <Grid2X2 size={18} />
+  </button>
+</div>
+
+</div>
+
 
             {combosFiltrados.length === 0 && (
               <p className="text-gray-600">No se encontraron resultados.</p>

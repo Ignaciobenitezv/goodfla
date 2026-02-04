@@ -27,6 +27,81 @@ export default function CheckoutPage() {
   const { items } = useCart()
     const router = useRouter()
 
+
+
+  // ================= WHATSAPP (TRANSFERENCIA / EFECTIVO) =================
+  const WHATSAPP_NUMBER = "5493624934353" // 
+
+  const buildWhatsappOrderText = () => {
+    const lines = (items || []).map((it: any) => {
+      const nombreProd = it?.nombre ?? "Producto"
+      const talle = it?.talle ? ` (Talle ${it.talle})` : ""
+      const qty = Number(it?.cantidad ?? 1)
+      const unit = Number(it?.precio ?? 0)
+      const lineTotal = unit * qty
+
+      return `- ${nombreProd}${talle} x${qty} - $${lineTotal.toLocaleString("es-AR")}`
+    })
+
+    const entregaTxt =
+      envio === "domicilio"
+        ? `Envío a domicilio (CP: ${cp || "—"})`
+        : envio === "sucursal"
+        ? "Retiro por sucursal"
+        : "Entrega: —"
+
+    const envioCostoTxt = quote
+      ? quote.price === 0
+        ? "Gratis"
+        : `$${quote.price.toLocaleString("es-AR")}`
+      : "—"
+
+    const header = [
+      "Hola! 👋 Mi pedido es:",
+      "",
+      ...lines,
+      "",
+      `Subtotal: $${totalProductos.toLocaleString("es-AR")}`,
+      `Costo de envío: ${envioCostoTxt}`,
+      `Total: $${total.toLocaleString("es-AR")}`,
+      "",
+      `Cliente: ${nombre} ${apellido}`.trim(),
+      `Teléfono: ${telefono || "—"}`,
+      `Entrega: ${entregaTxt}`,
+      envio === "domicilio"
+        ? `Dirección: ${destinatario.calle || "—"} ${destinatario.numero || ""}, ${destinatario.barrio ? destinatario.barrio + ", " : ""}${destinatario.ciudad || "—"}`
+        : "",
+      "",
+      "Quiero abonar en transferencia/efectivo.",
+    ]
+      .filter(Boolean)
+      .join("\n")
+
+    return header
+  }
+
+  const handleTransferOrCashWhatsApp = () => {
+    if (!items?.length) {
+      alert("Tu carrito está vacío.")
+      return
+    }
+
+    // (opcional) validación suave: si estás en paso pago, ideal tener datos de contacto
+    if (!nombre.trim() || !apellido.trim() || !telefono.trim()) {
+      alert("Completá tus datos de contacto antes de continuar.")
+      setStep("contacto")
+      return
+    }
+
+    const text = buildWhatsappOrderText()
+    const url = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(text)}`
+    window.open(url, "_blank", "noopener,noreferrer")
+  }
+
+
+
+
+
   // STEPS: contacto → entrega → pago
   const [step, setStep] = useState<"contacto" | "entrega" | "pago">("contacto")
 
@@ -449,6 +524,28 @@ router.push(`/checkout/failure?${qs.toString()}`)
 
             <div className="space-y-3">
               {/* Tarjeta inline */}
+                            {/* Transferencia / Efectivo -> WhatsApp */}
+              <label
+                onClick={() => {
+                  setPayMethod("transfer") // o "cash" si querés distinguir
+                  orderIdRef.current = "" // opcional
+                  handleTransferOrCashWhatsApp()
+                }}
+                className={`flex items-center justify-between border rounded p-4 cursor-pointer transition ${
+                  payMethod === "transfer"
+                    ? "border-amber-600 bg-amber-50"
+                    : "hover:border-black"
+                }`}
+              >
+                <div>
+                  <p className="font-medium">Efectivo / Transferencia</p>
+                  <p className="text-sm text-gray-500">
+                    Coordinamos por WhatsApp y te pasamos los datos
+                  </p>
+                </div>
+                <span className="text-lg">💸</span>
+              </label>
+
               <label
                 onClick={() => {
                   setPayMethod("card_inline")

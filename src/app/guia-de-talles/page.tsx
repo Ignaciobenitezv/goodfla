@@ -4,14 +4,15 @@ import type { Metadata } from "next";
 export const metadata: Metadata = {
   title: "Guía de talles | Goodfla",
   description:
-    "Medidas de remeras oversize, remeras comunes y jeans baggy: alto, ancho, cintura, largo y bota (en cm).",
+    "Medidas de remeras oversize, remeras comunes, jeans baggy y zapatillas (en cm).",
   openGraph: {
     title: "Guía de talles | Goodfla",
-    description: "Tabla de medidas en centímetros para nuestras prendas.",
+    description: "Tabla de medidas en centímetros para nuestras prendas y zapatillas.",
     type: "article",
     url: "/guia-de-talles",
   },
 };
+
 
 type Row = Record<string, string | number>;
 
@@ -93,6 +94,27 @@ export default function GuiaDeTallesPage() {
     { Talle: "XL", "Alto (cm)": 72, "Ancho (cm)": 55 },
     { Talle: "XXL", "Alto (cm)": 75, "Ancho (cm)": 58 },
   ];
+
+    const zapatillasCols = [
+    "Talle (AR)",
+    "DC (cm)",
+    "Puma (cm)",
+    "Campus (cm)",
+    "Vans (cm)",
+    "Samba (cm)",
+    "Superstar (cm)",
+  ];
+
+  const zapatillasRows: Row[] = [
+    { "Talle (AR)": 38, "DC (cm)": 24, "Puma (cm)": 24, "Campus (cm)": 24, "Vans (cm)": 24, "Samba (cm)": 24, "Superstar (cm)": 24 },
+    { "Talle (AR)": 39, "DC (cm)": 25, "Puma (cm)": 24.5, "Campus (cm)": 24.5, "Vans (cm)": 24.5, "Samba (cm)": 24.5, "Superstar (cm)": 24.5 },
+    { "Talle (AR)": 40, "DC (cm)": 25, "Puma (cm)": 25, "Campus (cm)": 25, "Vans (cm)": 25, "Samba (cm)": 25, "Superstar (cm)": 25 },
+    { "Talle (AR)": 41, "DC (cm)": 26, "Puma (cm)": 26, "Campus (cm)": 26, "Vans (cm)": 26, "Samba (cm)": 27, "Superstar (cm)": 26 },
+    { "Talle (AR)": 42, "DC (cm)": 27, "Puma (cm)": 27, "Campus (cm)": 27, "Vans (cm)": 27, "Samba (cm)": 27, "Superstar (cm)": 27 },
+    { "Talle (AR)": 43, "DC (cm)": 27.5, "Puma (cm)": 27.5, "Campus (cm)": 27.5, "Vans (cm)": 27.5, "Samba (cm)": 27.5, "Superstar (cm)": 27 },
+    { "Talle (AR)": 44, "DC (cm)": 28.5, "Puma (cm)": "-", "Campus (cm)": "-", "Vans (cm)": 28.5, "Samba (cm)": "-", "Superstar (cm)": "-" },
+  ];
+
 
   return (
     <main className="mx-auto max-w-5xl px-4 py-10 mt-10">
@@ -213,6 +235,33 @@ export default function GuiaDeTallesPage() {
         </div>
 
         <SizeTable caption="Corte regular" columns={comunesCols} rows={comunesRows} />
+      </section>
+            {/* ZAPATILLAS */}
+      <section className="mt-12 grid gap-6 md:grid-cols-[minmax(0,1.1fr)_minmax(0,1.3fr)] items-start">
+        <div className="space-y-3">
+          <h2 className="text-2xl md:text-3xl font-bold tracking-wide text-zinc-900">
+            Zapatillas
+          </h2>
+          <p className="text-sm md:text-[15px] text-zinc-700">
+            Guía de referencia por marca (medidas en cm). Si estás entre dos talles,
+            elegí el más grande para mayor comodidad.
+          </p>
+
+          <div className="mt-2 grid gap-2 text-xs md:text-sm text-zinc-700">
+            <div className="rounded-xl bg-zinc-50 border border-zinc-200 px-3 py-2">
+              <p className="font-medium">Tip rápido:</p>
+              <p className="text-zinc-600">
+                Medí tu pie (talón a punta) o una plantilla y compará con la columna de tu marca.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <SizeTable
+          caption="Guía de talles de zapatillas"
+          columns={zapatillasCols}
+          rows={zapatillasRows}
+        />
       </section>
 
       {/* BLOQUE CÓMO MEDIR */}

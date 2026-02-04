@@ -23,7 +23,7 @@ const SECTIONS = [
     paths: ["/productos/combos", "/combos"],
   },
   {
-    label: "Zapatillas 2x1",
+    label: "Zapatillas 2 x 1",
     href: "/productos/zapatillas",
     paths: ["/productos/zapatillas", "/zapatillas"],
   },
@@ -61,40 +61,59 @@ export default function SectionTitle({ basePath: _basePath }: SectionTitleProps)
   const next = SECTIONS[nextIndex]
 
   return (
-    <div className="w-full flex justify-center items-center gap-6 mb-10 relative">
-      {/* Inyectamos la animación pulse */}
-      <style>{pulseAnimation}</style>
+  <div className="w-full flex justify-center items-center gap-4 sm:gap-6 mb-10 relative">
+    <style>{pulseAnimation}</style>
 
-      {/* Flecha izquierda - SIEMPRE lleva a la sección anterior */}
-      <Link href={prev.href}>
-        <button className="p-2 rounded-full bg-black text-white shadow hover:scale-110 transition">
-          <ChevronLeft size={22} />
-        </button>
-      </Link>
-
-      {/* Título con pill negro y efecto pulse cada 5s */}
-      <span
+    {/* Flecha izquierda */}
+    <Link href={prev.href}>
+      <button
         className="
-          relative
-          px-8 py-3
-          rounded-full
-          bg-black
-          text-white
-          text-3xl sm:text-4xl
-          font-semibold
-          shadow-[0_0_25px_rgba(0,0,0,0.35)]
+          w-10 h-10 sm:w-11 sm:h-11
+          inline-flex items-center justify-center
+          rounded-full bg-black text-white shadow
+          hover:scale-110 transition
+          shrink-0
         "
-        style={{ animation: "pulseSlow 5s ease-in-out infinite" }}
+        aria-label={`Ir a ${prev.label}`}
       >
-        {current.label}
-      </span>
+        <ChevronLeft size={22} />
+      </button>
+    </Link>
 
-      {/* Flecha derecha - SIEMPRE lleva a la siguiente sección */}
-      <Link href={next.href}>
-        <button className="p-2 rounded-full bg-black text-white shadow hover:scale-110 transition">
-          <ChevronRight size={22} />
-        </button>
-      </Link>
-    </div>
-  )
+    {/* Título */}
+    <span
+      className="
+        relative
+        px-6 sm:px-8 py-3
+        rounded-full
+        bg-black text-white
+        font-semibold
+        shadow-[0_0_25px_rgba(0,0,0,0.35)]
+        whitespace-nowrap
+        leading-none
+        text-[clamp(18px,5vw,32px)]
+      "
+      style={{ animation: "pulseSlow 5s ease-in-out infinite" }}
+    >
+      {current.label}
+    </span>
+
+    {/* Flecha derecha */}
+    <Link href={next.href}>
+      <button
+        className="
+          w-10 h-10 sm:w-11 sm:h-11
+          inline-flex items-center justify-center
+          rounded-full bg-black text-white shadow
+          hover:scale-110 transition
+          shrink-0
+        "
+        aria-label={`Ir a ${next.label}`}
+      >
+        <ChevronRight size={22} />
+      </button>
+    </Link>
+  </div>
+)
+
 }

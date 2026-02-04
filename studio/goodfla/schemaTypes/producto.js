@@ -55,13 +55,18 @@ export default {
             },
           ],
           preview: {
-  select: { title: 'title', media: 'portada', precio: 'precioActual' },
-  prepare: (value) => ({
-    title: value.title,
-    subtitle: value.precio != null ? `$${value.precio}` : '',
-    media: value.media,
-  }),
-}
+  select: {
+    title: 'label',
+    stock: 'stock',
+  },
+  prepare({ title, stock }) {
+    return {
+      title: title || 'Sin talle',
+      subtitle: typeof stock === 'number' ? `Stock: ${stock}` : '',
+    }
+  },
+},
+
 
         },
       ],

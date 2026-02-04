@@ -10,6 +10,9 @@ import { useCart } from "@/context/CartContext"
 import AddedToCartDialog from './AddedToCartDialog'
 
 export default function Navbar() {
+  const NAV_SURFACE = "bg-black/80 backdrop-blur-lg"
+  const NAV_BORDER = "border border-white/10"
+
   const [menuOpen, setMenuOpen] = useState(false)
   const [ayudaOpen, setAyudaOpen] = useState(false)
   const [productosOpen, setProductosOpen] = useState(false)
@@ -75,16 +78,18 @@ export default function Navbar() {
   return (
     <>
       <nav
-        className="
-          fixed top-0 left-0 right-0
-          z-[1000]
-          bg-black/80 backdrop-blur-lg
-          border-b border-white/10
-          text-white
-          shadow-md
-          px-0 py-4
-        "
-      >
+  className={`
+    fixed top-0 left-0 right-0
+    z-[1000]
+    ${NAV_SURFACE}
+    border-b border-white/10
+    text-white
+    shadow-md
+    px-0 py-4
+  `}
+>
+
+
         <div className="flex justify-between items-center w-full max-w-none mx-0 px-2 md:px-4">
           {/* Logo */}
           <Link href="/" className="flex items-center gap-3">
@@ -152,16 +157,17 @@ export default function Navbar() {
                 Productos ▾
               </button>
               {productosOpen && (
-                <ul
-                  ref={submenuProductosRef}
-                  className="
-                    absolute right-0 top-full mt-2
-                    bg-black/80 backdrop-blur-lg
-                    text-white
-                    border border-white/10
-                    rounded-xl shadow-2xl
-                    z-[300] overflow-visible
-                  "
+  <ul
+    ref={submenuProductosRef}
+    className={`
+      absolute right-0 top-full mt-2
+      ${NAV_SURFACE} ${NAV_BORDER}
+      text-white
+      rounded-xl shadow-xl
+      z-[300] overflow-visible
+    `}
+
+
                   style={{
                     width: 'max-content',
                     maxWidth: 'calc(100vw - 32px)',
@@ -202,16 +208,17 @@ export default function Navbar() {
                 Ayuda ▾
               </button>
               {ayudaOpen && (
-                <ul
-                  ref={submenuRef}
-                  className="
-                    absolute right-0 top-full mt-2
-                    bg-black/80 backdrop-blur-lg
-                    text-white
-                    border border-white/10
-                    rounded-xl shadow-2xl
-                    z-[300] overflow-hidden
-                  "
+  <ul
+    ref={submenuRef}
+    className={`
+      absolute right-0 top-full mt-2
+      ${NAV_SURFACE} ${NAV_BORDER}
+      text-white
+      rounded-xl shadow-xl
+      z-[300] overflow-hidden
+    `}
+
+
                   style={{
                     width: 'max-content',
                     maxWidth: 'calc(100vw - 32px)',
@@ -261,7 +268,18 @@ export default function Navbar() {
 
         {/* Menú móvil desplegable */}
         {menuOpen && (
-          <ul className="md:hidden mt-3 space-y-2 px-4 text-white font-semibold">
+  <ul
+    className={`
+      md:hidden
+      mt-3
+      space-y-2
+      px-4 py-3
+      text-white font-semibold
+      bg-transparent
+    `}
+  >
+
+
             <li>
               <Link href="/" onClick={() => setMenuOpen(false)}>
                 Inicio
@@ -277,7 +295,10 @@ export default function Navbar() {
                 Productos ▾
               </button>
               {productosOpen && (
-                <ul className="ml-4 mt-1 space-y-1 text-white bg-black/80 p-2 rounded-md">
+  <ul className="ml-4 mt-1 space-y-1 text-white bg-transparent p-2">
+
+
+
                   <li>
                     <Link href="/mayorista" onClick={() => setMenuOpen(false)}>
                       Mayorista
@@ -312,7 +333,8 @@ export default function Navbar() {
                 Ayuda ▾
               </button>
               {ayudaOpen && (
-                <ul className="ml-4 mt-1 space-y-1 text-white bg:black/80 bg-black/80 p-2 rounded-md">
+  <ul className="ml-4 mt-1 space-y-1 text-white bg-transparent p-2">
+
                   {ayudaLinks.map((item) => (
                     <li key={item.href}>
                       <Link href={item.href} onClick={() => setMenuOpen(false)}>
