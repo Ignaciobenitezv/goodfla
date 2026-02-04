@@ -117,7 +117,8 @@ export default function GuiaDeTallesPage() {
 
 
   return (
-    <main className="min-h-[100dvh] bg-white text-zinc-900 mx-auto max-w-5xl px-4 py-10 mt-10">
+    <div className="min-h-[100dvh] bg-white text-zinc-900">
+  <main className="mx-auto max-w-5xl px-4 py-10 mt-10">
       <section className="relative left-1/2 right-1/2 -ml-[50vw] -mr-[50vw] w-screen overflow-hidden bg-marca-amarillo/90">
         <div className="mx-auto flex max-w-5xl flex-col items-center gap-3 px-4 py-10 md:flex-row md:justify-between md:py-12">
           <div className="text-center md:text-left space-y-2">
@@ -291,6 +292,8 @@ export default function GuiaDeTallesPage() {
           y lavado.
         </p>
       </div>
-    </main>
+      </main>
+</div>
+
   );
 }
