@@ -203,6 +203,70 @@ async function rollbackStockAtomic(cart: CartItem[], lockId: string) {
   return { ok: false, reason: "conflict" }
 }
 
+async function reserveStockAtomic(cart: CartItem[], lockId: string) {
+  // Idempotencia: si YA quedó processed, no tocamos stock
+  const existing = await sanity.getDocument(lockId)
+  if ((existing as any)?.status === "processed") return { ok: true, already: true }
+
+  const MAX_RETRIES = 8
+
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    const ids = cart.map((x) => x.productId)
+
+    const prods = await sanity.fetch(
+      `*[_type=="producto" && _id in $ids]{
+        _id,_rev,stock,talles[]{_key,label,stock}
+      }`,
+      { ids }
+    )
+    const byId = new Map<string, any>((prods || []).map((p: any) => [String(p._id), p]))
+
+    const out: any[] = []
+    for (const it of cart) {
+      const prod = byId.get(it.productId)
+      if (!prod) {
+        out.push({ productId: it.productId, talle: it.talle ?? null, ok: false, reason: "product_not_found" })
+        continue
+      }
+
+      const available =
+        Array.isArray(prod.talles) && it.talle
+          ? Number(prod.talles.find((t: any) => t?.label === it.talle)?.stock ?? 0)
+          : Number(prod.stock ?? 0)
+
+      if (available < it.cantidad) {
+        out.push({ productId: it.productId, talle: it.talle ?? null, ok: false, requested: it.cantidad, available })
+      }
+    }
+
+    if (out.length) return { ok: false, reason: "out_of_stock", details: out }
+
+    try {
+      for (const it of cart) {
+        const prod = byId.get(it.productId)
+        if (!prod) continue
+
+        if (Array.isArray(prod.talles) && it.talle) {
+          const newTalles = (prod.talles || []).map((t: any) =>
+            t?.label === it.talle ? { ...t, stock: Math.max(0, Number(t.stock || 0) - it.cantidad) } : t
+          )
+          await sanity.patch(prod._id).ifRevisionId(prod._rev).set({ talles: newTalles }).commit()
+        } else {
+          await sanity.patch(prod._id).ifRevisionId(prod._rev).dec({ stock: it.cantidad }).commit()
+        }
+      }
+
+      return { ok: true }
+    } catch (e: any) {
+      const msg = String(e?.message || "").toLowerCase()
+      if (msg.includes("revision") || msg.includes("_rev") || msg.includes("conflict")) continue
+      throw e
+    }
+  }
+
+  return { ok: false, reason: "conflict" }
+}
+
 
 export async function POST(req: Request) {
   try {
