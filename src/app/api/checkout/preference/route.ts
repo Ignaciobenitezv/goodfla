@@ -59,7 +59,7 @@ function getUnitPriceProduct(prod: any) {
 export async function POST(req: Request) {
   try {
     const body = await req.json().catch(() => ({}))
-
+    console.log("🟡 PREFERENCE BODY =>", JSON.stringify(body, null, 2))
     // ✅ puede venir comboId explícito o dentro de un item
     const comboId =
       String(body?.comboId || "").trim() ||
@@ -170,6 +170,9 @@ export async function POST(req: Request) {
     const successUrl = `${baseUrl}/checkout/success?orderId=${encodeURIComponent(orderId)}`
     const failureUrl = `${baseUrl}/checkout/failure?orderId=${encodeURIComponent(orderId)}`
     const pendingUrl = `${baseUrl}/checkout/pending?orderId=${encodeURIComponent(orderId)}`
+
+        console.log("🟢 MP ITEMS QUE SE ENVIAN =>", mpItems)
+
 
     const res = await fetch("https://api.mercadopago.com/checkout/preferences", {
       method: "POST",
