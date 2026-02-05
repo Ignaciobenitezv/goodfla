@@ -17,8 +17,11 @@ type BrickPayload = {
   issuer_id?: string | number
   payment_method_id?: string
   paymentMethodId?: string
+  payment_method?: { id?: string }
+  paymentMethod?: { id?: string }
   installments?: number | string
   email?: string
+  payer?: { email?: string; identification?: { type?: string; number?: string } }
 
   // Brick puede mandar identification en distintos formatos:
   identification?: { type?: string; number?: string }
@@ -112,12 +115,14 @@ function normalizeIdentification(body: BrickPayload) {
   const type =
     body.identification?.type ||
     body.identificationType ||
+    body.payer?.identification?.type ||
     (body as any)?.payer?.identification?.type ||
     ""
 
   const rawNumber =
     body.identification?.number ||
     body.identificationNumber ||
+    body.payer?.identification?.number ||
     (body as any)?.payer?.identification?.number ||
     ""
 
@@ -158,7 +163,7 @@ async function reserveStockAtomic(cart: CartItem[], lockId: string) {
 
       const available =
         Array.isArray(prod.talles) && it.talle
-          ? Number((prod.talles.find((t: any) => t?.label === it.talle)?.stock) ?? 0)
+          ? Number(prod.talles.find((t: any) => t?.label === it.talle)?.stock ?? 0)
           : Number(prod.stock ?? 0)
 
       if (available < it.cantidad) {
@@ -197,11 +202,21 @@ export async function POST(req: Request) {
   try {
     const body = (await req.json()) as BrickPayload
 
-    // 1) Datos mínimos
+    // 1) Datos mínimos (robusto a distintos formatos del Brick)
     const token = body.token
-    const payment_method_id = body.payment_method_id || body.paymentMethodId
+
+    const payment_method_id =
+      body.payment_method_id ||
+      body.paymentMethodId ||
+      body.payment_method?.id ||
+      body.paymentMethod?.id ||
+      (body as any)?.payment_method?.id ||
+      (body as any)?.paymentMethod?.id
+
     const issuer_id = body.issuer_id != null ? Number(body.issuer_id) : undefined
-    const installments = Number(body.installments ?? 1)
+
+    const installmentsRaw = Number(body.installments ?? 1)
+    const installments = Number.isFinite(installmentsRaw) && installmentsRaw >= 1 ? installmentsRaw : 1
 
     if (!token || !payment_method_id) {
       return NextResponse.json(
@@ -210,15 +225,12 @@ export async function POST(req: Request) {
       )
     }
 
-    // 1.1) Email + DNI (Brick)
-    const email = String(body.email || "").trim()
+    // 1.1) Email + DNI (Brick) — soporta body.email o payer.email
+    const email = String(body.email || body.payer?.email || (body as any)?.payer?.email || "").trim()
     const identification = normalizeIdentification(body)
 
     if (!email) {
-      return NextResponse.json(
-        { ok: false, error: "missing_email", message: "Falta el email del pagador." },
-        { status: 400 }
-      )
+      return NextResponse.json({ ok: false, error: "missing_email", message: "Falta el email del pagador." }, { status: 400 })
     }
 
     if (!identification.type || !identification.number) {
@@ -243,10 +255,7 @@ export async function POST(req: Request) {
       .filter((x) => x.productId && x.cantidad > 0)
 
     if (!cart.length) {
-      return NextResponse.json(
-        { ok: false, error: "invalid_cart", message: "Items inválidos (sin productId)." },
-        { status: 400 }
-      )
+      return NextResponse.json({ ok: false, error: "invalid_cart", message: "Items inválidos (sin productId)." }, { status: 400 })
     }
 
     const ids = cart.map((x) => x.productId)
@@ -293,7 +302,14 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: "invalid_amount", message: "Monto inválido." }, { status: 400 })
     }
 
+    // (Opcional) sanity-check del monto que manda el front: NO afecta el cobro (cobramos computedTotal)
+    const clientAmount = body.amount != null ? toMoney(body.amount) : null
+    if (clientAmount != null && Math.abs(clientAmount - computedTotal) > 0.01) {
+      console.warn("Amount mismatch:", { clientAmount, computedTotal, orderId: body.orderId })
+    }
+
     // 5) Idempotencia (orderId)
+    // Importante para NO descontar doble: usamos orderId para MP Idempotency Key + markerId de Sanity.
     const orderId =
       body.orderId ||
       crypto
@@ -413,7 +429,7 @@ export async function POST(req: Request) {
 
     const markerId = `mp_payment_${paymentId}`
 
-    // A) Reservar stock
+    // A) Reservar stock (idempotente por markerId + status processed)
     const r = await reserveStockAtomic(cart, markerId)
 
     if ((r as any)?.already) {
