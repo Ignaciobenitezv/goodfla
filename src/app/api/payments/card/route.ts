@@ -87,16 +87,18 @@ async function getShippingPrice(origin: string, cp?: string) {
 type CartItem = { productId: string; talle?: string | null; cantidad: number }
 
 async function mpCapture(paymentId: string, mpToken: string) {
-  const res = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}/capture`, {
-    method: "POST",
+  const res = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
+    method: "PUT",
     headers: {
       Authorization: `Bearer ${mpToken}`,
       "Content-Type": "application/json",
     },
+    body: JSON.stringify({ capture: true }),
   })
   const data = await res.json().catch(() => null)
   return { ok: res.ok, status: res.status, data }
 }
+
 
 async function mpCancel(paymentId: string, mpToken: string) {
   const res = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
