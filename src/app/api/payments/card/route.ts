@@ -79,80 +79,97 @@ async function getShippingPrice(origin: string, cp?: string) {
 
 type CartItem = { productId: string; talle?: string | null; cantidad: number }
 
-async function checkStock(cart: CartItem[]) {
-  const checks: any[] = []
-
-  for (const it of cart) {
-    const prod = await sanity.fetch(
-      `*[_type=="producto" && _id==$id][0]{_id, stock, talles[]{label, stock}}`,
-      { id: it.productId }
-    )
-
-    if (!prod) {
-      checks.push({
-        productId: it.productId,
-        talle: it.talle ?? null,
-        requested: it.cantidad,
-        available: 0,
-        ok: false,
-        reason: "product_not_found",
-      })
-      continue
-    }
-
-    if (Array.isArray(prod.talles) && it.talle) {
-      const t = prod.talles.find((x: any) => x?.label === it.talle)
-      const available = Number(t?.stock ?? 0)
-      checks.push({
-        productId: it.productId,
-        talle: it.talle,
-        requested: it.cantidad,
-        available,
-        ok: available >= it.cantidad,
-      })
-      continue
-    }
-
-    const available = Number(prod.stock ?? 0)
-    checks.push({
-      productId: it.productId,
-      talle: it.talle ?? null,
-      requested: it.cantidad,
-      available,
-      ok: available >= it.cantidad,
-    })
-  }
-
-  return checks
+async function mpCapture(paymentId: string, mpToken: string) {
+  const res = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}/capture`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${mpToken}`,
+      "Content-Type": "application/json",
+    },
+  })
+  const data = await res.json().catch(() => null)
+  return { ok: res.ok, status: res.status, data }
 }
 
-async function descontarStock(cart: CartItem[]) {
-  for (const it of cart) {
-    const prod = await sanity.fetch(
-      `*[_type=="producto" && _id==$id][0]{_id, stock, talles[]{label, stock}}`,
-      { id: it.productId }
-    )
-    if (!prod) continue
+async function mpCancel(paymentId: string, mpToken: string) {
+  const res = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
+    method: "PUT",
+    headers: {
+      Authorization: `Bearer ${mpToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ status: "cancelled" }),
+  })
+  const data = await res.json().catch(() => null)
+  return { ok: res.ok, status: res.status, data }
+}
 
-    // Talles
-    if (Array.isArray(prod.talles) && it.talle) {
-      const newTalles = prod.talles.map((t: any) =>
-        t.label === it.talle
-          ? { ...t, stock: Math.max(0, Number(t.stock || 0) - it.cantidad) }
-          : t
-      )
-      await sanity.patch(prod._id).set({ talles: newTalles }).commit()
-      console.log(`✅ [card] Stock actualizado talle ${it.talle} (${it.productId})`)
-      continue
+async function reserveStockAtomic(cart: CartItem[], lockId: string) {
+  const existing = await sanity.getDocument(lockId)
+if ((existing as any)?.status === "processed") {
+  return { ok: true, already: true }
+}
+
+
+  const MAX_RETRIES = 8
+
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    const ids = cart.map((x) => x.productId)
+
+    const prods = await sanity.fetch(
+      `*[_type=="producto" && _id in $ids]{
+        _id,_rev,stock,talles[]{_key,label,stock}
+      }`,
+      { ids }
+    )
+    const byId = new Map<string, any>((prods || []).map((p: any) => [String(p._id), p]))
+
+    const out: any[] = []
+    for (const it of cart) {
+      const prod = byId.get(it.productId)
+      if (!prod) {
+        out.push({ productId: it.productId, talle: it.talle ?? null, ok: false, reason: "product_not_found" })
+        continue
+      }
+
+      const available =
+        Array.isArray(prod.talles) && it.talle
+          ? Number((prod.talles.find((t: any) => t?.label === it.talle)?.stock) ?? 0)
+          : Number(prod.stock ?? 0)
+
+      if (available < it.cantidad) {
+        out.push({ productId: it.productId, talle: it.talle ?? null, ok: false, requested: it.cantidad, available })
+      }
     }
 
-    // Stock global
-    if (typeof prod.stock === "number") {
-      await sanity.patch(prod._id).dec({ stock: it.cantidad }).commit()
-      console.log(`✅ [card] Stock global actualizado (${it.productId})`)
+    if (out.length) return { ok: false, reason: "out_of_stock", details: out }
+
+    try {
+      for (const it of cart) {
+        const prod = byId.get(it.productId)
+
+        if (Array.isArray(prod.talles) && it.talle) {
+          const newTalles = (prod.talles || []).map((t: any) =>
+            t?.label === it.talle ? { ...t, stock: Math.max(0, Number(t.stock || 0) - it.cantidad) } : t
+          )
+
+          await sanity.patch(prod._id).ifRevisionId(prod._rev).set({ talles: newTalles }).commit()
+        } else {
+          await sanity.patch(prod._id).ifRevisionId(prod._rev).dec({ stock: it.cantidad }).commit()
+        }
+      }
+
+      return { ok: true }
+    } catch (e: any) {
+      const msg = String(e?.message || "").toLowerCase()
+      if (msg.includes("revision") || msg.includes("_rev") || msg.includes("conflict")) continue
+      throw e
     }
   }
+
+  return { ok: false, reason: "conflict" }
 }
+
 
 export async function POST(req: Request) {
   try {
@@ -161,7 +178,7 @@ export async function POST(req: Request) {
     // 1) Datos mínimos del pago
     const token = body.token
     const payment_method_id = body.payment_method_id || body.paymentMethodId
-    const issuer_id = body.issuer_id != null ? String(body.issuer_id) : undefined
+    const issuer_id = body.issuer_id != null ? Number(body.issuer_id) : undefined
     const installments = Number(body.installments ?? 1)
 
     if (!token || !payment_method_id) {
@@ -286,10 +303,8 @@ export async function POST(req: Request) {
         email: body.email,
         identification: body.identification,
       },
-      capture: true,
-
-      notification_url: `${origin}/api/webhooks/mp`,
-
+      capture: false,
+      notification_url: `${origin}/api/mp/webhook`,
 
       metadata: {
         orderId,
@@ -310,16 +325,16 @@ export async function POST(req: Request) {
     }
 
     console.log("💳 [card] creating payment", {
-  orderId,
-  computedTotal,
-  shippingType,
-  shippingPrice,
-  items: cart.map((x) => ({
-    productId: x.productId,
-    talle: x.talle ?? null,
-    cantidad: x.cantidad,
-  })),
-})
+      orderId,
+      computedTotal,
+      shippingType,
+      shippingPrice,
+      items: cart.map((x) => ({
+        productId: x.productId,
+        talle: x.talle ?? null,
+        cantidad: x.cantidad,
+      })),
+    })
 
     // 7) Crear pago en MP
     const res = await fetch("https://api.mercadopago.com/v1/payments", {
@@ -335,12 +350,12 @@ export async function POST(req: Request) {
     const data = await res.json().catch(() => null)
 
     console.log("💳 [card] mp response", {
-  ok: res.ok,
-  status: data?.status,
-  status_detail: data?.status_detail,
-  paymentId: data?.id,
-  orderId,
-})
+      ok: res.ok,
+      status: data?.status,
+      status_detail: data?.status_detail,
+      paymentId: data?.id,
+      orderId,
+    })
 
 
 
@@ -357,58 +372,166 @@ export async function POST(req: Request) {
       )
     }
 
-    // 8) Si approved -> descontar stock + marker idempotente (anti doble descuento)
+    // 8) NUEVO: reservar stock ATÓMICO -> capturar cobro
     const status = String(data?.status || "").toLowerCase()
     const paymentId = data?.id != null ? String(data.id) : ""
     const statusDetail = data?.status_detail != null ? String(data.status_detail) : ""
 
-    if (status === "approved" && paymentId) {
-      const markerId = `mp_payment_${paymentId}`
 
-      const already = await sanity.getDocument(markerId)
-      if (already) {
-        console.log("↩️ [card] ya procesado (idempotencia):", markerId)
-      } else {
-        // Re-check de stock justo antes de descontar (blindaje)
-        const recheck = await checkStock(cart)
-        const out = recheck.filter((x: any) => !x.ok)
 
-        if (out.length) {
-          await sanity.createIfNotExists({
-            _id: markerId,
-            _type: "mpWebhook",
-            paymentId,
-            orderId,
-            createdAt: new Date().toISOString(),
-            status: "stock_insufficient",
-            source: "card_inline",
-            detailsJson: JSON.stringify(out),
-          })
-
-          // OJO: pago ya está aprobado, así que esto es para revisión manual
-          console.warn("⚠️ [card] pago aprobado pero sin stock al descontar", out)
-        } else {
-          await descontarStock(cart)
-
-          await sanity.createIfNotExists({
-            _id: markerId,
-            _type: "mpWebhook",
-            paymentId,
-            orderId,
-            createdAt: new Date().toISOString(),
-            status: "processed",
-            source: "card_inline",
-          })
-        }
-      }
+    if (!paymentId) {
+      return NextResponse.json(
+        { ok: false, error: "mp_no_payment_id", message: "MP no devolvió payment id", mp: data },
+        { status: 502 }
+      )
     }
 
+
+    if (status === "rejected" || status === "cancelled") {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "payment_not_authorized",
+          message: "El pago no fue autorizado.",
+          id: paymentId,
+          status,
+          status_detail: statusDetail,
+          orderId,
+        },
+        { status: 402 }
+      )
+    }
+
+    if (status === "in_process" || status === "pending") {
+      // Guardamos marker para trazabilidad (NO descuenta stock)
+      await sanity.createIfNotExists({
+        _id: `mp_payment_${paymentId}`,
+        _type: "mpWebhook",
+        paymentId,
+        orderId,
+        createdAt: new Date().toISOString(),
+        status: "pending",
+        statusDetail,
+        source: "card_inline",
+      })
+
+      return NextResponse.json({
+        ok: true,
+        id: paymentId,
+        status,
+        status_detail: statusDetail,
+        orderId,
+        computedTotal,
+        subtotal,
+        shippingPrice,
+        shippingType,
+      })
+    }
+
+
+
+    const markerId = `mp_payment_${paymentId}`
+
+    // A) Reservar stock atómico
+    const r = await reserveStockAtomic(cart, markerId)
+
+    if ((r as any)?.already) {
+  // Ya se procesó antes (idempotencia). No volvemos a capturar ni tocar nada.
+  return NextResponse.json({
+    ok: true,
+    id: paymentId,
+    status,
+    status_detail: statusDetail,
+    orderId,
+    computedTotal,
+    subtotal,
+    shippingPrice,
+    shippingType,
+    already: true,
+  })
+}
+
+
+    if (!r.ok) {
+      // B) Cancelar autorización para NO cobrar
+      await mpCancel(paymentId, mpToken)
+
+      await sanity.createIfNotExists({
+        _id: markerId,
+        _type: "mpWebhook",
+        paymentId,
+        orderId,
+        createdAt: new Date().toISOString(),
+        status: "stock_insufficient",
+        source: "card_inline",
+        detailsJson: JSON.stringify(r.details ?? []),
+      })
+
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "out_of_stock_after_auth",
+          message: "Se quedó sin stock mientras pagabas. No se realizó el cobro.",
+          details: r.details ?? null,
+          id: paymentId,
+          status,
+          status_detail: statusDetail,
+          orderId,
+          computedTotal,
+          subtotal,
+          shippingPrice,
+          shippingType,
+        },
+        { status: 409 }
+      )
+    }
+
+    // C) Capturar cobro
+    const cap = await mpCapture(paymentId, mpToken)
+
+    if (!cap.ok) {
+      await sanity.createIfNotExists({
+        _id: markerId,
+        _type: "mpWebhook",
+        paymentId,
+        orderId,
+        createdAt: new Date().toISOString(),
+        status: "capture_failed",
+        source: "card_inline",
+        detailsJson: JSON.stringify({ mp: cap.data }),
+      })
+
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "capture_failed",
+          message: "Se reservó stock pero falló la captura del pago. Revisión requerida.",
+          id: paymentId,
+          orderId,
+          mp: cap.data,
+        },
+        { status: 502 }
+      )
+    }
+
+    await sanity.createIfNotExists({
+      _id: markerId,
+      _type: "mpWebhook",
+      paymentId,
+      orderId,
+      createdAt: new Date().toISOString(),
+      status: "processed",
+      source: "card_inline",
+    })
+
     // 9) OK
+    const finalStatus = String(cap.data?.status || status).toLowerCase()
+    const finalDetail = String(cap.data?.status_detail || statusDetail || "")
     return NextResponse.json({
       ok: true,
       id: paymentId,
-      status, // approved | in_process | rejected
-      status_detail: statusDetail,
+      status: finalStatus,
+      status_detail: finalDetail,
       orderId,
       computedTotal,
       subtotal,

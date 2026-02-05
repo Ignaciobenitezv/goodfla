@@ -33,93 +33,15 @@ async function mpGet(url: string) {
   return r.json()
 }
 
-async function checkStock(cart: CartItem[]) {
-  const checks: any[] = []
-
-  for (const it of cart) {
-    const prod = await sanity.fetch(
-      `*[_type=="producto" && _id==$id][0]{_id, stock, talles}`,
-      { id: it.productId }
-    )
-
-    if (!prod) {
-      checks.push({
-        productId: it.productId,
-        talle: it.talle ?? null,
-        requested: it.cantidad,
-        available: 0,
-        ok: false,
-        reason: "product_not_found",
-      })
-      continue
-    }
-
-    // talle
-    if (Array.isArray(prod.talles) && it.talle) {
-      const t = prod.talles.find((x: any) => x?.label === it.talle)
-      const available = Number(t?.stock ?? 0)
-      checks.push({
-        productId: it.productId,
-        talle: it.talle,
-        requested: it.cantidad,
-        available,
-        ok: available >= it.cantidad,
-      })
-      continue
-    }
-
-    // stock global
-    const available = Number(prod.stock ?? 0)
-    checks.push({
-      productId: it.productId,
-      talle: it.talle ?? null,
-      requested: it.cantidad,
-      available,
-      ok: available >= it.cantidad,
-    })
-  }
-
-  return checks
-}
-
-async function descontarStock(cart: CartItem[]) {
-  for (const it of cart) {
-    const prod = await sanity.fetch(
-      `*[_type=="producto" && _id==$id][0]{_id, stock, talles}`,
-      { id: it.productId }
-    )
-    if (!prod) continue
-
-    if (Array.isArray(prod.talles) && it.talle) {
-      const newTalles = prod.talles.map((t: any) =>
-        t.label === it.talle
-          ? { ...t, stock: Math.max(0, (t.stock || 0) - it.cantidad) }
-          : t
-      )
-
-      await sanity.patch(prod._id).set({ talles: newTalles }).commit()
-      console.log(`✅ Stock actualizado talle ${it.talle} (${it.productId})`)
-      continue
-    }
-
-    if (typeof prod.stock === "number") {
-      await sanity.patch(prod._id).dec({ stock: it.cantidad }).commit()
-      console.log(`✅ Stock global actualizado (${it.productId})`)
-    }
-  }
-}
-
 function pickTopicAndId(req: Request, body: any) {
   const url = new URL(req.url)
 
-  // MercadoPago a veces usa topic o type
   const topic =
     url.searchParams.get("topic") ||
     url.searchParams.get("type") ||
     body?.topic ||
     body?.type
 
-  // id puede venir de varias formas según el evento
   const id =
     url.searchParams.get("id") ||
     body?.id ||
@@ -127,6 +49,84 @@ function pickTopicAndId(req: Request, body: any) {
     body?.resource?.split("/")?.pop()
 
   return { topic, id }
+}
+
+async function reserveStockAtomic(cart: CartItem[], lockId: string) {
+  // Idempotencia por lockId (usa markerId)
+  const existing = await sanity.getDocument(lockId)
+  if ((existing as any)?.status === "processed") return { ok: true, already: true }
+
+  const MAX_RETRIES = 8
+
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    const ids = cart.map((x) => x.productId)
+
+    const prods = await sanity.fetch(
+      `*[_type=="producto" && _id in $ids]{
+        _id,_rev,stock,talles[]{_key,label,stock}
+      }`,
+      { ids }
+    )
+
+    const byId = new Map<string, any>((prods || []).map((p: any) => [String(p._id), p]))
+
+    const out: any[] = []
+    for (const it of cart) {
+      const prod = byId.get(it.productId)
+      if (!prod) {
+        out.push({
+          productId: it.productId,
+          talle: it.talle ?? null,
+          ok: false,
+          reason: "product_not_found",
+        })
+        continue
+      }
+
+      const available =
+        Array.isArray(prod.talles) && it.talle
+          ? Number((prod.talles.find((t: any) => t?.label === it.talle)?.stock) ?? 0)
+          : Number(prod.stock ?? 0)
+
+      if (available < it.cantidad) {
+        out.push({
+          productId: it.productId,
+          talle: it.talle ?? null,
+          ok: false,
+          requested: it.cantidad,
+          available,
+        })
+      }
+    }
+
+    if (out.length) return { ok: false, reason: "out_of_stock", details: out }
+
+    try {
+      for (const it of cart) {
+        const prod = byId.get(it.productId)
+
+        if (Array.isArray(prod.talles) && it.talle) {
+          const newTalles = (prod.talles || []).map((t: any) =>
+            t?.label === it.talle
+              ? { ...t, stock: Math.max(0, Number(t.stock || 0) - it.cantidad) }
+              : t
+          )
+
+          await sanity.patch(prod._id).ifRevisionId(prod._rev).set({ talles: newTalles }).commit()
+        } else {
+          await sanity.patch(prod._id).ifRevisionId(prod._rev).dec({ stock: it.cantidad }).commit()
+        }
+      }
+
+      return { ok: true }
+    } catch (e: any) {
+      const msg = String(e?.message || "").toLowerCase()
+      if (msg.includes("revision") || msg.includes("_rev") || msg.includes("conflict")) continue
+      throw e
+    }
+  }
+
+  return { ok: false, reason: "conflict" }
 }
 
 async function handle(req: Request) {
@@ -149,7 +149,7 @@ async function handle(req: Request) {
       hasBody: !!body,
     })
 
-    // Solo procesamos merchant_order (tu estrategia actual)
+    // Solo procesamos merchant_order
     if (topic !== "merchant_order") {
       return respond200({ ignored: true, topic }, startedAt)
     }
@@ -169,7 +169,7 @@ async function handle(req: Request) {
       payments: payments.map((p: any) => ({ id: p.id, status: p.status })),
     })
 
-    // ✅ pago aprobado (último approved por las dudas)
+    // ✅ pago aprobado
     const approvedPayment = payments.length
       ? [...payments].reverse().find((p: any) => p.status === "approved")
       : null
@@ -181,43 +181,39 @@ async function handle(req: Request) {
     const paymentId = String(approvedPayment.id)
     const markerId = `mp_payment_${paymentId}`
 
-    // ✅ 2) Candado atómico: creamos marker "processing" ANTES de descontar
-    // createIfNotExists es atómico por _id: evita doble descuento en concurrencia
-    let marker: any
-    try {
-      marker = await sanity.createIfNotExists({
-        _id: markerId,
-        _type: "mpWebhook",
-        paymentId,
-        orderId: order.id,
-        preferenceId: order.preference_id || null,
-        createdAt: new Date().toISOString(),
-        status: "processing",
-      })
-    } catch (e: any) {
-      console.error("🔥 marker_create_error", e?.message)
-      // igual 200
-      return respond200({ msg: "marker_create_error", markerId, paymentId }, startedAt)
-    }
+    // 2) Candado atómico (no duplica)
+    const marker = await sanity.createIfNotExists({
+      _id: markerId,
+      _type: "mpWebhook",
+      paymentId,
+      orderId: order.id,
+      preferenceId: order.preference_id || null,
+      createdAt: new Date().toISOString(),
+      status: "processing",
+    })
 
-    // Si ya existía y no está en processing, ya fue tratado
-    if (marker?.status && marker.status !== "processing") {
+    // Si ya existía y no está en processing => ya se procesó o quedó en terminal
+    if ((marker as any)?.status && (marker as any).status !== "processing") {
       return respond200(
-        { msg: "already_processed", markerId, paymentId, status: marker.status },
+        { msg: "already_processed", markerId, paymentId, status: (marker as any).status },
         startedAt
       )
     }
 
-    // 3) Traemos preferencia (para metadata.cart)
+    // 3) Traemos preferencia (metadata)
     if (!order.preference_id) {
-      // sin preference_id no podemos obtener el cart
       await sanity.patch(markerId).set({ status: "no_preference_id" }).commit().catch(() => {})
       return respond200({ msg: "no_preference_id", orderId: order.id, markerId, paymentId }, startedAt)
     }
 
-    const pref = await mpGet(
-      `https://api.mercadopago.com/checkout/preferences/${order.preference_id}`
-    )
+    const pref = await mpGet(`https://api.mercadopago.com/checkout/preferences/${order.preference_id}`)
+
+    // ✅ si viene de card_inline, se procesa en /api/payments/card (acá se ignora)
+    const source = pref?.metadata?.source
+    if (source === "card_inline") {
+      await sanity.patch(markerId).set({ status: "ignored_card_inline" }).commit().catch(() => {})
+      return respond200({ msg: "ignored_card_inline", markerId, paymentId }, startedAt)
+    }
 
     let cart: CartItem[] = []
     try {
@@ -234,36 +230,26 @@ async function handle(req: Request) {
       )
     }
 
-    // 4) Re-check stock (blindaje)
-    const stockChecks = await checkStock(cart)
-    const outOfStock = stockChecks.filter((x: any) => !x.ok)
+    // 4) Reservar stock atómico (idempotente)
+    const r = await reserveStockAtomic(cart, markerId)
 
-    if (outOfStock.length) {
+    if (!r.ok) {
       await sanity
         .patch(markerId)
         .set({
           status: "stock_insufficient",
-          detailsJson: JSON.stringify(outOfStock),
+          detailsJson: JSON.stringify((r as any).details ?? []),
         })
         .commit()
         .catch(() => {})
 
       return respond200(
-        {
-          msg: "stock_insufficient",
-          orderId: order.id,
-          preferenceId: order.preference_id,
-          markerId,
-          paymentId,
-        },
+        { msg: "stock_insufficient", orderId: order.id, preferenceId: order.preference_id, markerId, paymentId },
         startedAt
       )
     }
 
-    // 5) Descontar stock
-    await descontarStock(cart)
-
-    // 6) Marcar como procesado
+    // 5) Procesado
     await sanity
       .patch(markerId)
       .set({ status: "processed", processedAt: new Date().toISOString() })
