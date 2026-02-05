@@ -215,12 +215,36 @@ async function handle(req: Request) {
       return respond200({ msg: "ignored_card_inline", markerId, paymentId }, startedAt)
     }
 
-    let cart: CartItem[] = []
-    try {
-      if (pref?.metadata?.cart) cart = JSON.parse(pref.metadata.cart)
-    } catch (e) {
-      console.warn("⚠️ No se pudo parsear metadata.cart", e)
-    }
+ let cart: CartItem[] = []
+
+const rawCart = pref?.metadata?.cart
+
+if (Array.isArray(rawCart)) {
+  // ✅ NUEVO: metadata.cart ya viene como array
+  cart = rawCart as CartItem[]
+} else if (typeof rawCart === "string") {
+  // ✅ VIEJO: metadata.cart venía como string
+  try {
+    const parsed = JSON.parse(rawCart)
+    if (Array.isArray(parsed)) cart = parsed as CartItem[]
+  } catch (e) {
+    console.warn("⚠️ No se pudo parsear metadata.cart (string)", e)
+  }
+} else if (rawCart && typeof rawCart === "object") {
+  // ✅ por si MP devuelve objeto raro pero iterable
+  const maybe = rawCart as any
+  if (Array.isArray(maybe)) cart = maybe as CartItem[]
+}
+
+// (opcional pero recomendado) normalizar/validar shape mínimo
+cart = (cart || [])
+  .map((x: any) => ({
+    productId: String(x?.productId ?? x?._id ?? "").trim(),
+    talle: x?.talle ?? null,
+    cantidad: Number(x?.cantidad ?? 1),
+  }))
+  .filter((x: any) => x.productId && x.cantidad > 0)
+
 
     if (!cart.length) {
       await sanity.patch(markerId).set({ status: "no_cart_metadata" }).commit().catch(() => {})

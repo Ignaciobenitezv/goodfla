@@ -29,28 +29,29 @@ export default function SuccessClient() {
   const merchantOrderId = sp.get("merchant_order_id") || ""
   const paymentIdFromUrl = sp.get("payment_id") || sp.get("collection_id") || ""
   const preferenceId = sp.get("preference_id") || ""
+  const orderId = sp.get("orderId") || ""
 
   // Helpers UI
   const tone =
     ui === "cleared"
       ? "success"
       : ui === "error" || ui === "not_approved"
-      ? "danger"
-      : "neutral"
+        ? "danger"
+        : "neutral"
 
   const bgWashClass =
     tone === "success"
       ? "from-emerald-500/30 to-emerald-600/20"
       : tone === "danger"
-      ? "from-rose-500/25 to-orange-500/15"
-      : "from-sky-500/15 to-slate-900/10"
+        ? "from-rose-500/25 to-orange-500/15"
+        : "from-sky-500/15 to-slate-900/10"
 
   const ringClass =
     tone === "success"
       ? "ring-emerald-400/30"
       : tone === "danger"
-      ? "ring-rose-400/30"
-      : "ring-sky-300/25"
+        ? "ring-rose-400/30"
+        : "ring-sky-300/25"
 
   useEffect(() => {
     if (ran.current) return
@@ -79,8 +80,17 @@ export default function SuccessClient() {
           setProgress(clamp(base))
 
           const qs = new URLSearchParams()
-if (paymentIdFromUrl) qs.set("payment_id", paymentIdFromUrl)
-else if (merchantOrderId) qs.set("merchant_order_id", merchantOrderId)
+
+          if (paymentIdFromUrl) {
+            qs.set("payment_id", paymentIdFromUrl)
+          } else if (merchantOrderId) {
+            qs.set("merchant_order_id", merchantOrderId)
+          }
+
+          if (orderId) {
+            qs.set("orderId", orderId)
+          }
+
 
 
           const res = await fetch(`/api/checkout/confirm?${qs.toString()}`, {
@@ -97,28 +107,28 @@ else if (merchantOrderId) qs.set("merchant_order_id", merchantOrderId)
 
           const mpStatus = String(data.mpStatus || "unknown").toLowerCase()
 
-// Estados que NO son rechazo: hay que esperar (redirect puede tardar)
-const waitingStatuses = new Set(["pending", "in_process", "authorized", "null", "unknown", ""])
-const waitingDetail = String(data.mpStatusDetail || data.status_detail || data.statusDetail || "").toLowerCase()
-const isWaitingDetail =
-  waitingDetail.includes("pending") || waitingDetail.includes("in_process") || waitingDetail.includes("contingency")
+          // Estados que NO son rechazo: hay que esperar (redirect puede tardar)
+          const waitingStatuses = new Set(["pending", "in_process", "authorized", "null", "unknown", ""])
+          const waitingDetail = String(data.mpStatusDetail || data.status_detail || data.statusDetail || "").toLowerCase()
+          const isWaitingDetail =
+            waitingDetail.includes("pending") || waitingDetail.includes("in_process") || waitingDetail.includes("contingency")
 
 
-if (!data.approved) {
-  if (waitingStatuses.has(mpStatus)|| isWaitingDetail) {
-    setUi("checking")
-    setMsg(`Estamos confirmando tu pago… (estado: ${mpStatus}) intento ${i}/${maxTries}`)
-    setProgress((p) => clamp(Math.max(p, 35) + 5))
-    await new Promise((r) => setTimeout(r, waitMs))
-    continue
-  }
+          if (!data.approved) {
+            if (waitingStatuses.has(mpStatus) || isWaitingDetail) {
+              setUi("checking")
+              setMsg(`Estamos confirmando tu pago… (estado: ${mpStatus}) intento ${i}/${maxTries}`)
+              setProgress((p) => clamp(Math.max(p, 35) + 5))
+              await new Promise((r) => setTimeout(r, waitMs))
+              continue
+            }
 
-  // Rechazos reales
-  setUi("not_approved")
-  setMsg(`Tu pago no figura aprobado (estado: ${mpStatus}).`)
-  setProgress(100)
-  return
-}
+            // Rechazos reales
+            setUi("not_approved")
+            setMsg(`Tu pago no figura aprobado (estado: ${mpStatus}).`)
+            setProgress(100)
+            return
+          }
 
 
           if (data.approved && !data.processed) {
@@ -204,12 +214,12 @@ if (!data.approved) {
               {ui === "cleared"
                 ? "Compra confirmada"
                 : ui === "approved_waiting_stock"
-                ? "Confirmando stock"
-                : ui === "checking"
-                ? "Confirmando con MercadoPago"
-                : ui === "not_approved"
-                ? "Pago no aprobado"
-                : "No pudimos confirmar"}
+                  ? "Confirmando stock"
+                  : ui === "checking"
+                    ? "Confirmando con MercadoPago"
+                    : ui === "not_approved"
+                      ? "Pago no aprobado"
+                      : "No pudimos confirmar"}
             </h1>
 
             <p className="text-slate-600">{msg}</p>
@@ -234,8 +244,8 @@ if (!data.approved) {
                   tone === "success"
                     ? "bg-emerald-600"
                     : tone === "danger"
-                    ? "bg-rose-600"
-                    : "bg-slate-900",
+                      ? "bg-rose-600"
+                      : "bg-slate-900",
                 ].join(" ")}
                 style={{ width: `${progress}%` }}
               />
