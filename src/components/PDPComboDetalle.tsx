@@ -1,7 +1,6 @@
 // src/components/PDPComboDetalle.tsx
 "use client"
-
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import Image from "next/image"
 import Link from "next/link"
 import Modal from "@/components/Modal"
@@ -44,6 +43,16 @@ const [zoomOpen, setZoomOpen] = useState(false)
 
   const { addItem, items } = useCart()
   const { showAddedDialog } = useUi()
+
+
+  useEffect(() => {
+  if (combo?._id) {
+    localStorage.setItem("activeComboId", String(combo._id))
+  }
+  return () => {
+    localStorage.removeItem("activeComboId")
+  }
+}, [combo?._id])
 
   const setDraftValue = (prodId: string, key: "talle" | "color", value: string) =>
     setDraft((d) => ({ ...d, [prodId]: { ...(d[prodId] || {}), [key]: value } }))
@@ -357,7 +366,8 @@ const hasStockForCombo = () => {
     imagen: prod.imagen || "/placeholder.png",
     slug: prod.slug ?? undefined,
     talle: prod.talle ?? undefined,
-    stock: stockTalle, // ✅ CLAVE
+    stock: stockTalle,
+    comboId: combo._id
   })
 })
 

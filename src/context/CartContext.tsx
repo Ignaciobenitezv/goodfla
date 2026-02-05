@@ -1,8 +1,10 @@
 "use client"
+
 import { createContext, useContext, useState, useEffect, ReactNode } from "react"
 
 type CartItem = {
-  productId: string     // 🔹 _id real de Sanity
+  productId: string 
+  comboId?: string    // 🔹 _id real de Sanity (producto)
   cartKey: string       // 🔹 id único en el carrito (productId + talle)
   nombre: string
   precio: number
@@ -15,6 +17,11 @@ type CartItem = {
 
 type CartContextType = {
   items: CartItem[]
+  comboId: string | null
+
+  // ✅ setear/limpiar combo activo (para cobrar precio de combo)
+  setActiveCombo: (id: string | null) => void
+
   addItem: (item: Omit<CartItem, "cartKey">) => void
   removeItem: (cartKey: string) => void
   clearCart: () => void
@@ -27,41 +34,64 @@ const CartContext = createContext<CartContextType | undefined>(undefined)
 
 export function CartProvider({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<CartItem[]>([])
+  const [comboId, setComboId] = useState<string | null>(null)
 
   // cargar desde localStorage
   useEffect(() => {
-  try {
-    const stored = localStorage.getItem("cart")
-    if (!stored) return
-    const parsed = JSON.parse(stored)
-    if (Array.isArray(parsed)) setItems(parsed)
-  } catch (e) {
-    console.warn("[Cart] localStorage cart corrupto, lo reseteo", e)
-    localStorage.setItem("cart", "[]")
-    setItems([])
+    try {
+      const stored = localStorage.getItem("cart")
+      if (stored) {
+        const parsed = JSON.parse(stored)
+        if (Array.isArray(parsed)) setItems(parsed)
+      }
+
+      const storedComboId = localStorage.getItem("cartComboId")
+      if (storedComboId && typeof storedComboId === "string") {
+        setComboId(storedComboId)
+      }
+    } catch (e) {
+      console.warn("[Cart] localStorage corrupto, reseteo", e)
+      localStorage.setItem("cart", "[]")
+      localStorage.removeItem("cartComboId")
+      setItems([])
+      setComboId(null)
+    }
+  }, [])
+
+  // guardar carrito
+  useEffect(() => {
+    try {
+      localStorage.setItem("cart", JSON.stringify(items ?? []))
+    } catch (e) {
+      console.warn("[Cart] no pude persistir cart", e)
+    }
+  }, [items])
+
+  // guardar comboId
+  useEffect(() => {
+    try {
+      if (comboId) localStorage.setItem("cartComboId", comboId)
+      else localStorage.removeItem("cartComboId")
+    } catch (e) {
+      console.warn("[Cart] no pude persistir cartComboId", e)
+    }
+  }, [comboId])
+
+  // ✅ API pública para setear combo activo
+  const setActiveCombo = (id: string | null) => {
+    setComboId(id ? String(id).trim() : null)
   }
-}, [])
-
-
-  // guardar en localStorage
- useEffect(() => {
-  // Si quedó vacío, persistimos vacío (ok).
-  // Si por alguna razón no existe, lo inicializamos.
-  try {
-    localStorage.setItem("cart", JSON.stringify(items ?? []))
-  } catch (e) {
-    console.warn("[Cart] no pude persistir cart", e)
-  }
-}, [items])
-
 
   const addItem = (item: Omit<CartItem, "cartKey">) => {
+    // ✅ si agregás un producto normal, limpiamos comboId para no cobrar combo por error
+    // (si estás armando un combo, setealo explícitamente desde la pantalla de combo usando setActiveCombo)
+    setComboId(null)
+
     const cartKey = `${item.productId}-${item.talle || "default"}`
 
     setItems((prev) => {
       const existing = prev.find((i) => i.cartKey === cartKey)
 
-      // calcular stock restante considerando lo que ya está en carrito
       const enCarrito = existing ? existing.cantidad : 0
       const stockRestante = (item.stock ?? Infinity) - enCarrito
 
@@ -83,61 +113,57 @@ export function CartProvider({ children }: { children: ReactNode }) {
   }
 
   const removeItem = (cartKey: string) => {
-  setItems((prev) => {
-    // intento normal por cartKey
-    const after = prev.filter((i) => i.cartKey !== cartKey)
-    if (after.length !== prev.length) {
-      console.log("[Cart] removed by cartKey:", cartKey)
-      return after
-    }
+    setItems((prev) => {
+      const after = prev.filter((i) => i.cartKey !== cartKey)
+      if (after.length !== prev.length) {
+        console.log("[Cart] removed by cartKey:", cartKey)
+        return after
+      }
 
-    // 🔁 fallback: por productId + talle (por si el cartKey que llega no coincide 1:1)
-    const [pid, ...rest] = cartKey.split("-")
-    const sizeFromKey = rest.length ? rest.join("-") : "default"
+      const [pid, ...rest] = cartKey.split("-")
+      const sizeFromKey = rest.length ? rest.join("-") : "default"
 
-    const afterFallback = prev.filter(
-      (i) => !(i.productId === pid && (i.talle ?? "default") === sizeFromKey)
-    )
-    if (afterFallback.length !== prev.length) {
-      console.log("[Cart] removed by fallback pid+talle:", pid, sizeFromKey)
-      return afterFallback
-    }
+      const afterFallback = prev.filter(
+        (i) => !(i.productId === pid && (i.talle ?? "default") === sizeFromKey)
+      )
+      if (afterFallback.length !== prev.length) {
+        console.log("[Cart] removed by fallback pid+talle:", pid, sizeFromKey)
+        return afterFallback
+      }
 
-    console.warn("[Cart] removeItem no encontró coincidencias para:", cartKey, prev)
-    return prev
-  })
-}
-
+      console.warn("[Cart] removeItem no encontró coincidencias para:", cartKey, prev)
+      return prev
+    })
+  }
 
   const clearCart = () => {
-  setItems([])
-  try {
-    localStorage.setItem("cart", "[]")
-  } catch {}
-}
-
+    setItems([])
+    setComboId(null)
+    try {
+      localStorage.setItem("cart", "[]")
+      localStorage.removeItem("cartComboId")
+    } catch {}
+  }
 
   const increaseQuantity = (cartKey: string) => {
-  setItems((prev) =>
-    prev.map((i) => {
-      if (i.cartKey !== cartKey) return i
+    setItems((prev) =>
+      prev.map((i) => {
+        if (i.cartKey !== cartKey) return i
 
-      if (typeof i.stock !== "number") {
-        alert("No se pudo validar stock. Recargá la página.")
-        return i
-      }
+        if (typeof i.stock !== "number") {
+          alert("No se pudo validar stock. Recargá la página.")
+          return i
+        }
 
-      if (i.cantidad >= i.stock) {
-        alert("No hay más stock disponible")
-        return i
-      }
+        if (i.cantidad >= i.stock) {
+          alert("No hay más stock disponible")
+          return i
+        }
 
-      return { ...i, cantidad: i.cantidad + 1 }
-    })
-  )
-}
-
-
+        return { ...i, cantidad: i.cantidad + 1 }
+      })
+    )
+  }
 
   const decreaseQuantity = (cartKey: string) => {
     setItems((prev) =>
@@ -149,40 +175,50 @@ export function CartProvider({ children }: { children: ReactNode }) {
     )
   }
 
-// checkout
-const checkout = async () => {
-  try {
-    // 🔹 Guardamos SOLO lo que necesita updateStock
-    const lastOrderPayload = items.map((i) => ({
-      productId: i.productId, // _id real de Sanity
-      cantidad: i.cantidad,
-    }))
+  // checkout
+  const checkout = async () => {
+    try {
+      // payload stock (tuyo)
+      const lastOrderPayload = items.map((i) => ({
+        productId: i.productId,
+        cantidad: i.cantidad,
+        talle: i.talle ?? null,
+      }))
+      localStorage.setItem("lastOrder", JSON.stringify(lastOrderPayload))
 
-    localStorage.setItem("lastOrder", JSON.stringify(lastOrderPayload))
+      const res = await fetch("/api/checkout/preference", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        // ✅ CLAVE: mandamos comboId si existe
+        body: JSON.stringify({ items, comboId }),
+      })
 
-    const res = await fetch("/api/checkout/preference", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ items }), // para MP podés enviar todo el carrito
-    })
+      const data = await res.json().catch(() => null)
 
-    const data = await res.json()
-    if (data.init_point) {
-      window.location.href = data.init_point
-    } else {
+      if (!res.ok) {
+        console.error("[Cart] checkout error:", data)
+        alert("⚠️ No se pudo iniciar el pago")
+        return
+      }
+
+      if (data?.init_point) {
+        window.location.href = data.init_point
+        return
+      }
+
       alert("⚠️ No se pudo iniciar el pago")
+    } catch (err) {
+      console.error("❌ Error en checkout:", err)
+      alert("Hubo un error al procesar el pago")
     }
-  } catch (err) {
-    console.error("❌ Error en checkout:", err)
-    alert("Hubo un error al procesar el pago")
   }
-}
-
 
   return (
     <CartContext.Provider
       value={{
         items,
+        comboId,
+        setActiveCombo,
         addItem,
         removeItem,
         clearCart,

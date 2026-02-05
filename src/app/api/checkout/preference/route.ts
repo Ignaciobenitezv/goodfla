@@ -59,7 +59,7 @@ function getUnitPriceProduct(prod: any) {
 export async function POST(req: Request) {
   try {
     const body = await req.json().catch(() => ({}))
-    console.log("🟡 PREFERENCE BODY =>", JSON.stringify(body, null, 2))
+    console.log("🟣 PREFERENCE BODY =>", body)
     // ✅ puede venir comboId explícito o dentro de un item
     const comboId =
       String(body?.comboId || "").trim() ||
