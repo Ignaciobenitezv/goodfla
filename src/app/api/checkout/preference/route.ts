@@ -13,7 +13,11 @@ const sanity = createClient({
   useCdn: false,
 })
 
-type CompactCartItem = { productId: string; talle?: string | null; cantidad: number }
+type CompactCartItem = {
+  productId: string
+  talle?: string | null
+  cantidad: number
+}
 
 function toMoney(n: any) {
   const v = Number(n || 0)
@@ -36,7 +40,12 @@ async function getProductsSnapshot(ids: string[]) {
 
 async function getComboSnapshot(comboId: string) {
   return sanity.fetch(
-    `*[_type=="combo" && _id==$id][0]{ _id, nombre, precio }`,
+    `*[_type=="combo" && _id==$id][0]{
+      _id,
+      nombre,
+      precio,
+      precioActual
+    }`,
     { id: comboId }
   )
 }
@@ -50,36 +59,57 @@ function getAvailable(prod: any, talle: string | null | undefined) {
   return Number(prod.stock ?? 0)
 }
 
+function getUnitPriceProducto(prod: any) {
+  const p = prod?.precioActual ?? prod?.precio ?? 0
+  return toMoney(p)
+}
+
+function getUnitPriceCombo(combo: any) {
+  // En tu schema de combo el campo es "precio" (Precio actual)
+  const p = combo?.precioActual ?? combo?.precio ?? 0
+  return toMoney(p)
+}
+
 export async function POST(req: Request) {
   try {
-    const body = await req.json()
+    const body = await req.json().catch(() => null)
 
-    // ✅ Este endpoint es "checkout de combo"
-    const comboId = String(body?.comboId || "").trim()
-    if (!comboId) {
+    // ---- Base URL
+    const { origin } = new URL(req.url)
+    const baseUrl =
+      process.env.SITE_URL ||
+      process.env.PUBLIC_BASE_URL ||
+      origin ||
+      "http://localhost:3000"
+
+    // ---- MP token
+    const token = process.env.MP_ACCESS_TOKEN
+    if (!token) {
       return NextResponse.json(
-        { ok: false, error: "missing_comboId", message: "Falta comboId (id del documento combo en Sanity)." },
-        { status: 400 }
+        { ok: false, error: "missing_mp_token", message: "Missing MP_ACCESS_TOKEN" },
+        { status: 500 }
       )
     }
 
-    // 1) Cart de productos reales (para stock). El front suele mandar items = productos elegidos dentro del combo.
-    const compactCart: CompactCartItem[] = (Array.isArray(body?.items) ? body.items : [])
+    // ---- Items (productos elegidos)
+    const rawItems = Array.isArray(body?.items) ? body.items : []
+
+    const compactCart: CompactCartItem[] = rawItems
       .map((i: any) => ({
         productId: String(i?._id ?? i?.productId ?? "").trim(),
         talle: i?.talle ?? null,
-        cantidad: Number(i?.cantidad || 1),
+        cantidad: Number(i?.cantidad ?? 1),
       }))
       .filter((x: any) => x.productId && x.cantidad > 0)
 
     if (!compactCart.length) {
       return NextResponse.json(
-        { ok: false, error: "empty_cart", message: "El combo no trae productos en items (cart vacío)." },
+        { ok: false, error: "empty_cart", message: "Carrito vacío." },
         { status: 400 }
       )
     }
 
-    // 2) Validar stock con datos del server
+    // ---- Validar stock de productos SIEMPRE (aunque cobremos combo)
     const ids = compactCart.map((x) => x.productId)
     const prods = await getProductsSnapshot(ids)
     const byId = new Map<string, any>((prods || []).map((p: any) => [String(p._id), p]))
@@ -88,12 +118,27 @@ export async function POST(req: Request) {
     for (const it of compactCart) {
       const prod = byId.get(it.productId)
       if (!prod) {
-        stockErrors.push({ productId: it.productId, talle: it.talle, requested: it.cantidad, available: 0 })
+        stockErrors.push({
+          productId: it.productId,
+          talle: it.talle ?? null,
+          requested: it.cantidad,
+          available: 0,
+          ok: false,
+          reason: "product_not_found",
+        })
         continue
       }
+
       const available = getAvailable(prod, it.talle)
       if (available < it.cantidad) {
-        stockErrors.push({ productId: it.productId, talle: it.talle, requested: it.cantidad, available })
+        stockErrors.push({
+          productId: it.productId,
+          talle: it.talle ?? null,
+          requested: it.cantidad,
+          available,
+          ok: false,
+          reason: "out_of_stock",
+        })
       }
     }
 
@@ -104,49 +149,69 @@ export async function POST(req: Request) {
       )
     }
 
-    // 3) Traer combo desde Sanity y usar SU precio para MP
-    const combo = await getComboSnapshot(comboId)
-    if (!combo?._id) {
-      return NextResponse.json(
-        { ok: false, error: "combo_not_found", message: "No existe el combo en Sanity.", comboId },
-        { status: 404 }
-      )
-    }
-
-    const comboPrice = toMoney(combo?.precio)
-    if (!comboPrice || comboPrice <= 0) {
-      return NextResponse.json(
-        { ok: false, error: "invalid_combo_price", message: "El combo tiene precio inválido.", comboId, comboPrice },
-        { status: 400 }
-      )
-    }
-
-    // ✅ ACÁ ESTÁ LA CLAVE: 1 solo item para MP con precio del combo
-    const mpItems = [
-      {
-        title: String(combo?.nombre || "Combo"),
-        quantity: 1,
-        unit_price: comboPrice,
-        currency_id: "ARS",
-      },
-    ]
-
-    // 4) URLs base
-    const { origin } = new URL(req.url)
-    const baseUrl = process.env.SITE_URL || process.env.PUBLIC_BASE_URL || origin || "http://localhost:3000"
-
-    const token = process.env.MP_ACCESS_TOKEN
-    if (!token) {
-      return NextResponse.json({ ok: false, error: "missing_mp_token", message: "Missing MP_ACCESS_TOKEN" }, { status: 500 })
-    }
-
-    const orderId = randomUUID()
+    // ---- orderId
+    const orderId = String(body?.orderId || randomUUID())
 
     const successUrl = `${baseUrl}/checkout/success?orderId=${encodeURIComponent(orderId)}`
     const failureUrl = `${baseUrl}/checkout/failure?orderId=${encodeURIComponent(orderId)}`
     const pendingUrl = `${baseUrl}/checkout/pending?orderId=${encodeURIComponent(orderId)}`
 
-    // 5) Crear preferencia
+    // ---- Si viene comboId: cobramos el COMBO (1 item). Si no: cobramos productos (compat).
+    const comboId = String(body?.comboId || "").trim()
+
+    let mpItems: any[] = []
+    let chargedMode: "combo" | "products" = "products"
+    let chargedAmount = 0
+
+    if (comboId) {
+      const combo = await getComboSnapshot(comboId)
+
+      if (!combo?._id) {
+        return NextResponse.json(
+          { ok: false, error: "combo_not_found", message: "No se encontró el combo.", comboId },
+          { status: 404 }
+        )
+      }
+
+      const comboPrice = getUnitPriceCombo(combo)
+      if (!comboPrice || comboPrice <= 0) {
+        return NextResponse.json(
+          { ok: false, error: "invalid_combo_price", message: "Precio de combo inválido.", comboId, comboPrice },
+          { status: 400 }
+        )
+      }
+
+      mpItems = [
+        {
+          title: String(combo?.nombre || "Combo"),
+          quantity: 1,
+          unit_price: comboPrice,
+          currency_id: "ARS",
+        },
+      ]
+
+      chargedMode = "combo"
+      chargedAmount = comboPrice
+    } else {
+      // Compat: cobra por productos (tu comportamiento anterior)
+      mpItems = compactCart.map((it) => {
+        const prod = byId.get(it.productId)
+        const unit_price = getUnitPriceProducto(prod)
+        const title = `${prod?.nombre || "Producto"}${it.talle ? ` - Talle ${it.talle}` : ""}`
+
+        chargedAmount += unit_price * it.cantidad
+
+        return {
+          title,
+          quantity: it.cantidad,
+          unit_price,
+          currency_id: "ARS",
+        }
+      })
+
+      chargedAmount = toMoney(chargedAmount)
+    }
+
     const res = await fetch("https://api.mercadopago.com/checkout/preferences", {
       method: "POST",
       headers: {
@@ -155,7 +220,10 @@ export async function POST(req: Request) {
       },
       body: JSON.stringify({
         items: mpItems,
+
+        // tracking
         external_reference: orderId,
+
         back_urls: {
           success: successUrl,
           failure: failureUrl,
@@ -163,12 +231,14 @@ export async function POST(req: Request) {
         },
         auto_return: "approved",
         notification_url: `${baseUrl}/api/mp/webhook`,
+
+        // metadata para webhook/stock
         metadata: {
           source: "preference_redirect",
           orderId,
-          comboId,
-          comboPrice,
-          // 👉 esto lo usa tu webhook para descontar stock de productos
+          comboId: comboId || null,
+          chargedMode,
+          chargedAmount,
           cart: JSON.stringify(compactCart),
         },
       }),
@@ -178,7 +248,10 @@ export async function POST(req: Request) {
     const data = await res.json().catch(() => null)
 
     if (!res.ok) {
-      return NextResponse.json({ ok: false, error: "mp_pref_error", mp: data }, { status: res.status })
+      return NextResponse.json(
+        { ok: false, error: "mp_pref_error", status: res.status, mp: data },
+        { status: res.status }
+      )
     }
 
     return NextResponse.json({
@@ -186,11 +259,14 @@ export async function POST(req: Request) {
       id: data.id,
       init_point: data.sandbox_init_point || data.init_point,
       orderId,
-      comboId,
-      comboPrice,
+      chargedMode,
+      chargedAmount,
     })
-  } catch (error) {
-    console.error("❌ Error en /api/checkout/preference:", error)
-    return NextResponse.json({ ok: false, error: "internal_error" }, { status: 500 })
+  } catch (error: any) {
+    console.error("❌ Error en /api/checkout/preference:", error?.message || error)
+    return NextResponse.json(
+      { ok: false, error: "internal_error", message: "Error al crear preferencia" },
+      { status: 500 }
+    )
   }
 }
