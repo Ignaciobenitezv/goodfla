@@ -3,8 +3,9 @@ import { useEffect } from "react";
 
 export default function CheckoutPage() {
   useEffect(() => {
+    let controller: any = null;
+
     const initializeBrick = async () => {
-      // Evita inyectar el script dos veces
       if (!document.querySelector('script[src="https://sdk.mercadopago.com/js/v2"]')) {
         const script = document.createElement("script");
         script.src = "https://sdk.mercadopago.com/js/v2";
@@ -19,25 +20,38 @@ export default function CheckoutPage() {
         const MP = (window as any).MercadoPago;
         if (!MP) return;
 
-        const mp = new MP(process.env.NEXT_PUBLIC_MP_PUBLIC_KEY, { locale: "es-AR" });
+        const publicKey = process.env.NEXT_PUBLIC_MP_PUBLIC_KEY;
+        if (!publicKey) {
+          console.error("Falta NEXT_PUBLIC_MP_PUBLIC_KEY");
+          return;
+        }
+
+        const mp = new MP(publicKey, { locale: "es-AR" });
         const bricksBuilder = mp.bricks();
 
-        // Llamo al backend para obtener la preferencia
-        const res = await fetch("/api/checkout", { method: "POST" });
-        const pref = await res.json();
-
-        bricksBuilder.create("payment", "paymentBrick_container", {
+        // IMPORTANT: CardPayment Brick (tarjeta) -> NO usa preferenceId
+        controller = await bricksBuilder.create("cardPayment", "paymentBrick_container", {
           initialization: {
-            amount: 10000, // monto de la compra
-            preferenceId: pref.id, // preferencia del backend
+            amount: 10000,
           },
           customization: {
-            visual: { style: { theme: "default" } }, // otros: "dark", "flat"
+            visual: { style: { theme: "default" } },
           },
           callbacks: {
             onReady: () => console.log("Brick listo"),
-            onSubmit: (formData: any) => {
-              console.log("Datos enviados:", formData);
+            onSubmit: async (formData: any) => {
+              // Enviar al backend para crear el pago con token, issuer, installments, etc.
+              const r = await fetch("/api/payments/card", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  ...formData,
+                  amount: 10000,
+                }),
+              });
+
+              const data = await r.json();
+              console.log("Respuesta backend:", data);
             },
             onError: (error: any) => console.error("Error en brick:", error),
           },
@@ -46,6 +60,13 @@ export default function CheckoutPage() {
     };
 
     initializeBrick();
+
+    return () => {
+      // Limpieza para evitar bricks duplicados
+      try {
+        controller?.unmount?.();
+      } catch {}
+    };
   }, []);
 
   return (
