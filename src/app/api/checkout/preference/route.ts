@@ -70,6 +70,8 @@ function getComboPrice(combo: any) {
 export async function POST(req: Request) {
   try {
     const body = await req.json()
+    console.log("🧾 PREF body.items sample:", body?.items?.[0])
+console.log("🧾 PREF comboIdFromBody:", body?.comboId)
 
     // --------- 1) Detectar comboId (si corresponde) ----------
     // Recomendado: body.comboId
