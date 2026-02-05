@@ -33,6 +33,16 @@ async function mpGet(url: string) {
   return r.json()
 }
 
+async function mpGetSoft(url: string) {
+  try {
+    return await mpGet(url)
+  } catch (e: any) {
+    const msg = String(e?.message || "")
+    return { __error: true, __message: msg }
+  }
+}
+
+
 function pickTopicAndId(req: Request, body: any) {
   const url = new URL(req.url)
 
@@ -42,7 +52,9 @@ function pickTopicAndId(req: Request, body: any) {
     body?.topic ||
     body?.type
 
+  // ✅ CLAVE: MP manda el id como data.id en querystring
   const id =
+    url.searchParams.get("data.id") ||
     url.searchParams.get("id") ||
     body?.id ||
     body?.data?.id ||
@@ -50,6 +62,7 @@ function pickTopicAndId(req: Request, body: any) {
 
   return { topic, id }
 }
+
 
 async function reserveStockAtomic(cart: CartItem[], lockId: string) {
   const existing = await sanity.getDocument(lockId)
@@ -170,23 +183,41 @@ async function handle(req: Request) {
     let paymentId: string | null = null
 
     if (topic === "payment") {
-      const payment = await mpGet(`https://api.mercadopago.com/v1/payments/${id}`)
-      console.log("💳 payment", { id: payment?.id, status: payment?.status, order: payment?.order })
+  // OJO: data.id a veces NO es el paymentId real (puede ser notification id).
+  // Probamos resolverlo como paymentId y si no existe, respondemos 200 sin cortar el flujo.
 
-      if (String(payment?.status || "").toLowerCase() !== "approved") {
-        return respond200({ msg: "payment_not_approved_yet", paymentId: payment?.id, status: payment?.status }, startedAt)
-      }
+  const paymentTry = await mpGetSoft(`https://api.mercadopago.com/v1/payments/${id}`)
 
-      paymentId = String(payment?.id || "")
-      const merchantOrderId =
-        payment?.order?.id || payment?.order_id || payment?.merchant_order_id
+  if ((paymentTry as any).__error) {
+    // ✅ No rompemos: esperamos a que llegue merchant_order o a un retry de MP
+    return respond200(
+      { msg: "payment_id_not_resolvable_yet", receivedId: id, topic },
+      startedAt
+    )
+  }
 
-      if (!merchantOrderId) {
-        return respond200({ msg: "payment_without_merchant_order_id", paymentId }, startedAt)
-      }
+  const payment = paymentTry
+  console.log("💳 payment", { id: payment?.id, status: payment?.status, order: payment?.order })
 
-      merchantOrder = await mpGet(`https://api.mercadopago.com/merchant_orders/${merchantOrderId}`)
-    } else if (topic === "merchant_order") {
+  if (String(payment?.status || "").toLowerCase() !== "approved") {
+    return respond200(
+      { msg: "payment_not_approved_yet", paymentId: payment?.id, status: payment?.status },
+      startedAt
+    )
+  }
+
+  paymentId = String(payment?.id || "")
+
+  const merchantOrderId =
+    payment?.order?.id || payment?.order_id || payment?.merchant_order_id
+
+  if (!merchantOrderId) {
+    return respond200({ msg: "payment_without_merchant_order_id", paymentId }, startedAt)
+  }
+
+  merchantOrder = await mpGet(`https://api.mercadopago.com/merchant_orders/${merchantOrderId}`)
+}
+else if (topic === "merchant_order") {
       merchantOrder = await mpGet(`https://api.mercadopago.com/merchant_orders/${id}`)
     } else {
       // otros topics: ignorar pero 200
