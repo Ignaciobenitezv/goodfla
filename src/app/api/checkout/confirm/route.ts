@@ -84,20 +84,26 @@ export async function GET(req: Request) {
 
       preferenceId = order?.preference_id ? String(order.preference_id) : null
 
-      const approvedPayment = Array.isArray(order?.payments)
-        ? [...order.payments].reverse().find((p: any) => p?.status === "approved")
-        : null
+      const payments: any[] = Array.isArray(order?.payments) ? order.payments : []
+
+      // 1) Si existe alguno aprobado, listo
+      const approvedPayment = [...payments].reverse().find((p: any) => String(p?.status || "").toLowerCase() === "approved")
 
       if (approvedPayment?.id) {
         approvedPaymentId = String(approvedPayment.id)
         mpStatus = "approved"
       } else {
-        const last = Array.isArray(order?.payments)
-          ? order.payments[order.payments.length - 1]
-          : null
-        mpStatus = last?.status ? String(last.status) : "not_approved"
+        // 2) Si no hay aprobado, NO digas "not_approved" si aún no hay pagos
+        if (!payments.length) {
+          mpStatus = "pending" // o "unknown" — pero pending es mejor para UX
+        } else {
+          // 3) Tomamos el último estado conocido (pending/in_process/rejected/etc.)
+          const last = payments[payments.length - 1]
+          mpStatus = last?.status ? String(last.status).toLowerCase() : "pending"
+        }
       }
-    } else if (paymentIdParam) {
+    }
+    else if (paymentIdParam) {
       // confirmar por payment_id directo (ideal para tarjeta inline)
       const pay = await mpGet(`https://api.mercadopago.com/v1/payments/${paymentIdParam}`)
       mpStatus = pay?.status ? String(pay.status) : "unknown"
@@ -125,10 +131,9 @@ export async function GET(req: Request) {
       const marker = await sanity.getDocument(markerId)
 
       if (marker) {
-        processed = true
-        webhookStatus = (marker as any)?.status
-          ? String((marker as any).status)
-          : "processed"
+        const st = String((marker as any)?.status || "")
+        webhookStatus = st || "unknown"
+        processed = st === "processed"
       }
     }
 

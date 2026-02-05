@@ -79,8 +79,9 @@ export default function SuccessClient() {
           setProgress(clamp(base))
 
           const qs = new URLSearchParams()
-          if (merchantOrderId) qs.set("merchant_order_id", merchantOrderId)
-          if (!merchantOrderId && paymentIdFromUrl) qs.set("payment_id", paymentIdFromUrl)
+if (paymentIdFromUrl) qs.set("payment_id", paymentIdFromUrl)
+else if (merchantOrderId) qs.set("merchant_order_id", merchantOrderId)
+
 
           const res = await fetch(`/api/checkout/confirm?${qs.toString()}`, {
             cache: "no-store",
@@ -94,16 +95,31 @@ export default function SuccessClient() {
             return
           }
 
-          if (!data.approved) {
-            setUi("not_approved")
-            setMsg(
-              `Tu pago todavía no figura aprobado (estado: ${String(
-                data.mpStatus || "unknown"
-              )}).`
-            )
-            setProgress(100)
-            return
-          }
+          const mpStatus = String(data.mpStatus || "unknown").toLowerCase()
+
+// Estados que NO son rechazo: hay que esperar (redirect puede tardar)
+const waitingStatuses = new Set(["pending", "in_process", "authorized", "null", "unknown", ""])
+const waitingDetail = String(data.mpStatusDetail || data.status_detail || data.statusDetail || "").toLowerCase()
+const isWaitingDetail =
+  waitingDetail.includes("pending") || waitingDetail.includes("in_process") || waitingDetail.includes("contingency")
+
+
+if (!data.approved) {
+  if (waitingStatuses.has(mpStatus)|| isWaitingDetail) {
+    setUi("checking")
+    setMsg(`Estamos confirmando tu pago… (estado: ${mpStatus}) intento ${i}/${maxTries}`)
+    setProgress((p) => clamp(Math.max(p, 35) + 5))
+    await new Promise((r) => setTimeout(r, waitMs))
+    continue
+  }
+
+  // Rechazos reales
+  setUi("not_approved")
+  setMsg(`Tu pago no figura aprobado (estado: ${mpStatus}).`)
+  setProgress(100)
+  return
+}
+
 
           if (data.approved && !data.processed) {
             setUi("approved_waiting_stock")
@@ -144,7 +160,8 @@ export default function SuccessClient() {
     }
 
     run()
-  }, [merchantOrderId, paymentIdFromUrl, preferenceId, clearCart])
+  }, [merchantOrderId, paymentIdFromUrl, clearCart])
+
 
   return (
     <main className="min-h-[100dvh] relative overflow-hidden pt-24 md:pt-28">
