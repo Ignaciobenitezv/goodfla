@@ -288,7 +288,8 @@ export async function POST(req: Request) {
       },
       capture: true,
 
-      notification_url: body.identification,
+      notification_url: `${origin}/api/webhooks/mp`,
+
 
       metadata: {
         orderId,
