@@ -35,15 +35,8 @@ async function getProductsSnapshot(ids: string[]) {
 }
 
 async function getComboSnapshot(comboId: string) {
-  // ⚠️ Ajustá campos si tu schema usa otros nombres.
-  // Esto intenta leer precioActual/precio desde el documento combo.
   return sanity.fetch(
-    `*[_type=="combo" && _id==$id][0]{
-      _id,
-      nombre,
-      precio,
-      precioActual
-    }`,
+    `*[_type=="combo" && _id==$id][0]{ _id, nombre, precio }`,
     { id: comboId }
   )
 }
@@ -57,52 +50,36 @@ function getAvailable(prod: any, talle: string | null | undefined) {
   return Number(prod.stock ?? 0)
 }
 
-function getUnitPrice(prod: any) {
-  const p = prod?.precioActual ?? prod?.precio ?? 0
-  return toMoney(p)
-}
-
-function getComboPrice(combo: any) {
-  const p = combo?.precioActual ?? combo?.precio ?? 0
-  return toMoney(p)
-}
-
 export async function POST(req: Request) {
   try {
     const body = await req.json()
-    console.log("🧾 PREF body.items sample:", body?.items?.[0])
-console.log("🧾 PREF comboIdFromBody:", body?.comboId)
 
-    // --------- 1) Detectar comboId (si corresponde) ----------
-    // Recomendado: body.comboId
-    // Alternativa: items[0] viene como combo y su _id es el id del combo
-    const rawItems = Array.isArray(body?.items) ? body.items : []
-    const first = rawItems?.[0] || null
+    // ✅ Este endpoint es "checkout de combo"
+    const comboId = String(body?.comboId || "").trim()
+    if (!comboId) {
+      return NextResponse.json(
+        { ok: false, error: "missing_comboId", message: "Falta comboId (id del documento combo en Sanity)." },
+        { status: 400 }
+      )
+    }
 
-    const comboIdFromBody = body?.comboId ? String(body.comboId) : ""
-    const comboIdFromItem =
-      first && (first?._type === "combo" || first?.type === "combo") && (first?._id || first?.comboId)
-        ? String(first._id || first.comboId)
-        : ""
-
-    const comboId = (comboIdFromBody || comboIdFromItem || "").trim()
-    const isComboCheckout = !!comboId
-
-    // --------- 2) Construir cart de productos (para STOCK) ----------
-    // OJO: Esto SIEMPRE tiene que ser lista de productos reales (producto._id)
-    const compactCart: CompactCartItem[] = rawItems
+    // 1) Cart de productos reales (para stock). El front suele mandar items = productos elegidos dentro del combo.
+    const compactCart: CompactCartItem[] = (Array.isArray(body?.items) ? body.items : [])
       .map((i: any) => ({
-        productId: String(i._id ?? i.productId ?? "").trim(), // producto id
-        talle: i.talle ?? null,
-        cantidad: Number(i.cantidad || 1),
+        productId: String(i?._id ?? i?.productId ?? "").trim(),
+        talle: i?.talle ?? null,
+        cantidad: Number(i?.cantidad || 1),
       }))
       .filter((x: any) => x.productId && x.cantidad > 0)
 
     if (!compactCart.length) {
-      return NextResponse.json({ ok: false, error: "empty_cart" }, { status: 400 })
+      return NextResponse.json(
+        { ok: false, error: "empty_cart", message: "El combo no trae productos en items (cart vacío)." },
+        { status: 400 }
+      )
     }
 
-    // --------- 3) Validar stock (productos) ----------
+    // 2) Validar stock con datos del server
     const ids = compactCart.map((x) => x.productId)
     const prods = await getProductsSnapshot(ids)
     const byId = new Map<string, any>((prods || []).map((p: any) => [String(p._id), p]))
@@ -127,61 +104,41 @@ console.log("🧾 PREF comboIdFromBody:", body?.comboId)
       )
     }
 
-    // --------- 4) Construir items para MercadoPago ----------
-    // ✅ Si es combo: 1 item con precio del combo desde Sanity
-    // ✅ Si NO es combo: items por producto con precio desde Sanity (server-authoritative)
-    let mpItems: any[] = []
-
-    if (isComboCheckout) {
-      const combo = await getComboSnapshot(comboId)
-      if (!combo?._id) {
-        return NextResponse.json(
-          { ok: false, error: "combo_not_found", message: "No se encontró el combo en Sanity.", comboId },
-          { status: 400 }
-        )
-      }
-
-      const comboPrice = getComboPrice(combo)
-      if (!comboPrice || comboPrice <= 0) {
-        return NextResponse.json(
-          { ok: false, error: "invalid_combo_price", message: "Precio de combo inválido.", comboId, combo },
-          { status: 400 }
-        )
-      }
-
-      mpItems = [
-        {
-          title: String(combo?.nombre || "Combo"),
-          quantity: 1,
-          unit_price: comboPrice,
-          currency_id: "ARS",
-        },
-      ]
-    } else {
-      mpItems = compactCart
-        .map((it) => {
-          const prod = byId.get(it.productId)
-          if (!prod) return null
-
-          const unit_price = getUnitPrice(prod)
-          const title = `${prod?.nombre || "Producto"}${it.talle ? ` - Talle ${it.talle}` : ""}`
-
-          return {
-            title,
-            quantity: it.cantidad,
-            unit_price,
-            currency_id: "ARS",
-          }
-        })
-        .filter(Boolean) as any[]
+    // 3) Traer combo desde Sanity y usar SU precio para MP
+    const combo = await getComboSnapshot(comboId)
+    if (!combo?._id) {
+      return NextResponse.json(
+        { ok: false, error: "combo_not_found", message: "No existe el combo en Sanity.", comboId },
+        { status: 404 }
+      )
     }
 
-    // --------- 5) MP + URLs ----------
+    const comboPrice = toMoney(combo?.precio)
+    if (!comboPrice || comboPrice <= 0) {
+      return NextResponse.json(
+        { ok: false, error: "invalid_combo_price", message: "El combo tiene precio inválido.", comboId, comboPrice },
+        { status: 400 }
+      )
+    }
+
+    // ✅ ACÁ ESTÁ LA CLAVE: 1 solo item para MP con precio del combo
+    const mpItems = [
+      {
+        title: String(combo?.nombre || "Combo"),
+        quantity: 1,
+        unit_price: comboPrice,
+        currency_id: "ARS",
+      },
+    ]
+
+    // 4) URLs base
     const { origin } = new URL(req.url)
     const baseUrl = process.env.SITE_URL || process.env.PUBLIC_BASE_URL || origin || "http://localhost:3000"
 
     const token = process.env.MP_ACCESS_TOKEN
-    if (!token) return NextResponse.json({ ok: false, error: "Missing MP_ACCESS_TOKEN" }, { status: 500 })
+    if (!token) {
+      return NextResponse.json({ ok: false, error: "missing_mp_token", message: "Missing MP_ACCESS_TOKEN" }, { status: 500 })
+    }
 
     const orderId = randomUUID()
 
@@ -189,6 +146,7 @@ console.log("🧾 PREF comboIdFromBody:", body?.comboId)
     const failureUrl = `${baseUrl}/checkout/failure?orderId=${encodeURIComponent(orderId)}`
     const pendingUrl = `${baseUrl}/checkout/pending?orderId=${encodeURIComponent(orderId)}`
 
+    // 5) Crear preferencia
     const res = await fetch("https://api.mercadopago.com/checkout/preferences", {
       method: "POST",
       headers: {
@@ -197,10 +155,7 @@ console.log("🧾 PREF comboIdFromBody:", body?.comboId)
       },
       body: JSON.stringify({
         items: mpItems,
-
-        // ✅ para track: útil para tu /confirm y debugging
         external_reference: orderId,
-
         back_urls: {
           success: successUrl,
           failure: failureUrl,
@@ -208,13 +163,13 @@ console.log("🧾 PREF comboIdFromBody:", body?.comboId)
         },
         auto_return: "approved",
         notification_url: `${baseUrl}/api/mp/webhook`,
-
-        // ✅ CLAVE: metadata.cart SIEMPRE ES PRODUCTOS para descontar stock
         metadata: {
           source: "preference_redirect",
           orderId,
-          comboId: isComboCheckout ? comboId : null,
-          cart: compactCart, // ✅ guardar como array (evita parseos raros)
+          comboId,
+          comboPrice,
+          // 👉 esto lo usa tu webhook para descontar stock de productos
+          cart: JSON.stringify(compactCart),
         },
       }),
       cache: "no-store",
@@ -231,6 +186,8 @@ console.log("🧾 PREF comboIdFromBody:", body?.comboId)
       id: data.id,
       init_point: data.sandbox_init_point || data.init_point,
       orderId,
+      comboId,
+      comboPrice,
     })
   } catch (error) {
     console.error("❌ Error en /api/checkout/preference:", error)
