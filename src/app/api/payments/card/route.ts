@@ -135,10 +135,10 @@ function normalizeIdentification(body: BrickPayload) {
   }
 }
 
-async function reserveStockAtomic(cart: CartItem[], lockId: string) {
-  // Idempotencia: si YA quedó processed, no tocamos stock
+async function rollbackStockAtomic(cart: CartItem[], lockId: string) {
+  // Si ya hicimos rollback antes, no tocar stock otra vez
   const existing = await sanity.getDocument(lockId)
-  if ((existing as any)?.status === "processed") return { ok: true, already: true }
+  if ((existing as any)?.rollbackDone) return { ok: true, already: true }
 
   const MAX_RETRIES = 8
 
@@ -153,39 +153,44 @@ async function reserveStockAtomic(cart: CartItem[], lockId: string) {
     )
     const byId = new Map<string, any>((prods || []).map((p: any) => [String(p._id), p]))
 
-    const out: any[] = []
-    for (const it of cart) {
-      const prod = byId.get(it.productId)
-      if (!prod) {
-        out.push({ productId: it.productId, talle: it.talle ?? null, ok: false, reason: "product_not_found" })
-        continue
-      }
-
-      const available =
-        Array.isArray(prod.talles) && it.talle
-          ? Number(prod.talles.find((t: any) => t?.label === it.talle)?.stock ?? 0)
-          : Number(prod.stock ?? 0)
-
-      if (available < it.cantidad) {
-        out.push({ productId: it.productId, talle: it.talle ?? null, ok: false, requested: it.cantidad, available })
-      }
-    }
-
-    if (out.length) return { ok: false, reason: "out_of_stock", details: out }
-
     try {
       for (const it of cart) {
         const prod = byId.get(it.productId)
+        if (!prod) continue
 
         if (Array.isArray(prod.talles) && it.talle) {
           const newTalles = (prod.talles || []).map((t: any) =>
-            t?.label === it.talle ? { ...t, stock: Math.max(0, Number(t.stock || 0) - it.cantidad) } : t
+            t?.label === it.talle
+              ? { ...t, stock: Number(t.stock || 0) + it.cantidad }
+              : t
           )
-          await sanity.patch(prod._id).ifRevisionId(prod._rev).set({ talles: newTalles }).commit()
+          await sanity
+            .patch(prod._id)
+            .ifRevisionId(prod._rev)
+            .set({ talles: newTalles })
+            .commit()
         } else {
-          await sanity.patch(prod._id).ifRevisionId(prod._rev).dec({ stock: it.cantidad }).commit()
+          await sanity
+            .patch(prod._id)
+            .ifRevisionId(prod._rev)
+            .inc({ stock: it.cantidad })
+            .commit()
         }
       }
+
+      // marcar rollback para idempotencia
+      await sanity.createIfNotExists({
+        _id: lockId,
+        _type: "mpWebhook",
+        createdAt: new Date().toISOString(),
+        status: "init",
+      })
+
+      await sanity
+        .patch(lockId)
+        .set({ rollbackDone: true, rollbackAt: new Date().toISOString() })
+        .commit({ autoGenerateArrayKeys: true })
+
 
       return { ok: true }
     } catch (e: any) {
@@ -197,6 +202,7 @@ async function reserveStockAtomic(cart: CartItem[], lockId: string) {
 
   return { ok: false, reason: "conflict" }
 }
+
 
 export async function POST(req: Request) {
   try {
@@ -484,6 +490,13 @@ export async function POST(req: Request) {
     const cap = await mpCapture(paymentId, mpToken)
 
     if (!cap.ok) {
+      console.error("❌ MP capture failed:", {
+        paymentId,
+        orderId,
+        mp: cap.data,
+      })
+
+      // 1) Guardar evento (si no existía)
       await sanity.createIfNotExists({
         _id: markerId,
         _type: "mpWebhook",
@@ -495,11 +508,23 @@ export async function POST(req: Request) {
         detailsJson: JSON.stringify({ mp: cap.data }),
       })
 
+      // 2) Intentar cancelar el pago autorizado (best-effort)
+      await mpCancel(paymentId, mpToken).catch(() => null)
+
+      // 3) 🔁 ROLLBACK DE STOCK (idempotente)
+      await rollbackStockAtomic(cart, markerId).catch(() => null)
+
+      await sanity
+        .patch(markerId)
+        .set({ status: "capture_failed_rolled_back" })
+        .commit()
+        .catch(() => null)
+
       return NextResponse.json(
         {
           ok: false,
           error: "capture_failed",
-          message: "Se reservó stock pero falló la captura del pago. Revisión requerida.",
+          message: "Falló la captura del pago. No se realizó el cobro y se revirtió el stock.",
           id: paymentId,
           orderId,
           mp: cap.data,
