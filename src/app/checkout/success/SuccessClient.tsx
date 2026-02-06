@@ -19,6 +19,7 @@ function clamp(n: number, min = 0, max = 100) {
 export default function SuccessClient() {
   const sp = useSearchParams()
   const { clearCart } = useCart()
+  const [isStockFailure, setIsStockFailure] = useState(false)
 
   const [ui, setUi] = useState<UiState>("checking")
   const [msg, setMsg] = useState<string>("Confirmando tu pago…")
@@ -72,62 +73,63 @@ export default function SuccessClient() {
         const maxTries = 10
         const waitMs = 2000
 
-      for (let i = 1; i <= maxTries; i++) {
-  const base = 10 + (i / maxTries) * 55
-  setProgress(clamp(base))
+        for (let i = 1; i <= maxTries; i++) {
+          const base = 10 + (i / maxTries) * 55
+          setProgress(clamp(base))
 
-  const qs = new URLSearchParams()
+          const qs = new URLSearchParams()
 
-  // ✅ preferencia: payment_id si existe, sino merchant_order_id
-  if (paymentIdFromUrl) qs.set("payment_id", paymentIdFromUrl)
-  else if (merchantOrderId) qs.set("merchant_order_id", merchantOrderId)
+          // ✅ preferencia: payment_id si existe, sino merchant_order_id
+          if (paymentIdFromUrl) qs.set("payment_id", paymentIdFromUrl)
+          else if (merchantOrderId) qs.set("merchant_order_id", merchantOrderId)
 
-  if (orderId) qs.set("orderId", orderId)
+          if (orderId) qs.set("orderId", orderId)
 
-  const res = await fetch(`/api/checkout/confirm?${qs.toString()}`, {
-    cache: "no-store",
-  })
-  const data = await res.json().catch(() => null)
+          const res = await fetch(`/api/checkout/confirm?${qs.toString()}`, {
+            cache: "no-store",
+          })
+          const data = await res.json().catch(() => null)
 
-  if (!res.ok || !data?.ok) {
-    setUi("error")
-    setMsg("Hubo un problema confirmando el pago. Podés reintentar.")
-    setProgress(100)
-    return
-  }
+          if (!res.ok || !data?.ok) {
+            setUi("error")
+            setMsg("Hubo un problema confirmando el pago. Podés reintentar.")
+            setProgress(100)
+            return
+          }
 
-  const state = String(data.state || "processing")
-  const processed = !!data.processed
-  const failed = !!data.failed
+          const state = String(data.state || "processing")
+          const processed = !!data.processed
+          const failed = !!data.failed
 
-  // 1) OK final
-  if (processed || state === "processed") {
-    setProgress(96)
-    clearCart()
-    localStorage.setItem("cart", "[]")
-    localStorage.removeItem("lastOrder")
+          // 1) OK final
+          if (processed || state === "processed") {
+            setProgress(96)
+            clearCart()
+            localStorage.setItem("cart", "[]")
+            localStorage.removeItem("lastOrder")
 
-    setUi("cleared")
-    setMsg("Pago aprobado. Tu compra fue confirmada ✅")
-    setTimeout(() => setProgress(100), 350)
-    return
-  }
+            setUi("cleared")
+            setMsg("Pago aprobado. Tu compra fue confirmada ✅")
+            setTimeout(() => setProgress(100), 350)
+            return
+          }
 
-  // 2) Fallo stock: cortar y avisar
-  if (failed || state === "failed_stock" || state === "stock_insufficient") {
-    setUi("error")
-    setMsg("Tu pago fue aprobado, pero no pudimos confirmar stock. Escribinos y lo resolvemos.")
-    setProgress(100)
-    return
-  }
+          // 2) Fallo stock: cortar y avisar
+          if (failed || state === "failed_stock" || state === "stock_insufficient") {
+            setIsStockFailure(true)
+            setUi("error")
+            setMsg("Tu pago fue aprobado, pero no pudimos confirmar stock. Escribinos y lo resolvemos.")
+            setProgress(100)
+            return
+          }
 
-  // 3) Sigue procesando
-  setUi("approved_waiting_stock")
-  setMsg(`Pago aprobado. Confirmando stock… (intento ${i}/${maxTries})`)
-  setProgress((p) => clamp(Math.max(p, 65) + 6))
+          // 3) Sigue procesando
+          setUi("approved_waiting_stock")
+          setMsg(`Pago aprobado. Confirmando stock… (intento ${i}/${maxTries})`)
+          setProgress((p) => clamp(Math.max(p, 65) + 6))
 
-  await new Promise((r) => setTimeout(r, waitMs))
-}
+          await new Promise((r) => setTimeout(r, waitMs))
+        }
 
 
         setUi("approved_waiting_stock")
@@ -236,24 +238,24 @@ export default function SuccessClient() {
               Seguir comprando
             </Link>
 
-            {ui === "error" && (
-  <a
-    href={`https://wa.me/5493624934353?text=${encodeURIComponent(
-      `Hola! Quiero solicitar un reembolso.\n\n` +
-      `Mi pago fue APROBADO pero el producto quedó sin stock.\n\n` +
-      `Datos del pago:\n` +
-      `- payment_id: ${paymentIdFromUrl || "-"}\n` +
-      `- merchant_order_id: ${merchantOrderId || "-"}\n` +
-      `- orderId: ${orderId || "-"}\n\n` +
-      `Quedo atento. Gracias.`
-    )}`}
-    target="_blank"
-    rel="noopener noreferrer"
-    className="inline-flex items-center justify-center rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium hover:bg-slate-50 transition"
-  >
-    Pedir reembolso
-  </a>
-)}
+            {ui === "error" && isStockFailure && (
+              <a
+                href={`https://wa.me/5493624934353?text=${encodeURIComponent(
+                  `Hola! Quiero solicitar un reembolso.\n\n` +
+                  `Mi pago fue APROBADO pero el producto quedó sin stock.\n\n` +
+                  `Datos del pago:\n` +
+                  `- payment_id: ${paymentIdFromUrl || "-"}\n` +
+                  `- merchant_order_id: ${merchantOrderId || "-"}\n` +
+                  `- orderId: ${orderId || "-"}\n\n` +
+                  `Quedo atento. Gracias.`
+                )}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center justify-center rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium hover:bg-slate-50 transition"
+              >
+                Pedir reembolso
+              </a>
+            )}
 
           </div>
 
