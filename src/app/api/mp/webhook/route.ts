@@ -334,30 +334,38 @@ else if (topic === "merchant_order") {
       await sanity.patch(markerId).set({ status: "no_cart_metadata" }).commit().catch(() => {})
       return respond200({ msg: "no_cart_metadata", markerId, paymentId, preferenceId: prefId }, startedAt)
     }
+// =========================
+// 4) Reservar stock
+// - NO se descuenta para packMayorista
+// =========================
+const packType = pref?.metadata?.packType || null
+const isMayorista = packType === "packMayorista"
 
-    // =========================
-    // 4) Reservar stock
-    // =========================
-    const r = await reserveStockAtomic(cart, markerId)
+if (!isMayorista) {
+  const r = await reserveStockAtomic(cart, markerId)
 
- if (!r.ok) {
-  console.log("❌ Sin stock — marcando orden como failed_stock")
+  if (!r.ok) {
+    console.log("❌ Sin stock — marcando orden como failed_stock")
 
-  await sanity
-    .patch(markerId)
-    .set({
-      status: "failed_stock",
-      detailsJson: JSON.stringify((r as any).details ?? []),
-      failedAt: new Date().toISOString(),
-    })
-    .commit()
-    .catch(() => {})
+    await sanity
+      .patch(markerId)
+      .set({
+        status: "failed_stock",
+        detailsJson: JSON.stringify((r as any).details ?? []),
+        failedAt: new Date().toISOString(),
+      })
+      .commit()
+      .catch(() => {})
 
-  return respond200(
-    { ignored: true, reason: "failed_stock", markerId, paymentId },
-    startedAt
-  )
+    return respond200(
+      { ignored: true, reason: "failed_stock", markerId, paymentId },
+      startedAt
+    )
+  }
+} else {
+  console.log("📦 packMayorista: skipping stock reserve", { markerId, paymentId })
 }
+
 
 
 

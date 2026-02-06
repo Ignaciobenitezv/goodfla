@@ -122,41 +122,56 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: "empty_cart" }, { status: 400 })
     }
 
-    // ==========================
-    // 1) VALIDACIÓN DE STOCK (siempre sobre productos)
-    // ==========================
-    const ids = [...new Set(compactCart.map((x) => x.productId))]
-    const prods = await getProductsSnapshot(ids)
-    const byId = new Map<string, any>((prods || []).map((p: any) => [String(p._id), p]))
+   // ==========================
+// 1) VALIDACIÓN DE STOCK
+// - NO se valida para packMayorista
+// ==========================
+let skipStock = false
 
-    const stockErrors: any[] = []
-    for (const it of compactCart) {
-      const prod = byId.get(it.productId)
-      if (!prod) {
-        stockErrors.push({ productId: it.productId, talle: it.talle, requested: it.cantidad, available: 0 })
-        continue
-      }
-      const available = getAvailable(prod, it.talle)
-      if (available < it.cantidad) {
-        stockErrors.push({ productId: it.productId, talle: it.talle, requested: it.cantidad, available })
-      }
+// Si viene comboId, resolvemos el type del pack para decidir si salteamos stock
+if (comboId) {
+  const pack = await getPackSnapshot(comboId)
+  if (pack?._type === "packMayorista") {
+    skipStock = true
+  }
+}
+
+if (!skipStock) {
+  const ids = [...new Set(compactCart.map((x) => x.productId))]
+  const prods = await getProductsSnapshot(ids)
+  const byId = new Map<string, any>((prods || []).map((p: any) => [String(p._id), p]))
+
+  const stockErrors: any[] = []
+  for (const it of compactCart) {
+    const prod = byId.get(it.productId)
+    if (!prod) {
+      stockErrors.push({ productId: it.productId, talle: it.talle, requested: it.cantidad, available: 0 })
+      continue
     }
-
-    if (stockErrors.length) {
-      return NextResponse.json(
-        { ok: false, error: "out_of_stock", message: "No hay stock suficiente.", details: stockErrors },
-        { status: 409 }
-      )
+    const available = getAvailable(prod, it.talle)
+    if (available < it.cantidad) {
+      stockErrors.push({ productId: it.productId, talle: it.talle, requested: it.cantidad, available })
     }
+  }
+
+  if (stockErrors.length) {
+    return NextResponse.json(
+      { ok: false, error: "out_of_stock", message: "No hay stock suficiente.", details: stockErrors },
+      { status: 409 }
+    )
+  }
+}
+
 
     // ==========================
-    // 2) ARMADO DE ITEMS PARA MP
-    // - Si hay comboId => COBRO EL COMBO (1 item)
-    // - Si NO hay comboId => COBRO PRODUCTOS (como siempre)
     // ==========================
-    let mpItems: any[] = []
+// 2) ARMADO DE ITEMS PARA MP
+// - Si hay comboId => COBRO PACK (1 item)
+// - Si NO hay comboId => COBRO PRODUCTOS
+// ==========================
+let mpItems: any[] = []
 
-    if (comboId) {
+if (comboId) {
   const pack = await getPackSnapshot(comboId)
 
   const packPrice = toMoney(Number(pack?.price ?? 0))
@@ -185,19 +200,23 @@ export async function POST(req: Request) {
       currency_id: "ARS",
     },
   ]
+} else {
+  // cobrar por productos con precio del server (y nombre)
+  const ids = [...new Set(compactCart.map((x) => x.productId))]
+  const prods = await getProductsSnapshot(ids)
+  const byId = new Map<string, any>((prods || []).map((p: any) => [String(p._id), p]))
+
+  mpItems = compactCart
+    .map((it) => {
+      const prod = byId.get(it.productId)
+      if (!prod) return null
+      const unit_price = getUnitPriceProduct(prod)
+      const title = `${prod?.nombre || "Producto"}${it.talle ? ` - Talle ${it.talle}` : ""}`
+      return { title, quantity: it.cantidad, unit_price, currency_id: "ARS" }
+    })
+    .filter(Boolean)
 }
- else {
-      // fallback: cobrar por producto con precio del server
-      mpItems = compactCart
-        .map((it) => {
-          const prod = byId.get(it.productId)
-          if (!prod) return null
-          const unit_price = getUnitPriceProduct(prod)
-          const title = `${prod?.nombre || "Producto"}${it.talle ? ` - Talle ${it.talle}` : ""}`
-          return { title, quantity: it.cantidad, unit_price, currency_id: "ARS" }
-        })
-        .filter(Boolean)
-    }
+
 
     // ==========================
     // 3) MP preference
@@ -238,11 +257,12 @@ export async function POST(req: Request) {
         auto_return: "approved",
         notification_url: `${baseUrl}/api/mp/webhook`,
         metadata: {
-          source: "preference_redirect",
-          orderId,
-          comboId: comboId || null,
-          cart: JSON.stringify(compactCart), // ✅ productos para stock
-        },
+  source: "preference_redirect",
+  orderId,
+  comboId: comboId || null,
+  packType: comboId ? (await getPackSnapshot(comboId))?._type || null : null,
+  cart: JSON.stringify(compactCart),
+},
       }),
       cache: "no-store",
     })
