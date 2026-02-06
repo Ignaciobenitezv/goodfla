@@ -1,6 +1,7 @@
 // src/app/api/mp/webhook/route.ts
 import { NextResponse } from "next/server"
 import { createClient } from "@sanity/client"
+import { sendOwnerSaleEmail } from "@/lib/email"
 
 export const dynamic = "force-dynamic"
 export const runtime = "nodejs"
@@ -151,6 +152,14 @@ function parseCartFromPref(pref: any): CartItem[] {
   return cart
 }
 
+  function buildItemsText(cart: CartItem[]) {
+  return cart
+    .map((i) => `• ${i.productId}${i.talle ? ` (Talle ${i.talle})` : ""} x ${i.cantidad}`)
+    .join("\n")
+}
+
+
+
 async function handle(req: Request) {
   const startedAt = Date.now()
 
@@ -292,22 +301,69 @@ else if (topic === "merchant_order") {
     // =========================
     const r = await reserveStockAtomic(cart, markerId)
 
-    if (!r.ok) {
-      await sanity
-        .patch(markerId)
-        .set({ status: "stock_insufficient", detailsJson: JSON.stringify((r as any).details ?? []) })
-        .commit()
-        .catch(() => {})
+ if (!r.ok) {
+  console.log("❌ Sin stock — marcando orden como failed_stock")
 
-      return respond200({ msg: "stock_insufficient", markerId, paymentId, preferenceId: prefId }, startedAt)
-    }
+  await sanity
+    .patch(markerId)
+    .set({
+      status: "failed_stock",
+      detailsJson: JSON.stringify((r as any).details ?? []),
+      failedAt: new Date().toISOString(),
+    })
+    .commit()
+    .catch(() => {})
+
+  return respond200(
+    { ignored: true, reason: "failed_stock", markerId, paymentId },
+    startedAt
+  )
+}
+
+
 
     // =========================
-    // 5) Procesado
-    // =========================
-    await sanity.patch(markerId).set({ status: "processed", processedAt: new Date().toISOString() }).commit().catch(() => {})
+// 5) Procesado + aviso por mail (idempotente)
+// =========================
+const processedAt = new Date().toISOString()
 
-    return respond200({ msg: "processed", markerId, paymentId, preferenceId: prefId }, startedAt)
+const updated = await sanity
+  .patch(markerId)
+  .setIfMissing({ ownerNotified: false })
+  .set({ status: "processed", processedAt })
+  .commit({ returnDocuments: true })
+  .catch(() => null)
+
+// 🟢 Avisar al dueño SOLO una vez
+if (updated && updated.ownerNotified !== true) {
+  try {
+    const itemsText = buildItemsText(cart)
+
+    await sendOwnerSaleEmail({
+      orderId: merchantOrder?.id || paymentId,
+      total: approvedPayment?.transaction_amount,
+      currency: approvedPayment?.currency_id,
+      itemsText,
+    })
+
+    await sanity
+      .patch(markerId)
+      .set({
+        ownerNotified: true,
+        ownerNotifiedAt: new Date().toISOString(),
+      })
+      .commit()
+      .catch(() => {})
+
+    console.log("📧 owner_notified_ok", { markerId })
+  } catch (e: any) {
+    console.error("❌ owner_notify_failed", e?.message || e)
+    // IMPORTANTE: no rompemos el webhook si falla el mail
+  }
+}
+
+return respond200({ msg: "processed", markerId, paymentId, preferenceId: prefId }, startedAt)
+
   } catch (err: any) {
     console.error("🔥 webhook_fatal_error", { message: err?.message, stack: err?.stack })
     return respond200({ msg: "fatal_error" }, Date.now())
