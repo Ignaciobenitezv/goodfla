@@ -236,14 +236,25 @@ export default function SuccessClient() {
               Seguir comprando
             </Link>
 
-            {(ui === "not_approved" || ui === "error") && (
-              <Link
-                href="/checkout"
-                className="inline-flex items-center justify-center rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium hover:bg-slate-50 transition"
-              >
-                Volver al checkout
-              </Link>
-            )}
+            {ui === "error" && (
+  <a
+    href={`https://wa.me/5493624934353?text=${encodeURIComponent(
+      `Hola! Quiero solicitar un reembolso.\n\n` +
+      `Mi pago fue APROBADO pero el producto quedó sin stock.\n\n` +
+      `Datos del pago:\n` +
+      `- payment_id: ${paymentIdFromUrl || "-"}\n` +
+      `- merchant_order_id: ${merchantOrderId || "-"}\n` +
+      `- orderId: ${orderId || "-"}\n\n` +
+      `Quedo atento. Gracias.`
+    )}`}
+    target="_blank"
+    rel="noopener noreferrer"
+    className="inline-flex items-center justify-center rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium hover:bg-slate-50 transition"
+  >
+    Pedir reembolso
+  </a>
+)}
+
           </div>
 
           {/* Debug info sutil (opcional) */}
