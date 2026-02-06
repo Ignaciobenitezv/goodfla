@@ -25,7 +25,7 @@ type Quote = {
 
 export default function CheckoutPage() {
   const { items } = useCart()
-    const router = useRouter()
+  const router = useRouter()
   const mpRedirectLock = useRef(false)
 
 
@@ -48,8 +48,8 @@ export default function CheckoutPage() {
       envio === "domicilio"
         ? `Envío a domicilio (CP: ${cp || "—"})`
         : envio === "sucursal"
-        ? "Retiro por sucursal"
-        : "Entrega: —"
+          ? "Retiro por sucursal"
+          : "Entrega: —"
 
     const envioCostoTxt = quote
       ? quote.price === 0
@@ -162,76 +162,76 @@ export default function CheckoutPage() {
 
   // 🔹 MercadoPago redirect (preferencia)
   // 🔹 MercadoPago redirect (preferencia)
-const handleMercadoPago = async () => {
-  if (mpRedirectLock.current) return
-  mpRedirectLock.current = true
-  try {
-    localStorage.setItem("cart", JSON.stringify(items))
+  const handleMercadoPago = async () => {
+    if (mpRedirectLock.current) return
+    mpRedirectLock.current = true
+    try {
+      localStorage.setItem("cart", JSON.stringify(items))
 
-    // ===============================
-    // Detectar pack mayorista
-    // ===============================
-    const onlyOne = Array.isArray(items) && items.length === 1
-    const first = onlyOne ? items[0] : null
+      // ===============================
+      // Detectar pack mayorista
+      // ===============================
+      const onlyOne = Array.isArray(items) && items.length === 1
+      const first = onlyOne ? items[0] : null
 
-    const isMayorista =
-      !!first &&
-      !first?.talle &&
-      String(first?.nombre || "").toUpperCase().includes("PACK")
+      const isMayorista =
+        !!first &&
+        !first?.talle &&
+        String(first?.nombre || "").toUpperCase().includes("PACK")
 
-    // comboId = _id real del packMayorista en Sanity
-    // en tu caso hoy viene como productId
-    const comboId = isMayorista ? String(first?.productId || "").trim() : ""
+      // comboId = _id real del packMayorista en Sanity
+      // en tu caso hoy viene como productId
+      const comboId = isMayorista ? String(first?.productId || "").trim() : ""
 
-    // payload final
-    const payload = isMayorista
-      ? { comboId, items }
-      : { items }
+      // payload final
+      const payload = isMayorista
+        ? { comboId, items }
+        : { items }
 
-    console.log("🧪 payload MP =>", payload)
+      console.log("🧪 payload MP =>", payload)
 
-    // ===============================
-    // Llamada al backend
-    // ===============================
-    const res = await fetch("/api/checkout/preference", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    })
+      // ===============================
+      // Llamada al backend
+      // ===============================
+      const res = await fetch("/api/checkout/preference", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      })
 
-    const data = await res.json().catch(() => null)
+      const data = await res.json().catch(() => null)
 
-    if (res.status === 409 && data?.error === "out_of_stock") {
-      const d = data.details?.[0]
-      const talleTxt = d?.talle ? ` (talle ${d.talle})` : ""
-      alert(
-        `Sin stock${talleTxt}.\n` +
+      if (res.status === 409 && data?.error === "out_of_stock") {
+        const d = data.details?.[0]
+        const talleTxt = d?.talle ? ` (talle ${d.talle})` : ""
+        alert(
+          `Sin stock${talleTxt}.\n` +
           `Pediste ${d?.requested} y hay ${d?.available}.\n\n` +
           `Actualizá tu carrito y probá con otro talle o producto.`
-      )
+        )
+        mpRedirectLock.current = false
+        return
+      }
+
+      if (!res.ok) {
+        alert("No se pudo generar el link de pago. Intentá de nuevo.")
+        mpRedirectLock.current = false
+        return
+      }
+
+      if (data?.init_point) {
+        window.location.href = data.init_point
+        return
+      }
+
+      alert("No se pudo generar el link de pago con MercadoPago.")
       mpRedirectLock.current = false
-      return
-    }
-
-    if (!res.ok) {
-      alert("No se pudo generar el link de pago. Intentá de nuevo.")
+    } catch (err) {
+      console.error("❌ Error con MP:", err)
+      alert("Hubo un problema con MercadoPago.")
       mpRedirectLock.current = false
-      return
     }
-
-    if (data?.init_point) {
-      window.location.href = data.init_point
-      return
-    }
-
-    alert("No se pudo generar el link de pago con MercadoPago.")
-    mpRedirectLock.current = false
-  } catch (err) {
-  console.error("❌ Error con MP:", err)
-  alert("Hubo un problema con MercadoPago.")
-  mpRedirectLock.current = false
-}
-}
+  }
 
 
   // ✅ Métodos y Brick
@@ -327,6 +327,15 @@ const handleMercadoPago = async () => {
                 }
 
                 const orderId = ensureOrderId()
+                const onlyOne = Array.isArray(items) && items.length === 1
+                const first = onlyOne ? items[0] : null
+
+                const isMayorista =
+                  !!first &&
+                  !first?.talle &&
+                  String(first?.nombre || "").toUpperCase().includes("PACK")
+
+                const comboId = isMayorista ? String(first?.productId || "").trim() : ""
 
                 // ✅ PASO B: payload hacia tu backend
                 const payload = {
@@ -337,15 +346,16 @@ const handleMercadoPago = async () => {
                   email: data.payer?.email ? String(data.payer.email) : undefined,
                   identification: data.payer?.identification
                     ? {
-                        type: String(data.payer.identification.type),
-                        number: String(data.payer.identification.number),
-                      }
+                      type: String(data.payer.identification.type),
+                      number: String(data.payer.identification.number),
+                    }
                     : undefined,
 
                   // ✅ lo importante
                   items: compactItems,
                   amount: Number(total), // el server recalcula igual
                   orderId,
+                  comboId,
 
                   shipping: {
                     type: envio === "domicilio" ? "domicilio" : "sucursal",
@@ -387,17 +397,17 @@ const handleMercadoPago = async () => {
                 if (statusDetail) qs.set("status_detail", statusDetail)
 
                 if (status === "approved") {
-  router.push(`/checkout/success?${qs.toString()}`)
-  return
-}
+                  router.push(`/checkout/success?${qs.toString()}`)
+                  return
+                }
 
-if (status === "in_process" || status === "pending") {
-  router.push(`/checkout/pending?${qs.toString()}`)
-  return
-}
+                if (status === "in_process" || status === "pending") {
+                  router.push(`/checkout/pending?${qs.toString()}`)
+                  return
+                }
 
-// rejected / cancelled / otros
-router.push(`/checkout/failure?${qs.toString()}`)
+                // rejected / cancelled / otros
+                router.push(`/checkout/failure?${qs.toString()}`)
 
               } catch (e) {
                 setCardLoading(false)
@@ -464,9 +474,8 @@ router.push(`/checkout/failure?${qs.toString()}`)
             <button
               disabled={!puedeContinuarContacto}
               onClick={() => setStep("entrega")}
-              className={`w-full py-3 rounded mt-6 text-white ${
-                puedeContinuarContacto ? "bg-black" : "bg-gray-300 cursor-not-allowed"
-              }`}
+              className={`w-full py-3 rounded mt-6 text-white ${puedeContinuarContacto ? "bg-black" : "bg-gray-300 cursor-not-allowed"
+                }`}
             >
               Continuar
             </button>
@@ -524,9 +533,8 @@ router.push(`/checkout/failure?${qs.toString()}`)
             <button
               disabled={envio === "" || (envio === "domicilio" && !quote)}
               onClick={() => setStep("pago")}
-              className={`w-full py-3 rounded mt-6 text-white ${
-                envio && (envio !== "domicilio" || !!quote) ? "bg-black" : "bg-gray-300 cursor-not-allowed"
-              }`}
+              className={`w-full py-3 rounded mt-6 text-white ${envio && (envio !== "domicilio" || !!quote) ? "bg-black" : "bg-gray-300 cursor-not-allowed"
+                }`}
             >
               Continuar
             </button>
@@ -558,18 +566,17 @@ router.push(`/checkout/failure?${qs.toString()}`)
 
             <div className="space-y-3">
               {/* Tarjeta inline */}
-                            {/* Transferencia / Efectivo -> WhatsApp */}
+              {/* Transferencia / Efectivo -> WhatsApp */}
               <label
                 onClick={() => {
                   setPayMethod("transfer") // o "cash" si querés distinguir
                   orderIdRef.current = "" // opcional
                   handleTransferOrCashWhatsApp()
                 }}
-                className={`flex items-center justify-between border rounded p-4 cursor-pointer transition ${
-                  payMethod === "transfer"
+                className={`flex items-center justify-between border rounded p-4 cursor-pointer transition ${payMethod === "transfer"
                     ? "border-amber-600 bg-amber-50"
                     : "hover:border-black"
-                }`}
+                  }`}
               >
                 <div>
                   <p className="font-medium">Efectivo / Transferencia</p>
@@ -586,9 +593,8 @@ router.push(`/checkout/failure?${qs.toString()}`)
                   // reiniciamos orderId para un nuevo intento al elegir el método (opcional pero recomendable)
                   orderIdRef.current = ""
                 }}
-                className={`flex items-center justify-between border rounded p-4 cursor-pointer transition ${
-                  payMethod === "card_inline" ? "border-blue-600 bg-blue-50" : "hover:border-black"
-                }`}
+                className={`flex items-center justify-between border rounded p-4 cursor-pointer transition ${payMethod === "card_inline" ? "border-blue-600 bg-blue-50" : "hover:border-black"
+                  }`}
               >
                 <div>
                   <p className="font-medium">Tarjeta (pagar acá mismo)</p>

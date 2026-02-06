@@ -31,6 +31,7 @@ type BrickPayload = {
   items?: CompactItem[]
   amount?: number
   orderId?: string
+  comboId?: string
   shipping?: { type: "domicilio" | "sucursal"; cp?: string }
 }
 
@@ -60,6 +61,49 @@ async function getProductsSnapshot(ids: string[]) {
     { ids }
   )
 }
+
+type PackSnapshot = { _id: string; _type: string; title: string; price: number }
+
+async function getPackSnapshot(id: string): Promise<PackSnapshot | null> {
+  if (!id) return null
+
+  const doc = await sanity.fetch(
+    `*[
+      _id == $id
+      && _type in ["combo", "zapatillas2x1", "packMayorista"]
+    ][0]{
+      _id,
+      _type,
+      // combo
+      "comboNombre": nombre,
+      "comboPrecio": precio,
+      // zapatillas2x1
+      "zapasNombre": nombre,
+      "zapasPrecio": precioActual,
+      // packMayorista
+      "mayoristaNombre": title,
+      "mayoristaPrecio": precioActual
+    }`,
+    { id }
+  )
+
+  if (!doc?._id) return null
+
+  if (doc._type === "combo") {
+    return { _id: doc._id, _type: doc._type, title: String(doc.comboNombre || "Combo"), price: Number(doc.comboPrecio ?? 0) }
+  }
+
+  if (doc._type === "zapatillas2x1") {
+    return { _id: doc._id, _type: doc._type, title: String(doc.zapasNombre || "Zapatillas 2x1"), price: Number(doc.zapasPrecio ?? 0) }
+  }
+
+  if (doc._type === "packMayorista") {
+    return { _id: doc._id, _type: doc._type, title: String(doc.mayoristaNombre || "Pack Mayorista"), price: Number(doc.mayoristaPrecio ?? 0) }
+  }
+
+  return null
+}
+
 
 function getAvailable(prod: any, talle: string | null | undefined) {
   if (!prod) return 0
@@ -332,37 +376,67 @@ export async function POST(req: Request) {
 
     const ids = cart.map((x) => x.productId)
 
-    // 3) Pre-check stock + subtotal
-    const prods = await getProductsSnapshot(ids)
-    const byId = new Map<string, any>((prods || []).map((p: any) => [String(p._id), p]))
+// ==========================
+// 3) Detectar pack + stock/subtotal
+// ==========================
+const comboId = String(body.comboId || "").trim()
+const packDebug = comboId ? await getPackSnapshot(comboId) : null
 
-    let subtotal = 0
-    const stockErrors: any[] = []
+// Si el front mandó comboId pero no existe el doc, cortamos con error claro
+if (comboId && !packDebug?._id) {
+  return NextResponse.json(
+    { ok: false, error: "invalid_comboId", message: "comboId no existe en Sanity.", comboId },
+    { status: 400 }
+  )
+}
 
-    for (const it of cart) {
-      const prod = byId.get(it.productId)
-      if (!prod) {
-        stockErrors.push({ productId: it.productId, talle: it.talle, requested: it.cantidad, available: 0, ok: false })
-        continue
-      }
+// Solo mayorista NO valida stock ni descuenta stock
+const skipStock = packDebug?._type === "packMayorista"
 
-      const available = getAvailable(prod, it.talle)
-      if (available < it.cantidad) {
-        stockErrors.push({ productId: it.productId, talle: it.talle, requested: it.cantidad, available, ok: false })
-        continue
-      }
 
-      subtotal += getUnitPrice(prod) * it.cantidad
+let subtotal = 0
+const stockErrors: any[] = []
+let byId = new Map<string, any>()
+
+if (skipStock) {
+  subtotal = toMoney(Number(packDebug?.price ?? 0))
+
+  if (!subtotal || subtotal <= 0) {
+    return NextResponse.json(
+      { ok: false, error: "invalid_pack_price", message: "Pack mayorista sin precio válido.", comboId, packDebug },
+      { status: 400 }
+    )
+  }
+} else {
+  const prods = await getProductsSnapshot(ids)
+  byId = new Map<string, any>((prods || []).map((p: any) => [String(p._id), p]))
+
+  for (const it of cart) {
+    const prod = byId.get(it.productId)
+    if (!prod) {
+      stockErrors.push({ productId: it.productId, talle: it.talle, requested: it.cantidad, available: 0, ok: false })
+      continue
     }
 
-    if (stockErrors.length) {
-      return NextResponse.json(
-        { ok: false, error: "out_of_stock", message: "No hay stock suficiente.", details: stockErrors },
-        { status: 409 }
-      )
+    const available = getAvailable(prod, it.talle)
+    if (available < it.cantidad) {
+      stockErrors.push({ productId: it.productId, talle: it.talle, requested: it.cantidad, available, ok: false })
+      continue
     }
 
-    subtotal = toMoney(subtotal)
+    subtotal += getUnitPrice(prod) * it.cantidad
+  }
+
+  if (stockErrors.length) {
+    return NextResponse.json(
+      { ok: false, error: "out_of_stock", message: "No hay stock suficiente.", details: stockErrors },
+      { status: 409 }
+    )
+  }
+
+  subtotal = toMoney(subtotal)
+}
+
 
     // 4) Shipping
     const { origin } = new URL(req.url)
@@ -407,13 +481,16 @@ export async function POST(req: Request) {
       capture: false,
       notification_url: `${origin}/api/mp/webhook`,
       metadata: {
-        orderId,
-        source: "card_inline",
-        shippingType,
-        shippingPrice,
-        subtotal,
-        cart,
-      },
+  orderId,
+  source: "card_inline",
+  comboId: comboId || null,
+  packType: packDebug?._type || null,
+  packTitle: packDebug?.title || null,
+  shippingType,
+  shippingPrice,
+  subtotal,
+  cart: skipStock ? null : JSON.stringify(cart),
+},
     }
 
     const mpToken = process.env.MP_ACCESS_TOKEN
@@ -499,14 +576,47 @@ export async function POST(req: Request) {
       })
     }
 
-    const markerId = `mp_payment_${paymentId}`
+const markerId = `mp_payment_${paymentId}`
 
-    // A) Reservar stock (idempotente por markerId + status processed)
-    const r = await reserveStockAtomic(cart, markerId)
+// A) Reservar stock SOLO si NO es mayorista
+if (!skipStock) {
+  const r = await reserveStockAtomic(cart, markerId)
 
-    if ((r as any)?.already) {
-      return NextResponse.json({
-        ok: true,
+  if ((r as any)?.already) {
+    return NextResponse.json({
+      ok: true,
+      id: paymentId,
+      status,
+      status_detail: statusDetail,
+      orderId,
+      computedTotal,
+      subtotal,
+      shippingPrice,
+      shippingType,
+      already: true,
+    })
+  }
+
+  if (!r.ok) {
+    await mpCancel(paymentId, mpToken)
+
+    await sanity.createIfNotExists({
+      _id: markerId,
+      _type: "mpWebhook",
+      paymentId,
+      orderId,
+      createdAt: new Date().toISOString(),
+      status: "stock_insufficient",
+      source: "card_inline",
+      detailsJson: JSON.stringify((r as any).details ?? []),
+    })
+
+    return NextResponse.json(
+      {
+        ok: false,
+        error: "out_of_stock_after_auth",
+        message: "Se quedó sin stock mientras pagabas. No se realizó el cobro.",
+        details: (r as any).details ?? null,
         id: paymentId,
         status,
         status_detail: statusDetail,
@@ -515,42 +625,12 @@ export async function POST(req: Request) {
         subtotal,
         shippingPrice,
         shippingType,
-        already: true,
-      })
-    }
+      },
+      { status: 409 }
+    )
+  }
+}
 
-    if (!r.ok) {
-      await mpCancel(paymentId, mpToken)
-
-      await sanity.createIfNotExists({
-        _id: markerId,
-        _type: "mpWebhook",
-        paymentId,
-        orderId,
-        createdAt: new Date().toISOString(),
-        status: "stock_insufficient",
-        source: "card_inline",
-        detailsJson: JSON.stringify((r as any).details ?? []),
-      })
-
-      return NextResponse.json(
-        {
-          ok: false,
-          error: "out_of_stock_after_auth",
-          message: "Se quedó sin stock mientras pagabas. No se realizó el cobro.",
-          details: (r as any).details ?? null,
-          id: paymentId,
-          status,
-          status_detail: statusDetail,
-          orderId,
-          computedTotal,
-          subtotal,
-          shippingPrice,
-          shippingType,
-        },
-        { status: 409 }
-      )
-    }
 
     // C) Capturar
     const cap = await mpCapture(paymentId, mpToken)
@@ -578,7 +658,9 @@ export async function POST(req: Request) {
       await mpCancel(paymentId, mpToken).catch(() => null)
 
       // 3) 🔁 ROLLBACK DE STOCK (idempotente)
-      await rollbackStockAtomic(cart, markerId).catch(() => null)
+      if (!skipStock) {
+  await rollbackStockAtomic(cart, markerId).catch(() => null)
+}
 
       await sanity
         .patch(markerId)
