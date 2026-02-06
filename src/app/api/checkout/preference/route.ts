@@ -35,12 +35,53 @@ async function getProductsSnapshot(ids: string[]) {
   )
 }
 
-async function getComboSnapshot(comboId: string) {
-  return sanity.fetch(
-    `*[_type=="combo" && _id==$id][0]{ _id, nombre, precio }`,
-    { id: comboId }
+type PackSnapshot = { _id: string; _type: string; title: string; price: number }
+
+async function getPackSnapshot(id: string): Promise<PackSnapshot | null> {
+  const doc = await sanity.fetch(
+    `*[
+      _id == $id
+      && _type in ["combo", "zapatillas2x1", "packMayorista"]
+    ][0]{
+      _id,
+      _type,
+      // combo
+      "comboNombre": nombre,
+      "comboPrecio": precio,
+      // zapatillas2x1
+      "zapasNombre": nombre,
+      "zapasPrecio": precioActual,
+      // packMayorista
+      "mayoristaNombre": title,
+      "mayoristaPrecio": precioActual
+    }`,
+    { id }
   )
+
+  if (!doc?._id) return null
+
+  // Normalizamos según el type
+  if (doc._type === "combo") {
+    const price = Number(doc.comboPrecio ?? 0)
+    const title = String(doc.comboNombre || "Combo")
+    return { _id: doc._id, _type: doc._type, title, price }
+  }
+
+  if (doc._type === "zapatillas2x1") {
+    const price = Number(doc.zapasPrecio ?? 0)
+    const title = String(doc.zapasNombre || "Zapatillas 2x1")
+    return { _id: doc._id, _type: doc._type, title, price }
+  }
+
+  if (doc._type === "packMayorista") {
+    const price = Number(doc.mayoristaPrecio ?? 0)
+    const title = String(doc.mayoristaNombre || "Pack Mayorista")
+    return { _id: doc._id, _type: doc._type, title, price }
+  }
+
+  return null
 }
+
 
 function getAvailable(prod: any, talle: string | null | undefined) {
   if (!prod) return 0
@@ -116,30 +157,36 @@ export async function POST(req: Request) {
     let mpItems: any[] = []
 
     if (comboId) {
-      const combo = await getComboSnapshot(comboId)
-      const comboPrice = toMoney(combo?.precio ?? 0)
+  const pack = await getPackSnapshot(comboId)
 
-      if (!combo?._id || !comboPrice || comboPrice <= 0) {
-        return NextResponse.json(
-          {
-            ok: false,
-            error: "invalid_combo",
-            message: "No pudimos obtener el precio del combo (comboId inválido o sin precio).",
-            comboId,
-          },
-          { status: 400 }
-        )
-      }
+  const packPrice = toMoney(Number(pack?.price ?? 0))
 
-      mpItems = [
-        {
-          title: String(combo?.nombre || "Combo"),
-          quantity: 1,
-          unit_price: comboPrice,
-          currency_id: "ARS",
-        },
-      ]
-    } else {
+  if (!pack?._id || !packPrice || packPrice <= 0) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: "invalid_combo",
+        message:
+          "No pudimos obtener el precio del pack/2x1 (id inválido o sin precio). Asegurate de mandar el _id real del documento en Sanity.",
+        comboId,
+        foundType: pack?._type ?? null,
+        foundTitle: pack?.title ?? null,
+        foundPrice: pack?.price ?? null,
+      },
+      { status: 400 }
+    )
+  }
+
+  mpItems = [
+    {
+      title: pack.title,
+      quantity: 1,
+      unit_price: packPrice,
+      currency_id: "ARS",
+    },
+  ]
+}
+ else {
       // fallback: cobrar por producto con precio del server
       mpItems = compactCart
         .map((it) => {
