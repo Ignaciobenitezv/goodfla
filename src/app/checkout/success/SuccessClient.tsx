@@ -28,7 +28,6 @@ export default function SuccessClient() {
 
   const merchantOrderId = sp.get("merchant_order_id") || ""
   const paymentIdFromUrl = sp.get("payment_id") || sp.get("collection_id") || ""
-  const preferenceId = sp.get("preference_id") || ""
   const orderId = sp.get("orderId") || ""
 
   // Helpers UI
@@ -63,7 +62,7 @@ export default function SuccessClient() {
         setMsg("Confirmando tu pago…")
         setProgress(18)
 
-        if (!merchantOrderId && !paymentIdFromUrl) {
+        if (!merchantOrderId && !paymentIdFromUrl && !orderId) {
           setUi("error")
           setMsg("No pudimos identificar la orden para confirmar el pago.")
           setProgress(100)
@@ -73,88 +72,63 @@ export default function SuccessClient() {
         const maxTries = 10
         const waitMs = 2000
 
-        for (let i = 1; i <= maxTries; i++) {
-          // progreso “bonito” por etapa
-          // 0–60: validación | 60–90: esperando procesamiento | 90–100: final
-          const base = 10 + (i / maxTries) * 55
-          setProgress(clamp(base))
+      for (let i = 1; i <= maxTries; i++) {
+  const base = 10 + (i / maxTries) * 55
+  setProgress(clamp(base))
 
-          const qs = new URLSearchParams()
+  const qs = new URLSearchParams()
 
-          if (paymentIdFromUrl) {
-            qs.set("payment_id", paymentIdFromUrl)
-          } else if (merchantOrderId) {
-            qs.set("merchant_order_id", merchantOrderId)
-          }
+  // ✅ preferencia: payment_id si existe, sino merchant_order_id
+  if (paymentIdFromUrl) qs.set("payment_id", paymentIdFromUrl)
+  else if (merchantOrderId) qs.set("merchant_order_id", merchantOrderId)
 
-          if (orderId) {
-            qs.set("orderId", orderId)
-          }
+  if (orderId) qs.set("orderId", orderId)
 
+  const res = await fetch(`/api/checkout/confirm?${qs.toString()}`, {
+    cache: "no-store",
+  })
+  const data = await res.json().catch(() => null)
 
+  if (!res.ok || !data?.ok) {
+    setUi("error")
+    setMsg("Hubo un problema confirmando el pago. Podés reintentar.")
+    setProgress(100)
+    return
+  }
 
-          const res = await fetch(`/api/checkout/confirm?${qs.toString()}`, {
-            cache: "no-store",
-          })
-          const data = await res.json().catch(() => null)
+  const state = String(data.state || "processing")
+  const processed = !!data.processed
+  const failed = !!data.failed
 
-          if (!res.ok || !data?.ok) {
-            setUi("error")
-            setMsg("Hubo un problema confirmando el pago. Podés reintentar.")
-            setProgress(100)
-            return
-          }
+  // 1) OK final
+  if (processed || state === "processed") {
+    setProgress(96)
+    clearCart()
+    localStorage.setItem("cart", "[]")
+    localStorage.removeItem("lastOrder")
 
-          const mpStatus = String(data.mpStatus || "unknown").toLowerCase()
+    setUi("cleared")
+    setMsg("Pago aprobado. Tu compra fue confirmada ✅")
+    setTimeout(() => setProgress(100), 350)
+    return
+  }
 
-          // Estados que NO son rechazo: hay que esperar (redirect puede tardar)
-          const waitingStatuses = new Set(["pending", "in_process", "authorized", "null", "unknown", ""])
-          const waitingDetail = String(data.mpStatusDetail || data.status_detail || data.statusDetail || "").toLowerCase()
-          const isWaitingDetail =
-            waitingDetail.includes("pending") || waitingDetail.includes("in_process") || waitingDetail.includes("contingency")
+  // 2) Fallo stock: cortar y avisar
+  if (failed || state === "failed_stock" || state === "stock_insufficient") {
+    setUi("error")
+    setMsg("Tu pago fue aprobado, pero no pudimos confirmar stock. Escribinos y lo resolvemos.")
+    setProgress(100)
+    return
+  }
 
+  // 3) Sigue procesando
+  setUi("approved_waiting_stock")
+  setMsg(`Pago aprobado. Confirmando stock… (intento ${i}/${maxTries})`)
+  setProgress((p) => clamp(Math.max(p, 65) + 6))
 
-          if (!data.approved) {
-            if (waitingStatuses.has(mpStatus) || isWaitingDetail) {
-              setUi("checking")
-              setMsg(`Estamos confirmando tu pago… (estado: ${mpStatus}) intento ${i}/${maxTries}`)
-              setProgress((p) => clamp(Math.max(p, 35) + 5))
-              await new Promise((r) => setTimeout(r, waitMs))
-              continue
-            }
+  await new Promise((r) => setTimeout(r, waitMs))
+}
 
-            // Rechazos reales
-            setUi("not_approved")
-            setMsg(`Tu pago no figura aprobado (estado: ${mpStatus}).`)
-            setProgress(100)
-            return
-          }
-
-
-          if (data.approved && !data.processed) {
-            setUi("approved_waiting_stock")
-            setMsg(
-              `Pago aprobado. Confirmando stock… (intento ${i}/${maxTries})`
-            )
-            // sube lento hacia 90 mientras espera
-            setProgress((p) => clamp(Math.max(p, 65) + 6))
-            await new Promise((r) => setTimeout(r, waitMs))
-            continue
-          }
-
-          if (data.approved && data.processed) {
-            // “wipe” final
-            setProgress(96)
-            clearCart()
-            localStorage.setItem("cart", "[]")
-            localStorage.removeItem("lastOrder")
-
-            setUi("cleared")
-            setMsg("Pago aprobado. Tu compra fue confirmada ✅")
-            setTimeout(() => setProgress(100), 350)
-            return
-          }
-        }
 
         setUi("approved_waiting_stock")
         setMsg(
@@ -170,7 +144,8 @@ export default function SuccessClient() {
     }
 
     run()
-  }, [merchantOrderId, paymentIdFromUrl, clearCart])
+  }, [merchantOrderId, paymentIdFromUrl, orderId, clearCart])
+
 
 
   return (
