@@ -152,6 +152,45 @@ function parseCartFromPref(pref: any): CartItem[] {
   return cart
 }
 
+  async function getProductTitles(cart: CartItem[]) {
+  const ids = [...new Set(cart.map((x) => x.productId))]
+  const prods = await sanity.fetch(
+    `*[_type=="producto" && _id in $ids]{ _id, nombre }`,
+    { ids }
+  )
+  const byId = new Map<string, any>((prods || []).map((p: any) => [String(p._id), p]))
+  return (cart || []).map((it) => {
+    const prod = byId.get(it.productId)
+    return {
+      title: String(prod?.nombre || it.productId),
+      talle: it.talle ?? null,
+      qty: it.cantidad,
+    }
+  })
+}
+
+function buildShippingAddress(payment: any) {
+  // MP puede traer shipping / additional_info en distintos lugares según el flujo
+  const addr =
+    payment?.additional_info?.shipments?.receiver_address ||
+    payment?.additional_info?.payer?.address ||
+    payment?.payer?.address ||
+    null
+
+  if (!addr) return ""
+
+  const parts = [
+    addr?.street_name,
+    addr?.street_number,
+    addr?.zip_code,
+    addr?.city_name,
+    addr?.state_name,
+  ].filter(Boolean)
+
+  return parts.join(" ")
+}
+
+
   function buildItemsText(cart: CartItem[]) {
   return cart
     .map((i) => `• ${i.productId}${i.talle ? ` (Talle ${i.talle})` : ""} x ${i.cantidad}`)
@@ -337,14 +376,33 @@ const updated = await sanity
 // 🟢 Avisar al dueño SOLO una vez
 if (updated && updated.ownerNotified !== true) {
   try {
-    const itemsText = buildItemsText(cart)
+    const payment = await mpGetSoft(`https://api.mercadopago.com/v1/payments/${paymentId}`)
+const buyerName =
+  String(payment?.payer?.first_name || "").trim() +
+  (payment?.payer?.last_name ? ` ${String(payment.payer.last_name).trim()}` : "")
 
-    await sendOwnerSaleEmail({
-      orderId: merchantOrder?.id || paymentId,
-      total: approvedPayment?.transaction_amount,
-      currency: approvedPayment?.currency_id,
-      itemsText,
-    })
+const buyerEmail = payment?.payer?.email ? String(payment.payer.email) : ""
+const buyerPhone = payment?.payer?.phone
+  ? `${payment.payer.phone?.area_code || ""}${payment.payer.phone?.number ? ` ${payment.payer.phone.number}` : ""}`.trim()
+  : ""
+
+const shippingAddress = buildShippingAddress(payment)
+
+// productos con nombre desde Sanity
+const items = await getProductTitles(cart)
+
+await sendOwnerSaleEmail({
+  orderId: merchantOrder?.id || paymentId,
+  paymentId,
+  total: approvedPayment?.transaction_amount,
+  currency: approvedPayment?.currency_id,
+  buyerName: buyerName.trim() || undefined,
+  buyerEmail: buyerEmail || undefined,
+  buyerPhone: buyerPhone || undefined,
+  shippingAddress: shippingAddress || undefined,
+  items,
+})
+
 
     await sanity
       .patch(markerId)
