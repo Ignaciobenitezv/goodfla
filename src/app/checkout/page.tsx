@@ -606,18 +606,16 @@ router.push(`/checkout/failure?${qs.toString()}`)
               )}
 
               {/* MP redirect */}
-              <button
-  type="button"
-  onClick={handleMercadoPago}
-  className="flex items-center justify-between border rounded p-4 cursor-pointer ..."
->
-
+              <label
+                onClick={handleMercadoPago}
+                className="flex items-center justify-between border rounded p-4 cursor-pointer hover:border-black transition bg-blue-600 text-white hover:bg-blue-700"
+              >
                 <div>
                   <p className="font-medium">MercadoPago</p>
                   <p className="text-sm">Hasta 3 cuotas sin interés</p>
                 </div>
                 <span className="text-lg">💳</span>
-              </button>
+              </label>
             </div>
           </section>
         )}
