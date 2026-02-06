@@ -26,6 +26,7 @@ type Quote = {
 export default function CheckoutPage() {
   const { items } = useCart()
     const router = useRouter()
+  const mpRedirectLock = useRef(false)
 
 
 
@@ -162,6 +163,8 @@ export default function CheckoutPage() {
   // 🔹 MercadoPago redirect (preferencia)
   // 🔹 MercadoPago redirect (preferencia)
 const handleMercadoPago = async () => {
+  if (mpRedirectLock.current) return
+  mpRedirectLock.current = true
   try {
     localStorage.setItem("cart", JSON.stringify(items))
 
@@ -206,11 +209,13 @@ const handleMercadoPago = async () => {
           `Pediste ${d?.requested} y hay ${d?.available}.\n\n` +
           `Actualizá tu carrito y probá con otro talle o producto.`
       )
+      mpRedirectLock.current = false
       return
     }
 
     if (!res.ok) {
       alert("No se pudo generar el link de pago. Intentá de nuevo.")
+      mpRedirectLock.current = false
       return
     }
 
@@ -220,10 +225,12 @@ const handleMercadoPago = async () => {
     }
 
     alert("No se pudo generar el link de pago con MercadoPago.")
+    mpRedirectLock.current = false
   } catch (err) {
-    console.error("❌ Error con MP:", err)
-    alert("Hubo un problema con MercadoPago.")
-  }
+  console.error("❌ Error con MP:", err)
+  alert("Hubo un problema con MercadoPago.")
+  mpRedirectLock.current = false
+}
 }
 
 
@@ -599,16 +606,18 @@ router.push(`/checkout/failure?${qs.toString()}`)
               )}
 
               {/* MP redirect */}
-              <label
-                onClick={handleMercadoPago}
-                className="flex items-center justify-between border rounded p-4 cursor-pointer hover:border-black transition bg-blue-600 text-white hover:bg-blue-700"
-              >
+              <button
+  type="button"
+  onClick={handleMercadoPago}
+  className="flex items-center justify-between border rounded p-4 cursor-pointer ..."
+>
+
                 <div>
                   <p className="font-medium">MercadoPago</p>
                   <p className="text-sm">Hasta 3 cuotas sin interés</p>
                 </div>
                 <span className="text-lg">💳</span>
-              </label>
+              </button>
             </div>
           </section>
         )}
