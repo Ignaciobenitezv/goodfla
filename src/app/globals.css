@@ -114,7 +114,7 @@ button {
 
 html, body {
   height: 100%;
-  background: #000; /* evita el blanco del viewport */
+  background:#fff !important; /* evita el blanco del viewport */
 }
 
 body {

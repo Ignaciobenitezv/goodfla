@@ -67,8 +67,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
 
       <body
-        className={`${barlowCondensed.variable} ${montserrat.variable} min-h-[100dvh] bg-black text-white`}
-      >
+  className={`${barlowCondensed.variable} ${montserrat.variable} min-h-[100dvh] bg-white text-black`}
+>
+
         <UiProvider>
           <CartProvider>
             <Navbar />
