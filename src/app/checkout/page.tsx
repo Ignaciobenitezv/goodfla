@@ -160,45 +160,72 @@ export default function CheckoutPage() {
   const puedeContinuarContacto = [nombre, apellido, telefono].every((v) => v.trim() !== "")
 
   // 🔹 MercadoPago redirect (preferencia)
-  const handleMercadoPago = async () => {
-    try {
-      localStorage.setItem("cart", JSON.stringify(items))
+  // 🔹 MercadoPago redirect (preferencia)
+const handleMercadoPago = async () => {
+  try {
+    localStorage.setItem("cart", JSON.stringify(items))
 
-      const res = await fetch("/api/checkout/preference", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ items }),
-      })
+    // ===============================
+    // Detectar pack mayorista
+    // ===============================
+    const onlyOne = Array.isArray(items) && items.length === 1
+    const first = onlyOne ? items[0] : null
 
-      const data = await res.json().catch(() => null)
+    const isMayorista =
+      !!first &&
+      !first?.talle &&
+      String(first?.nombre || "").toUpperCase().includes("PACK")
 
-      if (res.status === 409 && data?.error === "out_of_stock") {
-        const d = data.details?.[0]
-        const talleTxt = d?.talle ? ` (talle ${d.talle})` : ""
-        alert(
-          `Sin stock${talleTxt}.\n` +
-            `Pediste ${d?.requested} y hay ${d?.available}.\n\n` +
-            `Actualizá tu carrito y probá con otro talle o producto.`
-        )
-        return
-      }
+    // comboId = _id real del packMayorista en Sanity
+    // en tu caso hoy viene como productId
+    const comboId = isMayorista ? String(first?.productId || "").trim() : ""
 
-      if (!res.ok) {
-        alert("No se pudo generar el link de pago. Intentá de nuevo.")
-        return
-      }
+    // payload final
+    const payload = isMayorista
+      ? { comboId, items }
+      : { items }
 
-      if (data?.init_point) {
-        window.location.href = data.init_point
-        return
-      }
+    console.log("🧪 payload MP =>", payload)
 
-      alert("No se pudo generar el link de pago con MercadoPago.")
-    } catch (err) {
-      console.error("❌ Error con MP:", err)
-      alert("Hubo un problema con MercadoPago.")
+    // ===============================
+    // Llamada al backend
+    // ===============================
+    const res = await fetch("/api/checkout/preference", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    })
+
+    const data = await res.json().catch(() => null)
+
+    if (res.status === 409 && data?.error === "out_of_stock") {
+      const d = data.details?.[0]
+      const talleTxt = d?.talle ? ` (talle ${d.talle})` : ""
+      alert(
+        `Sin stock${talleTxt}.\n` +
+          `Pediste ${d?.requested} y hay ${d?.available}.\n\n` +
+          `Actualizá tu carrito y probá con otro talle o producto.`
+      )
+      return
     }
+
+    if (!res.ok) {
+      alert("No se pudo generar el link de pago. Intentá de nuevo.")
+      return
+    }
+
+    if (data?.init_point) {
+      window.location.href = data.init_point
+      return
+    }
+
+    alert("No se pudo generar el link de pago con MercadoPago.")
+  } catch (err) {
+    console.error("❌ Error con MP:", err)
+    alert("Hubo un problema con MercadoPago.")
   }
+}
+
 
   // ✅ Métodos y Brick
   const [payMethod, setPayMethod] = useState<"transfer" | "cash" | "mp_redirect" | "card_inline" | null>(null)
