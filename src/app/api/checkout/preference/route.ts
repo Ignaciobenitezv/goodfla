@@ -108,6 +108,14 @@ export async function POST(req: Request) {
         (Array.isArray(body?.items) ? body.items : []).find((x: any) => x?.comboId)?.comboId || ""
       ).trim()
 
+
+      // ==========================
+// DEBUG pack / combo
+// ==========================
+const packDebug = comboId ? await getPackSnapshot(comboId) : null
+console.log("🟡 comboId =>", comboId)
+console.log("🟡 packDebug =>", packDebug)
+
     // ✅ siempre parseamos cart de productos (para stock + metadata)
     const rawItems = Array.isArray(body?.items) ? body.items : []
     const compactCart: CompactProductItem[] = rawItems
@@ -122,100 +130,98 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: "empty_cart" }, { status: 400 })
     }
 
-   // ==========================
 // 1) VALIDACIÓN DE STOCK
 // - NO se valida para packMayorista
 // ==========================
 let skipStock = false
 
-// Si viene comboId, resolvemos el type del pack para decidir si salteamos stock
-if (comboId) {
-  const pack = await getPackSnapshot(comboId)
-  if (pack?._type === "packMayorista") {
-    skipStock = true
-  }
+if (packDebug?._type === "packMayorista") {
+  skipStock = true
 }
 
-if (!skipStock) {
-  const ids = [...new Set(compactCart.map((x) => x.productId))]
-  const prods = await getProductsSnapshot(ids)
-  const byId = new Map<string, any>((prods || []).map((p: any) => [String(p._id), p]))
+console.log("🟡 skipStock =>", skipStock)
 
-  const stockErrors: any[] = []
-  for (const it of compactCart) {
-    const prod = byId.get(it.productId)
-    if (!prod) {
-      stockErrors.push({ productId: it.productId, talle: it.talle, requested: it.cantidad, available: 0 })
-      continue
-    }
-    const available = getAvailable(prod, it.talle)
-    if (available < it.cantidad) {
-      stockErrors.push({ productId: it.productId, talle: it.talle, requested: it.cantidad, available })
-    }
-  }
 
-  if (stockErrors.length) {
-    return NextResponse.json(
-      { ok: false, error: "out_of_stock", message: "No hay stock suficiente.", details: stockErrors },
-      { status: 409 }
-    )
-  }
-}
+    if (!skipStock) {
+      const ids = [...new Set(compactCart.map((x) => x.productId))]
+      const prods = await getProductsSnapshot(ids)
+      const byId = new Map<string, any>((prods || []).map((p: any) => [String(p._id), p]))
+
+      const stockErrors: any[] = []
+      for (const it of compactCart) {
+        const prod = byId.get(it.productId)
+        if (!prod) {
+          stockErrors.push({ productId: it.productId, talle: it.talle, requested: it.cantidad, available: 0 })
+          continue
+        }
+        const available = getAvailable(prod, it.talle)
+        if (available < it.cantidad) {
+          stockErrors.push({ productId: it.productId, talle: it.talle, requested: it.cantidad, available })
+        }
+      }
+
+      if (stockErrors.length) {
+        return NextResponse.json(
+          { ok: false, error: "out_of_stock", message: "No hay stock suficiente.", details: stockErrors },
+          { status: 409 }
+        )
+      }
+    }
 
 
     // ==========================
     // ==========================
-// 2) ARMADO DE ITEMS PARA MP
-// - Si hay comboId => COBRO PACK (1 item)
-// - Si NO hay comboId => COBRO PRODUCTOS
-// ==========================
-let mpItems: any[] = []
+    // 2) ARMADO DE ITEMS PARA MP
+    // - Si hay comboId => COBRO PACK (1 item)
+    // - Si NO hay comboId => COBRO PRODUCTOS
+    // ==========================
+    let mpItems: any[] = []
 
-if (comboId) {
-  const pack = await getPackSnapshot(comboId)
+    if (comboId) {
+      const pack = await getPackSnapshot(comboId)
 
-  const packPrice = toMoney(Number(pack?.price ?? 0))
+      const packPrice = toMoney(Number(pack?.price ?? 0))
 
-  if (!pack?._id || !packPrice || packPrice <= 0) {
-    return NextResponse.json(
-      {
-        ok: false,
-        error: "invalid_combo",
-        message:
-          "No pudimos obtener el precio del pack/2x1 (id inválido o sin precio). Asegurate de mandar el _id real del documento en Sanity.",
-        comboId,
-        foundType: pack?._type ?? null,
-        foundTitle: pack?.title ?? null,
-        foundPrice: pack?.price ?? null,
-      },
-      { status: 400 }
-    )
-  }
+      if (!pack?._id || !packPrice || packPrice <= 0) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error: "invalid_combo",
+            message:
+              "No pudimos obtener el precio del pack/2x1 (id inválido o sin precio). Asegurate de mandar el _id real del documento en Sanity.",
+            comboId,
+            foundType: pack?._type ?? null,
+            foundTitle: pack?.title ?? null,
+            foundPrice: pack?.price ?? null,
+          },
+          { status: 400 }
+        )
+      }
 
-  mpItems = [
-    {
-      title: pack.title,
-      quantity: 1,
-      unit_price: packPrice,
-      currency_id: "ARS",
-    },
-  ]
-} else {
-  // cobrar por productos con precio del server (y nombre)
-  const ids = [...new Set(compactCart.map((x) => x.productId))]
-  const prods = await getProductsSnapshot(ids)
-  const byId = new Map<string, any>((prods || []).map((p: any) => [String(p._id), p]))
+      mpItems = [
+        {
+          title: pack.title,
+          quantity: 1,
+          unit_price: packPrice,
+          currency_id: "ARS",
+        },
+      ]
+    } else {
+      // cobrar por productos con precio del server (y nombre)
+      const ids = [...new Set(compactCart.map((x) => x.productId))]
+      const prods = await getProductsSnapshot(ids)
+      const byId = new Map<string, any>((prods || []).map((p: any) => [String(p._id), p]))
 
-  mpItems = compactCart
-    .map((it) => {
-      const prod = byId.get(it.productId)
-      if (!prod) return null
-      const unit_price = getUnitPriceProduct(prod)
-      const title = `${prod?.nombre || "Producto"}${it.talle ? ` - Talle ${it.talle}` : ""}`
-      return { title, quantity: it.cantidad, unit_price, currency_id: "ARS" }
-    })
-    .filter(Boolean)
-}
+      mpItems = compactCart
+        .map((it) => {
+          const prod = byId.get(it.productId)
+          if (!prod) return null
+          const unit_price = getUnitPriceProduct(prod)
+          const title = `${prod?.nombre || "Producto"}${it.talle ? ` - Talle ${it.talle}` : ""}`
+          return { title, quantity: it.cantidad, unit_price, currency_id: "ARS" }
+        })
+        .filter(Boolean)
+    }
 
 
     // ==========================
@@ -237,7 +243,7 @@ if (comboId) {
     const failureUrl = `${baseUrl}/checkout/failure?orderId=${encodeURIComponent(orderId)}`
     const pendingUrl = `${baseUrl}/checkout/pending?orderId=${encodeURIComponent(orderId)}`
 
-        console.log("🟢 MP ITEMS QUE SE ENVIAN =>", mpItems)
+    console.log("🟢 MP ITEMS QUE SE ENVIAN =>", mpItems)
 
 
     const res = await fetch("https://api.mercadopago.com/checkout/preferences", {
@@ -257,12 +263,12 @@ if (comboId) {
         auto_return: "approved",
         notification_url: `${baseUrl}/api/mp/webhook`,
         metadata: {
-  source: "preference_redirect",
-  orderId,
-  comboId: comboId || null,
-  packType: comboId ? (await getPackSnapshot(comboId))?._type || null : null,
-  cart: JSON.stringify(compactCart),
-},
+          source: "preference_redirect",
+          orderId,
+          comboId: comboId || null,
+          packType: comboId ? (await getPackSnapshot(comboId))?._type || null : null,
+          cart: JSON.stringify(compactCart),
+        },
       }),
       cache: "no-store",
     })
