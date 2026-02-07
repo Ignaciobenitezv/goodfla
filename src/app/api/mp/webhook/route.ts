@@ -308,6 +308,7 @@ async function handle(req: Request) {
   }
 
   paymentId = String(payment?.id || "")
+  const markerId = `mp_payment_${paymentId}`
 
   const merchantOrderId =
     payment?.order?.id || payment?.order_id || payment?.merchant_order_id
@@ -315,19 +316,6 @@ async function handle(req: Request) {
   if (!merchantOrderId) {
   // ✅ Flujo Brick/card_inline: no hay merchant_order, usamos payment.metadata
   const meta = payment?.metadata || {}
-  const markerId = `mp_payment_${paymentId}`
-
-  // candado idempotente
-  const marker = await sanity.createIfNotExists({
-    _id: markerId,
-    _type: "mpWebhook",
-    paymentId,
-    orderId: meta?.orderId || null,
-    createdAt: new Date().toISOString(),
-    status: "processing",
-  })
-
- const markerId = `mp_payment_${paymentId}`
 
 // candado idempotente
 await sanity.createIfNotExists({
