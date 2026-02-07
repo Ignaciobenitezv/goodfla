@@ -85,7 +85,6 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const addItem = (item: Omit<CartItem, "cartKey">) => {
     // ✅ si agregás un producto normal, limpiamos comboId para no cobrar combo por error
     // (si estás armando un combo, setealo explícitamente desde la pantalla de combo usando setActiveCombo)
-    setComboId(null)
 
     const cartKey = `${item.productId}-${item.talle || "default"}`
 

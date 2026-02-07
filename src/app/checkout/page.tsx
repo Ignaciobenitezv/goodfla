@@ -133,6 +133,14 @@ export default function CheckoutPage() {
   const costoEnvio = quote?.price ?? 0
   const total = totalProductos + costoEnvio
 
+
+  // ✅ ID efectivo del combo (prioriza contexto, fallback al item)
+const effectiveComboId =
+  (comboId && comboId.trim()) ||
+  (items?.length === 1 ? String((items[0] as any)?.comboId || "").trim() : "") ||
+  ""
+
+
   const calcularEnvio = async () => {
     setCpError(null)
     if (!/^\d{4}$/.test(cp)) {
@@ -192,7 +200,7 @@ export default function CheckoutPage() {
 
 const payload = {
   items,
-  comboId: comboId || "", // ✅ el comboId del useCart()
+  comboId: effectiveComboId,// ✅ el comboId del useCart()
   customer,
 }
 
@@ -356,7 +364,9 @@ const payload = {
   items: compactItems,
   amount: Number(total),
   orderId,
-  comboId,
+  comboId: effectiveComboId,
+
+
 
   // ✅ NUEVO: datos del cliente / entrega
   customer: {
