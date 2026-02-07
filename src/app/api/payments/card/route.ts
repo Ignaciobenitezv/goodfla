@@ -436,7 +436,7 @@ export async function POST(req: Request) {
     const ids = cart.map((x) => x.productId)
 
 // ==========================
-// 3) Detectar pack + stock/subtotal
+// 3) Detectar pack/combo + stock/subtotal
 // ==========================
 const comboId = String(body.comboId || "").trim()
 const packDebug = comboId ? await getPackSnapshot(comboId) : null
@@ -449,24 +449,19 @@ if (comboId && !packDebug?._id) {
   )
 }
 
-// Solo mayorista NO valida stock ni descuenta stock
-const skipStock = packDebug?._type === "packMayorista"
+// Tipos
+const isPackMayorista = packDebug?._type === "packMayorista"
+const isComboLike = !!packDebug && (packDebug._type === "combo" || packDebug._type === "zapatillas2x1")
 
+// Solo mayorista NO valida stock ni descuenta stock
+const skipStock = isPackMayorista
 
 let subtotal = 0
 const stockErrors: any[] = []
 let byId = new Map<string, any>()
 
-if (skipStock) {
-  subtotal = toMoney(Number(packDebug?.price ?? 0))
-
-  if (!subtotal || subtotal <= 0) {
-    return NextResponse.json(
-      { ok: false, error: "invalid_pack_price", message: "Pack mayorista sin precio válido.", comboId, packDebug },
-      { status: 400 }
-    )
-  }
-} else {
+// 3A) Validación de stock (si aplica) SIEMPRE por productos del carrito
+if (!skipStock) {
   const prods = await getProductsSnapshot(ids)
   byId = new Map<string, any>((prods || []).map((p: any) => [String(p._id), p]))
 
@@ -482,8 +477,6 @@ if (skipStock) {
       stockErrors.push({ productId: it.productId, talle: it.talle, requested: it.cantidad, available, ok: false })
       continue
     }
-
-    subtotal += getUnitPrice(prod) * it.cantidad
   }
 
   if (stockErrors.length) {
@@ -492,9 +485,37 @@ if (skipStock) {
       { status: 409 }
     )
   }
-
-  subtotal = toMoney(subtotal)
 }
+
+// 3B) Subtotal de cobro (regla correcta)
+if (isPackMayorista) {
+  subtotal = toMoney(Number(packDebug?.price ?? 0))
+  if (!subtotal || subtotal <= 0) {
+    return NextResponse.json(
+      { ok: false, error: "invalid_pack_price", message: "Pack mayorista sin precio válido.", comboId, packDebug },
+      { status: 400 }
+    )
+  }
+} else if (isComboLike) {
+  // ✅ Cobra precio del combo / 2x1, NO suma productos
+  subtotal = toMoney(Number(packDebug?.price ?? 0))
+  if (!subtotal || subtotal <= 0) {
+    return NextResponse.json(
+      { ok: false, error: "invalid_combo_price", message: "Combo sin precio válido.", comboId, packDebug },
+      { status: 400 }
+    )
+  }
+} else {
+  // ✅ Producto normal: suma de productos
+  let sum = 0
+  for (const it of cart) {
+    const prod = byId.get(it.productId)
+    if (!prod) continue
+    sum += getUnitPrice(prod) * it.cantidad
+  }
+  subtotal = toMoney(sum)
+}
+
 
 
     // 4) Shipping

@@ -544,6 +544,11 @@ const updated = await sanity
 if (updated && updated.ownerNotified !== true) {
   try {
     const payment = await mpGetSoft(`https://api.mercadopago.com/v1/payments/${paymentId}`)
+    if ((payment as any)?.__error) {
+  console.error("❌ payment_fetch_failed_for_email", { paymentId, err: (payment as any)?.__message })
+  // no rompemos webhook; dejamos ownerNotified=false para reintento
+  return respond200({ msg: "payment_fetch_failed_for_email", markerId, paymentId }, startedAt)
+}
 
     // ✅ metadata desde la preference (tu checkout)
     const meta = pref?.metadata || {}
@@ -597,8 +602,8 @@ if (updated && updated.ownerNotified !== true) {
     await sendOwnerSaleEmail({
       orderId: emailOrderId,
       paymentId,
-      total: approvedPayment?.transaction_amount,
-      currency: approvedPayment?.currency_id,
+      total: Number(payment?.transaction_amount ?? 0) || undefined,
+currency: String(payment?.currency_id || "ARS"),
       buyerName,
       buyerEmail,
       buyerPhone,
