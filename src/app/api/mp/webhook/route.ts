@@ -327,9 +327,30 @@ async function handle(req: Request) {
     status: "processing",
   })
 
-  if ((marker as any)?.status && (marker as any).status === "processed") {
-    return respond200({ msg: "already_processed_card_inline", markerId, paymentId }, startedAt)
-  }
+ const markerId = `mp_payment_${paymentId}`
+
+// candado idempotente
+await sanity.createIfNotExists({
+  _id: markerId,
+  _type: "mpWebhook",
+  paymentId,
+  orderId: meta?.orderId || null,
+  createdAt: new Date().toISOString(),
+  status: "processing",
+})
+
+// 🔥 en vez de confiar en "marker", traemos el doc real
+const existing = await sanity.getDocument(markerId)
+
+if ((existing as any)?.status === "processed" && (existing as any)?.ownerNotified === true) {
+  return respond200(
+    { msg: "already_processed_card_inline", markerId, paymentId },
+    startedAt
+  )
+}
+
+// si está processed pero ownerNotified NO, dejamos seguir para reintentar mail
+
 
   // armar comprador desde metadata.customer
   const customer: any = meta?.customer || null
@@ -357,6 +378,16 @@ async function handle(req: Request) {
     .set({ status: "processed", processedAt: new Date().toISOString() })
     .commit({ returnDocuments: true })
     .catch(() => null)
+console.log("📧 attempting_owner_email_card_inline", {
+  markerId,
+  paymentId,
+  orderId: String(meta?.orderId || paymentId),
+  buyerName,
+  buyerEmail,
+  buyerPhone,
+  shippingAddress,
+  itemsCount: items?.length || 0,
+})
 
   if (updated && updated.ownerNotified !== true) {
     try {
