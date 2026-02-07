@@ -362,7 +362,6 @@ export default function CheckoutPage() {
   nombre: nombre.trim(),
   apellido: apellido.trim(),
   telefono: telefono.trim(),
-  email: email.trim(), // ✅ NUEVO (el input del checkout)
   envio: envio, // "domicilio" | "sucursal"
   cp: cp || null,
   direccion:
