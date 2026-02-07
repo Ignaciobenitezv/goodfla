@@ -184,9 +184,28 @@ export default function CheckoutPage() {
       const comboId = isMayorista ? String(first?.productId || "").trim() : ""
 
       // payload final
-      const payload = isMayorista
-        ? { comboId, items }
-        : { items }
+      const customer = {
+  nombre: nombre.trim(),
+  apellido: apellido.trim(),
+  telefono: telefono.trim(),
+  email: "", // 👈 no lo tenés en UI todavía, abajo te digo qué hacer
+  envio: envio || null,
+  cp: cp || null,
+  direccion:
+    envio === "domicilio"
+      ? {
+          calle: destinatario.calle || "",
+          numero: destinatario.numero || "",
+          barrio: destinatario.barrio || "",
+          ciudad: destinatario.ciudad || "",
+        }
+      : null,
+}
+
+const payload = isMayorista
+  ? { comboId, items, customer }
+  : { items, customer }
+
 
       console.log("🧪 payload MP =>", payload)
 
