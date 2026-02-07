@@ -378,7 +378,12 @@ async function handle(req: Request) {
         .commit()
         .catch(() => {})
     } catch (e: any) {
-      console.error("❌ owner_notify_failed (card_inline)", e?.message || e)
+      console.error("❌ owner_notify_failed (card_inline)", {
+  message: e?.message,
+  name: e?.name,
+  stack: e?.stack,
+  raw: e,
+})
     }
   }
 
