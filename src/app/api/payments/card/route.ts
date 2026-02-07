@@ -377,6 +377,15 @@ export async function POST(req: Request) {
   try {
     const body = (await req.json()) as BrickPayload
 
+
+    console.log("PAYMENT_CARD_IN", {
+  orderId: body.orderId,
+  clientAmount: body.amount,
+  comboId: body.comboId,
+  itemsCount: Array.isArray(body.items) ? body.items.length : 0,
+  firstItem: Array.isArray(body.items) ? body.items[0] : null,
+})
+
     // 1) Datos mínimos (robusto a distintos formatos del Brick)
     const token = body.token
 
@@ -440,6 +449,7 @@ export async function POST(req: Request) {
 // ==========================
 const comboId = String(body.comboId || "").trim()
 const packDebug = comboId ? await getPackSnapshot(comboId) : null
+console.log("PACK_DEBUG", { comboId, packDebug })
 
 // Si el front mandó comboId pero no existe el doc, cortamos con error claro
 if (comboId && !packDebug?._id) {
@@ -529,10 +539,31 @@ if (isPackMayorista) {
     }
 
     // (Opcional) sanity-check del monto que manda el front: NO afecta el cobro (cobramos computedTotal)
-    const clientAmount = body.amount != null ? toMoney(body.amount) : null
-    if (clientAmount != null && Math.abs(clientAmount - computedTotal) > 0.01) {
-      console.warn("Amount mismatch:", { clientAmount, computedTotal, orderId: body.orderId })
-    }
+   const clientAmount = body.amount != null ? toMoney(body.amount) : null
+
+if (clientAmount != null && Math.abs(clientAmount - computedTotal) > 0.01) {
+  console.warn("Amount mismatch:", {
+    clientAmount,
+    computedTotal,
+    comboId: body.comboId || null,
+    orderId: body.orderId,
+  })
+
+  // 🔒 Airbag: si el front está inicializando el Brick con un total mayor (ej combo),
+  // pero el backend no lo puede justificar (comboId faltante o lógica rota), NO cobramos.
+  return NextResponse.json(
+    {
+      ok: false,
+      error: "amount_mismatch",
+      message: "El monto del checkout no coincide con el monto calculado por el servidor.",
+      clientAmount,
+      serverAmount: computedTotal,
+      comboId: body.comboId || null,
+    },
+    { status: 400 }
+  )
+}
+
 
     // 5) Idempotencia (orderId)
     // Importante para NO descontar doble: usamos orderId para MP Idempotency Key + markerId de Sanity.

@@ -24,7 +24,7 @@ type Quote = {
 }
 
 export default function CheckoutPage() {
-  const { items } = useCart()
+  const { items, comboId } = useCart()
   const router = useRouter()
   const mpRedirectLock = useRef(false)
 
@@ -171,18 +171,6 @@ export default function CheckoutPage() {
       // ===============================
       // Detectar pack mayorista
       // ===============================
-      const onlyOne = Array.isArray(items) && items.length === 1
-      const first = onlyOne ? items[0] : null
-
-      const isMayorista =
-        !!first &&
-        !first?.talle &&
-        String(first?.nombre || "").toUpperCase().includes("PACK")
-
-      // comboId = _id real del packMayorista en Sanity
-      // en tu caso hoy viene como productId
-      const comboId = isMayorista ? String(first?.productId || "").trim() : ""
-
       // payload final
       const customer = {
   nombre: nombre.trim(),
@@ -202,9 +190,12 @@ export default function CheckoutPage() {
       : null,
 }
 
-const payload = isMayorista
-  ? { comboId, items, customer }
-  : { items, customer }
+const payload = {
+  items,
+  comboId: comboId || "", // ✅ el comboId del useCart()
+  customer,
+}
+
 
 
       console.log("🧪 payload MP =>", payload)
@@ -346,16 +337,7 @@ const payload = isMayorista
                 }
 
                 const orderId = ensureOrderId()
-                const onlyOne = Array.isArray(items) && items.length === 1
-                const first = onlyOne ? items[0] : null
-
-                const isMayorista =
-                  !!first &&
-                  !first?.talle &&
-                  String(first?.nombre || "").toUpperCase().includes("PACK")
-
-                const comboId = isMayorista ? String(first?.productId || "").trim() : ""
-
+              
                 // ✅ PASO B: payload hacia tu backend
                 const payload = {
   token: String(data.token),
