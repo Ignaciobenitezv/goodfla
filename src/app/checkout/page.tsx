@@ -339,29 +339,48 @@ export default function CheckoutPage() {
 
                 // ✅ PASO B: payload hacia tu backend
                 const payload = {
-                  token: String(data.token),
-                  issuer_id: data.issuer_id != null ? String(data.issuer_id) : undefined,
-                  payment_method_id: String(data.paymentMethodId || data.payment_method_id),
-                  installments: Number(data.installments ?? 1),
-                  email: data.payer?.email ? String(data.payer.email) : undefined,
-                  identification: data.payer?.identification
-                    ? {
-                      type: String(data.payer.identification.type),
-                      number: String(data.payer.identification.number),
-                    }
-                    : undefined,
+  token: String(data.token),
+  issuer_id: data.issuer_id != null ? String(data.issuer_id) : undefined,
+  payment_method_id: String(data.paymentMethodId || data.payment_method_id),
+  installments: Number(data.installments ?? 1),
+  email: data.payer?.email ? String(data.payer.email) : undefined,
+  identification: data.payer?.identification
+    ? {
+        type: String(data.payer.identification.type),
+        number: String(data.payer.identification.number),
+      }
+    : undefined,
 
-                  // ✅ lo importante
-                  items: compactItems,
-                  amount: Number(total), // el server recalcula igual
-                  orderId,
-                  comboId,
+  // ✅ lo importante
+  items: compactItems,
+  amount: Number(total),
+  orderId,
+  comboId,
 
-                  shipping: {
-                    type: envio === "domicilio" ? "domicilio" : "sucursal",
-                    cp: envio === "domicilio" ? cp : undefined,
-                  },
-                }
+  // ✅ NUEVO: datos del cliente / entrega
+  customer: {
+    nombre: nombre.trim(),
+    apellido: apellido.trim(),
+    telefono: telefono.trim(),
+    envio: envio, // "domicilio" | "sucursal"
+    cp: cp || null,
+    direccion:
+      envio === "domicilio"
+        ? {
+            calle: destinatario.calle || "",
+            numero: destinatario.numero || "",
+            barrio: destinatario.barrio || "",
+            ciudad: destinatario.ciudad || "",
+          }
+        : null,
+  },
+
+  shipping: {
+    type: envio === "domicilio" ? "domicilio" : "sucursal",
+    cp: envio === "domicilio" ? cp : undefined,
+  },
+}
+
 
                 const res = await fetch("/api/payments/card", {
                   method: "POST",

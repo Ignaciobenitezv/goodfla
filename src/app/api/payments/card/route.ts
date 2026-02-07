@@ -1,6 +1,7 @@
 // app/api/payments/card/route.ts
 export const runtime = "nodejs"
 
+import { sendOwnerSaleEmail } from "@/lib/email"
 import { NextResponse } from "next/server"
 import crypto from "crypto"
 import { createClient } from "@sanity/client"
@@ -23,7 +24,6 @@ type BrickPayload = {
   email?: string
   payer?: { email?: string; identification?: { type?: string; number?: string } }
 
-  // Brick puede mandar identification en distintos formatos:
   identification?: { type?: string; number?: string }
   identificationType?: string
   identificationNumber?: string
@@ -33,7 +33,23 @@ type BrickPayload = {
   orderId?: string
   comboId?: string
   shipping?: { type: "domicilio" | "sucursal"; cp?: string }
+
+  // ✅ PASO 2 – agregar esto
+  customer?: {
+    nombre?: string
+    apellido?: string
+    telefono?: string
+    envio?: "domicilio" | "sucursal"
+    cp?: string | null
+    direccion?: {
+      calle?: string
+      numero?: string
+      barrio?: string
+      ciudad?: string
+    } | null
+  }
 }
+
 
 const sanity = createClient({
   projectId: process.env.SANITY_PROJECT_ID!,
@@ -129,6 +145,49 @@ async function getShippingPrice(origin: string, cp?: string) {
 }
 
 type CartItem = { productId: string; talle?: string | null; cantidad: number }
+
+  // ==========================
+// Helpers para email / resumen
+// ==========================
+async function getProductTitles(cart: CartItem[]) {
+  const ids = [...new Set(cart.map((x) => x.productId))]
+
+  const prods = await sanity.fetch(
+    `*[_type=="producto" && _id in $ids]{ _id, nombre }`,
+    { ids }
+  )
+
+  const byId = new Map<string, any>(
+    (prods || []).map((p: any) => [String(p._id), p])
+  )
+
+  return (cart || []).map((it) => {
+    const prod = byId.get(it.productId)
+    return {
+      title: String(prod?.nombre || it.productId),
+      talle: it.talle ?? null,
+      qty: it.cantidad,
+    }
+  })
+}
+
+function buildShippingTextFromCustomer(body: BrickPayload) {
+  const envio = body.customer?.envio || body.shipping?.type
+
+  if (envio === "sucursal") return "Retiro por sucursal"
+
+  const d = body.customer?.direccion
+  const parts = [
+    d?.calle,
+    d?.numero,
+    d?.barrio,
+    d?.ciudad,
+    body.customer?.cp,
+  ].filter(Boolean)
+
+  return parts.length ? parts.join(" ") : "Envío a domicilio"
+}
+
 
 async function mpCapture(paymentId: string, mpToken: string) {
   const res = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
@@ -483,14 +542,29 @@ if (skipStock) {
       metadata: {
   orderId,
   source: "card_inline",
+
   comboId: comboId || null,
   packType: packDebug?._type || null,
   packTitle: packDebug?.title || null,
+
+  // ✅ datos humanos (vienen del front)
+  customer: {
+    nombre: body.customer?.nombre || null,
+    apellido: body.customer?.apellido || null,
+    telefono: body.customer?.telefono || null,
+    envio: body.customer?.envio || shippingType,
+    cp: body.customer?.cp || body.shipping?.cp || null,
+    direccion: body.customer?.direccion || null,
+  },
+
   shippingType,
   shippingPrice,
   subtotal,
+
+  // ✅ mantenemos tu formato actual (string / null)
   cart: skipStock ? null : JSON.stringify(cart),
 },
+
     }
 
     const mpToken = process.env.MP_ACCESS_TOKEN
@@ -690,6 +764,59 @@ if (!skipStock) {
       status: "processed",
       source: "card_inline",
     })
+
+    // =========================
+// Aviso por mail (solo Brick) - idempotente
+// =========================
+const buyerName = `${String(body.customer?.nombre || "").trim()} ${String(body.customer?.apellido || "").trim()}`.trim()
+const buyerPhone = String(body.customer?.telefono || "").trim() || undefined
+const buyerEmail = email || undefined
+
+const shippingAddress = buildShippingTextFromCustomer(body) || undefined
+
+const mailItems =
+  skipStock
+    ? [
+        {
+          title: String(packDebug?.title || "Pack Mayorista"),
+          talle: null,
+          qty: 1,
+        },
+      ]
+    : await getProductTitles(cart)
+
+// idempotencia de email (evita duplicar si reintenta)
+const updated = await sanity
+  .patch(markerId)
+  .setIfMissing({ ownerNotified: false })
+  .commit({ returnDocuments: true })
+  .catch(() => null)
+
+if (updated && updated.ownerNotified !== true) {
+  try {
+    await sendOwnerSaleEmail({
+      orderId: orderId,              // o paymentId si preferís
+      paymentId,
+      total: computedTotal,
+      currency: "ARS",
+      buyerName: buyerName || undefined,
+      buyerEmail,
+      buyerPhone,
+      shippingAddress,
+      items: mailItems,
+    })
+
+    await sanity
+      .patch(markerId)
+      .set({ ownerNotified: true, ownerNotifiedAt: new Date().toISOString() })
+      .commit()
+      .catch(() => {})
+  } catch (e: any) {
+    console.error("❌ owner_notify_failed (card_inline)", e?.message || e)
+    // no cortamos el flujo si falla el mail
+  }
+}
+
 
     const finalStatus = String(cap.data?.status || status).toLowerCase()
     const finalDetail = String(cap.data?.status_detail || statusDetail || "")
