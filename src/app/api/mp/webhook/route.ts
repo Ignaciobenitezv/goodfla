@@ -394,8 +394,9 @@ console.log("📧 attempting_owner_email_card_inline", {
 
   if (updated && updated.ownerNotified !== true) {
     try {
+      const orderIdForEmail = String(meta?.orderId || paymentId)
       await sendOwnerSaleEmail({
-        orderId: String(meta?.orderId || paymentId),
+        orderId: orderIdForEmail,
         paymentId,
         total: Number(payment?.transaction_amount ?? 0) || undefined,
         currency: String(payment?.currency_id || "ARS"),

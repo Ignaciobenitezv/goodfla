@@ -263,12 +263,24 @@ console.log("🟡 skipStock =>", skipStock)
         auto_return: "approved",
         notification_url: `${baseUrl}/api/mp/webhook`,
         metadata: {
-          source: "preference_redirect",
-          orderId,
-          comboId: comboId || null,
-          packType: comboId ? (await getPackSnapshot(comboId))?._type || null : null,
-          cart: JSON.stringify(compactCart),
-        },
+  source: "preference_redirect",
+  orderId,
+  comboId: comboId || null,
+  packType: comboId ? (await getPackSnapshot(comboId))?._type || null : null,
+  cart: JSON.stringify(compactCart),
+
+  // ✅ NUEVO: datos del cliente
+  customer: {
+    nombre: body?.customer?.nombre?.trim() || null,
+    apellido: body?.customer?.apellido?.trim() || null,
+    telefono: body?.customer?.telefono?.trim() || null,
+    email: body?.customer?.email?.trim() || null,
+    envio: body?.customer?.envio || null,
+    cp: body?.customer?.cp || null,
+    direccion: body?.customer?.direccion || null,
+  },
+},
+
       }),
       cache: "no-store",
     })
