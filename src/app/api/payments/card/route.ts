@@ -562,7 +562,7 @@ if (skipStock) {
   subtotal,
 
   // ✅ mantenemos tu formato actual (string / null)
-  cart: skipStock ? null : JSON.stringify(cart),
+  cart: JSON.stringify(cart),
 },
 
     }
@@ -765,57 +765,6 @@ if (!skipStock) {
       source: "card_inline",
     })
 
-    // =========================
-// Aviso por mail (solo Brick) - idempotente
-// =========================
-const buyerName = `${String(body.customer?.nombre || "").trim()} ${String(body.customer?.apellido || "").trim()}`.trim()
-const buyerPhone = String(body.customer?.telefono || "").trim() || undefined
-const buyerEmail = email || undefined
-
-const shippingAddress = buildShippingTextFromCustomer(body) || undefined
-
-const mailItems =
-  skipStock
-    ? [
-        {
-          title: String(packDebug?.title || "Pack Mayorista"),
-          talle: null,
-          qty: 1,
-        },
-      ]
-    : await getProductTitles(cart)
-
-// idempotencia de email (evita duplicar si reintenta)
-const updated = await sanity
-  .patch(markerId)
-  .setIfMissing({ ownerNotified: false })
-  .commit({ returnDocuments: true })
-  .catch(() => null)
-
-if (updated && updated.ownerNotified !== true) {
-  try {
-    await sendOwnerSaleEmail({
-      orderId: orderId,              // o paymentId si preferís
-      paymentId,
-      total: computedTotal,
-      currency: "ARS",
-      buyerName: buyerName || undefined,
-      buyerEmail,
-      buyerPhone,
-      shippingAddress,
-      items: mailItems,
-    })
-
-    await sanity
-      .patch(markerId)
-      .set({ ownerNotified: true, ownerNotifiedAt: new Date().toISOString() })
-      .commit()
-      .catch(() => {})
-  } catch (e: any) {
-    console.error("❌ owner_notify_failed (card_inline)", e?.message || e)
-    // no cortamos el flujo si falla el mail
-  }
-}
 
 
     const finalStatus = String(cap.data?.status || status).toLowerCase()

@@ -152,6 +152,59 @@ function parseCartFromPref(pref: any): CartItem[] {
   return cart
 }
 
+type MetaCustomer = {
+  nombre?: string | null
+  apellido?: string | null
+  telefono?: string | null
+  envio?: "domicilio" | "sucursal" | null
+  cp?: string | null
+  direccion?: {
+    calle?: string | null
+    numero?: string | null
+    barrio?: string | null
+    ciudad?: string | null
+  } | null
+}
+
+function parseCartFromMetadata(meta: any): CartItem[] {
+  const raw = meta?.cart
+
+  let arr: any[] = []
+  if (Array.isArray(raw)) arr = raw
+  else if (typeof raw === "string") {
+    try {
+      const parsed = JSON.parse(raw)
+      if (Array.isArray(parsed)) arr = parsed
+    } catch {}
+  }
+
+  return (arr || [])
+    .map((x: any) => ({
+      productId: String(x?.productId ?? x?._id ?? "").trim(),
+      talle: x?.talle ?? null,
+      cantidad: Number(x?.cantidad ?? 1),
+    }))
+    .filter((x: any) => x.productId && x.cantidad > 0)
+}
+
+function buildShippingFromCustomer(customer: MetaCustomer | null | undefined): string {
+  const envio = customer?.envio
+  if (envio === "sucursal") return "Retiro por sucursal"
+
+  const d = customer?.direccion
+  const parts = [d?.calle, d?.numero, d?.barrio, d?.ciudad, customer?.cp].filter(Boolean)
+  return parts.length ? parts.join(" ") : "Envío a domicilio"
+}
+
+function buildBuyerNameFromCustomer(customer: MetaCustomer | null | undefined): string {
+  const n = String(customer?.nombre || "").trim()
+  const a = String(customer?.apellido || "").trim()
+  return `${n} ${a}`.trim()
+}
+
+
+
+
   async function getProductTitles(cart: CartItem[]) {
   const ids = [...new Set(cart.map((x) => x.productId))]
   const prods = await sanity.fetch(
@@ -260,8 +313,78 @@ async function handle(req: Request) {
     payment?.order?.id || payment?.order_id || payment?.merchant_order_id
 
   if (!merchantOrderId) {
-    return respond200({ msg: "payment_without_merchant_order_id", paymentId }, startedAt)
+  // ✅ Flujo Brick/card_inline: no hay merchant_order, usamos payment.metadata
+  const meta = payment?.metadata || {}
+  const markerId = `mp_payment_${paymentId}`
+
+  // candado idempotente
+  const marker = await sanity.createIfNotExists({
+    _id: markerId,
+    _type: "mpWebhook",
+    paymentId,
+    orderId: meta?.orderId || null,
+    createdAt: new Date().toISOString(),
+    status: "processing",
+  })
+
+  if ((marker as any)?.status && (marker as any).status === "processed") {
+    return respond200({ msg: "already_processed_card_inline", markerId, paymentId }, startedAt)
   }
+
+  // armar comprador desde metadata.customer
+  const customer: any = meta?.customer || null
+  const buyerName = buildBuyerNameFromCustomer(customer) || undefined
+  const buyerPhone = String(customer?.telefono || "").trim() || undefined
+  const buyerEmail = String(payment?.payer?.email || "").trim() || undefined
+
+  // envío desde metadata.customer
+  const shippingAddress = buildShippingFromCustomer(customer) || undefined
+
+  // items: si es mayorista, usamos packTitle; si no, usamos cart
+  const packType = meta?.packType || null
+  const isMayorista = packType === "packMayorista"
+
+  const cart = isMayorista ? [] : parseCartFromMetadata(meta)
+
+  const items = isMayorista
+    ? [{ title: String(meta?.packTitle || "Pack Mayorista"), talle: null, qty: 1 }]
+    : await getProductTitles(cart)
+
+  // idempotencia de email
+  const updated = await sanity
+    .patch(markerId)
+    .setIfMissing({ ownerNotified: false })
+    .set({ status: "processed", processedAt: new Date().toISOString() })
+    .commit({ returnDocuments: true })
+    .catch(() => null)
+
+  if (updated && updated.ownerNotified !== true) {
+    try {
+      await sendOwnerSaleEmail({
+        orderId: String(meta?.orderId || paymentId),
+        paymentId,
+        total: Number(payment?.transaction_amount ?? 0) || undefined,
+        currency: String(payment?.currency_id || "ARS"),
+        buyerName,
+        buyerEmail,
+        buyerPhone,
+        shippingAddress,
+        items,
+      })
+
+      await sanity
+        .patch(markerId)
+        .set({ ownerNotified: true, ownerNotifiedAt: new Date().toISOString() })
+        .commit()
+        .catch(() => {})
+    } catch (e: any) {
+      console.error("❌ owner_notify_failed (card_inline)", e?.message || e)
+    }
+  }
+
+  return respond200({ msg: "processed_card_inline_no_merchant_order", markerId, paymentId }, startedAt)
+}
+
 
   merchantOrder = await mpGet(`https://api.mercadopago.com/merchant_orders/${merchantOrderId}`)
 }
@@ -322,11 +445,6 @@ else if (topic === "merchant_order") {
 
     const pref = await mpGet(`https://api.mercadopago.com/checkout/preferences/${prefId}`)
 
-    const source = pref?.metadata?.source
-    if (source === "card_inline") {
-      await sanity.patch(markerId).set({ status: "ignored_card_inline" }).commit().catch(() => {})
-      return respond200({ msg: "ignored_card_inline", markerId, paymentId }, startedAt)
-    }
 
     const cart = parseCartFromPref(pref)
 
