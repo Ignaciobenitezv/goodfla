@@ -36,18 +36,19 @@ type BrickPayload = {
 
   // ✅ PASO 2 – agregar esto
   customer?: {
-    nombre?: string
-    apellido?: string
-    telefono?: string
-    envio?: "domicilio" | "sucursal"
-    cp?: string | null
-    direccion?: {
-      calle?: string
-      numero?: string
-      barrio?: string
-      ciudad?: string
-    } | null
-  }
+  nombre?: string
+  apellido?: string
+  telefono?: string
+  email?: string // ✅ NUEVO
+  envio?: "domicilio" | "sucursal"
+  cp?: string | null
+  direccion?: {
+    calle?: string
+    numero?: string
+    barrio?: string
+    ciudad?: string
+  } | null
+}
 }
 
 
@@ -152,24 +153,23 @@ type CartItem = { productId: string; talle?: string | null; cantidad: number }
 async function getProductTitles(cart: CartItem[]) {
   const ids = [...new Set(cart.map((x) => x.productId))]
 
-  const prods = await sanity.fetch(
-    `*[_type=="producto" && _id in $ids]{ _id, nombre }`,
+  const docs = await sanity.fetch(
+    `*[_id in $ids]{ _id, _type, "nombre": coalesce(nombre, title) }`,
     { ids }
   )
 
-  const byId = new Map<string, any>(
-    (prods || []).map((p: any) => [String(p._id), p])
-  )
+  const byId = new Map<string, any>((docs || []).map((p: any) => [String(p._id), p]))
 
   return (cart || []).map((it) => {
-    const prod = byId.get(it.productId)
+    const doc = byId.get(it.productId)
     return {
-      title: String(prod?.nombre || it.productId),
+      title: String(doc?.nombre || it.productId),
       talle: it.talle ?? null,
       qty: it.cantidad,
     }
   })
 }
+
 
 function buildShippingTextFromCustomer(body: BrickPayload) {
   const envio = body.customer?.envio || body.shipping?.type
@@ -549,13 +549,15 @@ if (skipStock) {
 
   // ✅ datos humanos (vienen del front)
   customer: {
-    nombre: body.customer?.nombre || null,
-    apellido: body.customer?.apellido || null,
-    telefono: body.customer?.telefono || null,
-    envio: body.customer?.envio || shippingType,
-    cp: body.customer?.cp || body.shipping?.cp || null,
-    direccion: body.customer?.direccion || null,
-  },
+  nombre: body.customer?.nombre || null,
+  apellido: body.customer?.apellido || null,
+  telefono: body.customer?.telefono || null,
+  email: body.customer?.email || null, // ✅ NUEVO
+  envio: body.customer?.envio || shippingType,
+  cp: body.customer?.cp || body.shipping?.cp || null,
+  direccion: body.customer?.direccion || null,
+},
+
 
   shippingType,
   shippingPrice,

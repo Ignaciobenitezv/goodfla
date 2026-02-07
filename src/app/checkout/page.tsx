@@ -359,21 +359,23 @@ export default function CheckoutPage() {
 
   // ✅ NUEVO: datos del cliente / entrega
   customer: {
-    nombre: nombre.trim(),
-    apellido: apellido.trim(),
-    telefono: telefono.trim(),
-    envio: envio, // "domicilio" | "sucursal"
-    cp: cp || null,
-    direccion:
-      envio === "domicilio"
-        ? {
-            calle: destinatario.calle || "",
-            numero: destinatario.numero || "",
-            barrio: destinatario.barrio || "",
-            ciudad: destinatario.ciudad || "",
-          }
-        : null,
-  },
+  nombre: nombre.trim(),
+  apellido: apellido.trim(),
+  telefono: telefono.trim(),
+  email: email.trim(), // ✅ NUEVO (el input del checkout)
+  envio: envio, // "domicilio" | "sucursal"
+  cp: cp || null,
+  direccion:
+    envio === "domicilio"
+      ? {
+          calle: destinatario.calle || "",
+          numero: destinatario.numero || "",
+          barrio: destinatario.barrio || "",
+          ciudad: destinatario.ciudad || "",
+        }
+      : null,
+},
+
 
   shipping: {
     type: envio === "domicilio" ? "domicilio" : "sucursal",

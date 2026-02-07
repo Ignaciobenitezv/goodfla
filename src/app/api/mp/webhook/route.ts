@@ -156,6 +156,7 @@ type MetaCustomer = {
   nombre?: string | null
   apellido?: string | null
   telefono?: string | null
+  email?: string | null // ✅ NUEVO
   envio?: "domicilio" | "sucursal" | null
   cp?: string | null
   direccion?: {
@@ -165,6 +166,7 @@ type MetaCustomer = {
     ciudad?: string | null
   } | null
 }
+
 
 function parseCartFromMetadata(meta: any): CartItem[] {
   const raw = meta?.cart
@@ -205,22 +207,26 @@ function buildBuyerNameFromCustomer(customer: MetaCustomer | null | undefined): 
 
 
 
-  async function getProductTitles(cart: CartItem[]) {
+async function getProductTitles(cart: CartItem[]) {
   const ids = [...new Set(cart.map((x) => x.productId))]
-  const prods = await sanity.fetch(
-    `*[_type=="producto" && _id in $ids]{ _id, nombre }`,
+
+  const docs = await sanity.fetch(
+    `*[_id in $ids]{ _id, _type, "nombre": coalesce(nombre, title) }`,
     { ids }
   )
-  const byId = new Map<string, any>((prods || []).map((p: any) => [String(p._id), p]))
+
+  const byId = new Map<string, any>((docs || []).map((p: any) => [String(p._id), p]))
+
   return (cart || []).map((it) => {
-    const prod = byId.get(it.productId)
+    const doc = byId.get(it.productId)
     return {
-      title: String(prod?.nombre || it.productId),
+      title: String(doc?.nombre || it.productId),
       talle: it.talle ?? null,
       qty: it.cantidad,
     }
   })
 }
+
 
 function buildShippingAddress(payment: any) {
   // MP puede traer shipping / additional_info en distintos lugares según el flujo
@@ -342,9 +348,17 @@ if ((existing as any)?.status === "processed" && (existing as any)?.ownerNotifie
 
   // armar comprador desde metadata.customer
   const customer: any = meta?.customer || null
+  // 🔎 DEBUG EMAIL
+console.log("email_debug", {
+  metaCustomerEmail: meta?.customer?.email,
+  payerEmail: payment?.payer?.email,
+})
   const buyerName = buildBuyerNameFromCustomer(customer) || undefined
   const buyerPhone = String(customer?.telefono || "").trim() || undefined
-  const buyerEmail = String(payment?.payer?.email || "").trim() || undefined
+  const buyerEmail =
+  String(customer?.email || "").trim() || // ✅ prioridad checkout
+  String(payment?.payer?.email || "").trim() || // fallback MP
+  undefined
 
   // envío desde metadata.customer
   const shippingAddress = buildShippingFromCustomer(customer) || undefined
