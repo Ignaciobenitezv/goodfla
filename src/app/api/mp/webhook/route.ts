@@ -355,9 +355,10 @@ console.log("email_debug", {
 })
   const buyerName = buildBuyerNameFromCustomer(customer) || undefined
   const buyerPhone = String(customer?.telefono || "").trim() || undefined
-  const buyerEmail =
-  String(customer?.email || "").trim() || // ✅ prioridad checkout
-  String(payment?.payer?.email || "").trim() || // fallback MP
+
+const buyerEmail =
+  String(meta?.customer?.email || "").trim() ||
+  String(payment?.payer?.email || "").trim() ||
   undefined
 
   // envío desde metadata.customer

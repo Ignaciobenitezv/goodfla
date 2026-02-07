@@ -552,7 +552,7 @@ if (skipStock) {
   nombre: body.customer?.nombre || null,
   apellido: body.customer?.apellido || null,
   telefono: body.customer?.telefono || null,
-  email: body.customer?.email || null, // ✅ NUEVO
+  email: email || null,
   envio: body.customer?.envio || shippingType,
   cp: body.customer?.cp || body.shipping?.cp || null,
   direccion: body.customer?.direccion || null,
