@@ -267,6 +267,7 @@ console.log("🟡 skipStock =>", skipStock)
   orderId,
   comboId: comboId || null,
   packType: comboId ? (await getPackSnapshot(comboId))?._type || null : null,
+  packTitle: comboId ? (await getPackSnapshot(comboId))?.title || null : null,
   cart: JSON.stringify(compactCart),
 
   // ✅ NUEVO: datos del cliente

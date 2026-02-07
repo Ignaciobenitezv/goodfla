@@ -540,35 +540,71 @@ const updated = await sanity
   .catch(() => null)
 
 // 🟢 Avisar al dueño SOLO una vez
+// 🟢 Avisar al dueño SOLO una vez
 if (updated && updated.ownerNotified !== true) {
   try {
     const payment = await mpGetSoft(`https://api.mercadopago.com/v1/payments/${paymentId}`)
-const buyerName =
-  String(payment?.payer?.first_name || "").trim() +
-  (payment?.payer?.last_name ? ` ${String(payment.payer.last_name).trim()}` : "")
 
-const buyerEmail = payment?.payer?.email ? String(payment.payer.email) : ""
-const buyerPhone = payment?.payer?.phone
-  ? `${payment.payer.phone?.area_code || ""}${payment.payer.phone?.number ? ` ${payment.payer.phone.number}` : ""}`.trim()
-  : ""
+    // ✅ metadata desde la preference (tu checkout)
+    const meta = pref?.metadata || {}
+    const metaCustomer = (meta?.customer || null) as MetaCustomer | null
 
-const shippingAddress = buildShippingAddress(payment)
+    // ✅ buyerName: primero lo tuyo (metadata.customer), si no existe, MP payer
+    const buyerName =
+      buildBuyerNameFromCustomer(metaCustomer) ||
+      (
+        String(payment?.payer?.first_name || "").trim() +
+        (payment?.payer?.last_name ? ` ${String(payment.payer.last_name).trim()}` : "")
+      ).trim() ||
+      undefined
 
-// productos con nombre desde Sanity
-const items = await getProductTitles(cart)
+    // ✅ buyerEmail: primero lo tuyo (metadata.customer.email), si no existe, MP payer.email
+    const buyerEmail =
+      String(metaCustomer?.email || "").trim() ||
+      String(payment?.payer?.email || "").trim() ||
+      undefined
 
-await sendOwnerSaleEmail({
-  orderId: merchantOrder?.id || paymentId,
-  paymentId,
-  total: approvedPayment?.transaction_amount,
-  currency: approvedPayment?.currency_id,
-  buyerName: buyerName.trim() || undefined,
-  buyerEmail: buyerEmail || undefined,
-  buyerPhone: buyerPhone || undefined,
-  shippingAddress: shippingAddress || undefined,
-  items,
-})
+    // ✅ buyerPhone: primero lo tuyo (metadata.customer.telefono), si no existe, MP payer.phone
+    const buyerPhone =
+      String(metaCustomer?.telefono || "").trim() ||
+      (
+        payment?.payer?.phone
+          ? `${payment.payer.phone?.area_code || ""}${payment.payer.phone?.number ? ` ${payment.payer.phone.number}` : ""}`.trim()
+          : ""
+      ) ||
+      undefined
 
+    // ✅ shipping: primero lo tuyo (metadata.customer), si no existe, lo de MP
+    const shippingAddress =
+      buildShippingFromCustomer(metaCustomer) ||
+      buildShippingAddress(payment) ||
+      undefined
+
+    // ✅ items: si pack mayorista, mandamos packTitle. Si no, títulos desde Sanity usando cart.
+    const packType = meta?.packType || null
+    const isMayorista = packType === "packMayorista"
+
+    const items = isMayorista
+      ? [{ title: String(meta?.packTitle || "Pack Mayorista"), talle: null, qty: 1 }]
+      : await getProductTitles(cart)
+
+    // ✅ orderId para el mail: preferí tu orderId (external_reference)
+    const emailOrderId =
+      String(meta?.orderId || "").trim() ||
+      String(merchantOrder?.id || "").trim() ||
+      String(paymentId)
+
+    await sendOwnerSaleEmail({
+      orderId: emailOrderId,
+      paymentId,
+      total: approvedPayment?.transaction_amount,
+      currency: approvedPayment?.currency_id,
+      buyerName,
+      buyerEmail,
+      buyerPhone,
+      shippingAddress,
+      items,
+    })
 
     await sanity
       .patch(markerId)
@@ -585,6 +621,7 @@ await sendOwnerSaleEmail({
     // IMPORTANTE: no rompemos el webhook si falla el mail
   }
 }
+
 
 return respond200({ msg: "processed", markerId, paymentId, preferenceId: prefId }, startedAt)
 
