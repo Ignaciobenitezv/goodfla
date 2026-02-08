@@ -208,6 +208,52 @@ cart = (cart || [])
   return cart
 }
 
+function parseComboLinesFromPref(pref: any): CartItem[] {
+  const raw = pref?.metadata?.comboLines
+
+  let arr: any[] = []
+  if (Array.isArray(raw)) arr = raw
+  else if (typeof raw === "string") {
+    try {
+      const parsed = JSON.parse(raw)
+      if (Array.isArray(parsed)) arr = parsed
+    } catch {}
+  }
+
+  return (arr || [])
+    .map((x: any) => ({
+      productId: String(x?.productId ?? x?._id ?? "").trim(),
+      talle: x?.talle ?? null,
+      cantidad: Number(x?.cantidad ?? 1),
+      comboId: x?.comboId ? String(x.comboId).trim() : null, // ✅ IMPORTANTE
+    }))
+    .filter((x: any) => x.productId && x.cantidad > 0)
+}
+
+function mergeCartItems(items: CartItem[]): CartItem[] {
+  const map = new Map<string, CartItem>()
+
+  for (const it of items || []) {
+    const key = `${String(it.productId)}::${String(it.talle || "")}`
+    const prev = map.get(key)
+
+    if (!prev) {
+      map.set(key, { ...it, cantidad: Number(it.cantidad || 0) })
+    } else {
+      map.set(key, {
+        ...prev,
+        // ✅ preserva comboId si alguno lo tiene
+        comboId: prev.comboId || it.comboId || null,
+        cantidad: Number(prev.cantidad || 0) + Number(it.cantidad || 0),
+      })
+    }
+  }
+
+  return [...map.values()].filter((x) => x.productId && x.cantidad > 0)
+}
+
+
+
 type MetaCustomer = {
   nombre?: string | null
   apellido?: string | null
@@ -307,50 +353,17 @@ async function buildEmailItems(cart: CartItem[], meta: any) {
     }
   }
 
-  // 2) Combos / zapatillas2x1: se cobran como “pack” pero se descuentan por unidades del cart
-  // Armamos un item por comboId
-  const comboLines = cart.filter((x) => !!x.comboId && !packIdSet.has(String(x.productId)))
-
-  const comboGroup = new Map<string, CartItem[]>()
-  for (const line of comboLines) {
-    const cid = String(line.comboId || "").trim()
-    if (!cid) continue
-    const arr = comboGroup.get(cid) || []
-    arr.push(line)
-    comboGroup.set(cid, arr)
-  }
-
-  const comboIds = [...comboGroup.keys()]
-  const comboSnaps = await Promise.all(comboIds.map((id) => getPackSnapshot(id)))
-  const comboById = new Map<string, PackSnapshot>(
-    (comboSnaps.filter(Boolean) as PackSnapshot[]).map((p) => [String(p._id), p])
-  )
-
-  const comboItems: { title: string; talle: string | null; qty: number }[] = []
-
-  for (const cid of comboIds) {
-    const pack = comboById.get(cid)
-    if (!pack?._id) continue
-
-    const lines = comboGroup.get(cid) || []
-    const totalUnits = lines.reduce((acc, l) => acc + Number(l.cantidad || 0), 0)
-
-    // misma regla que tu preference:
-    const qty =
-      pack._type === "zapatillas2x1"
-        ? Math.max(1, Math.ceil(totalUnits / 2))
-        : 1
-
-    comboItems.push({ title: pack.title, talle: null, qty })
-  }
+   // 2) Productos elegidos dentro de combos (2x1 / combo): listar UNITARIOS
+  const comboCart = cart.filter((x) => !!x.comboId && !packIdSet.has(String(x.productId)))
+  const comboUnitItems = await getProductTitles(comboCart)
 
   // 3) Productos normales: líneas que NO son pack y NO tienen comboId
   const normalCart = cart.filter((x) => !packIdSet.has(String(x.productId)) && !x.comboId)
   const normalItems = await getProductTitles(normalCart)
 
-  // Resultado final: packs + combos + normales
-  return [...packItems, ...comboItems, ...normalItems]
-}
+  // Resultado final: packs + productos de combos (unitarios) + normales
+  return [...packItems, ...comboUnitItems, ...normalItems]
+
 
 function buildShippingAddress(payment: any) {
   // MP puede traer shipping / additional_info en distintos lugares según el flujo
@@ -610,15 +623,20 @@ else if (topic === "merchant_order") {
       return respond200({ msg: "no_preference_id", markerId, paymentId }, startedAt)
     }
 
-    const pref = await mpGet(`https://api.mercadopago.com/checkout/preferences/${prefId}`)
+const pref = await mpGet(`https://api.mercadopago.com/checkout/preferences/${prefId}`)
 
+const cart = parseCartFromPref(pref)                  // fuente principal
+const comboCart = parseComboLinesFromPref(pref)       // fallback
 
-    const cart = parseCartFromPref(pref)
+// ✅ Si cart ya viene con comboId, NO lo merges con comboCart porque duplicás unidades.
+const mergedCart =
+  cart.some((x) => !!x.comboId) ? cart : mergeCartItems([...cart, ...comboCart])
 
-    if (!cart.length) {
-      await sanity.patch(markerId).set({ status: "no_cart_metadata" }).commit().catch(() => {})
-      return respond200({ msg: "no_cart_metadata", markerId, paymentId, preferenceId: prefId }, startedAt)
-    }
+if (!mergedCart.length) {
+  await sanity.patch(markerId).set({ status: "no_cart_metadata" }).commit().catch(() => {})
+  return respond200({ msg: "no_cart_metadata", markerId, paymentId, preferenceId: prefId }, startedAt)
+}
+
 // =========================
 // 4) Reservar stock
 // - NO se descuenta para packMayorista
@@ -631,7 +649,7 @@ const packIds = Array.isArray(meta?.packIds) ? meta.packIds.map(String) : []
 const packIdSet = new Set(packIds)
 
 // ✅ SOLO descontar stock de líneas que NO sean packMayorista
-const cartForStock = cart.filter((x) => !packIdSet.has(String(x.productId)))
+const cartForStock = mergedCart.filter((x) => !packIdSet.has(String(x.productId)))
 
 if (cartForStock.length) {
   const r = await reserveStockAtomic(cartForStock, markerId)
@@ -717,7 +735,8 @@ if (updated && updated.ownerNotified !== true) {
       undefined
 
     // ✅ items: si pack mayorista, mandamos packTitle. Si no, títulos desde Sanity usando cart.
-   const items = await buildEmailItems(cart, meta)
+   const items = await buildEmailItems(mergedCart, meta)
+
     // ✅ orderId para el mail: preferí tu orderId (external_reference)
     const emailOrderId =
       String(meta?.orderId || "").trim() ||
