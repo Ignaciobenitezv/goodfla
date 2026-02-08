@@ -363,7 +363,7 @@ async function buildEmailItems(cart: CartItem[], meta: any) {
 
   // Resultado final: packs + productos de combos (unitarios) + normales
   return [...packItems, ...comboUnitItems, ...normalItems]
-
+}
 
 function buildShippingAddress(payment: any) {
   // MP puede traer shipping / additional_info en distintos lugares según el flujo
@@ -637,10 +637,6 @@ if (!mergedCart.length) {
   return respond200({ msg: "no_cart_metadata", markerId, paymentId, preferenceId: prefId }, startedAt)
 }
 
-// =========================
-// 4) Reservar stock
-// - NO se descuenta para packMayorista
-// =========================
 
 
 // packIds = ids de documentos packMayorista (para excluir de stock)
