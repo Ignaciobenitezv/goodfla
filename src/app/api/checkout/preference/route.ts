@@ -118,6 +118,14 @@ console.log("🟡 packDebug =>", packDebug)
 
     // ✅ siempre parseamos cart de productos (para stock + metadata)
     const rawItems = Array.isArray(body?.items) ? body.items : []
+      // ✅ Detectar packMayorista aunque NO venga comboId (mayorista manda el id del pack en productId)
+const firstProductId = String(rawItems?.[0]?._id ?? rawItems?.[0]?.productId ?? "").trim()
+const packByProductId = firstProductId ? await getPackSnapshot(firstProductId) : null
+const isMayoristaByProductId = packByProductId?._type === "packMayorista"
+
+const packResolved = packDebug || packByProductId
+const packResolvedId = comboId || (isMayoristaByProductId ? firstProductId : "")
+
     const compactCart: CompactProductItem[] = rawItems
       .map((i: any) => ({
         productId: String(i._id ?? i.productId ?? "").trim(),
@@ -135,9 +143,10 @@ console.log("🟡 packDebug =>", packDebug)
 // ==========================
 let skipStock = false
 
-if (packDebug?._type === "packMayorista") {
+if (packDebug?._type === "packMayorista" || isMayoristaByProductId) {
   skipStock = true
 }
+
 
 console.log("🟡 skipStock =>", skipStock)
 
@@ -177,51 +186,42 @@ console.log("🟡 skipStock =>", skipStock)
     // ==========================
     let mpItems: any[] = []
 
-    if (comboId) {
-      const pack = await getPackSnapshot(comboId)
+if (comboId || isMayoristaByProductId) {
+  const packId = comboId || firstProductId
+  const pack = await getPackSnapshot(packId)
 
-      const packPrice = toMoney(Number(pack?.price ?? 0))
+  const packPrice = toMoney(Number(pack?.price ?? 0))
 
-      if (!pack?._id || !packPrice || packPrice <= 0) {
-        return NextResponse.json(
-          {
-            ok: false,
-            error: "invalid_combo",
-            message:
-              "No pudimos obtener el precio del pack/2x1 (id inválido o sin precio). Asegurate de mandar el _id real del documento en Sanity.",
-            comboId,
-            foundType: pack?._type ?? null,
-            foundTitle: pack?.title ?? null,
-            foundPrice: pack?.price ?? null,
-          },
-          { status: 400 }
-        )
-      }
+  if (!pack?._id || !packPrice || packPrice <= 0) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: "invalid_pack",
+        message: "No pudimos obtener el precio del pack mayorista.",
+        packId,
+        foundType: pack?._type ?? null,
+        foundTitle: pack?.title ?? null,
+        foundPrice: pack?.price ?? null,
+      },
+      { status: 400 }
+    )
+  }
 
-      mpItems = [
-        {
-          title: pack.title,
-          quantity: 1,
-          unit_price: packPrice,
-          currency_id: "ARS",
-        },
-      ]
-    } else {
-      // cobrar por productos con precio del server (y nombre)
-      const ids = [...new Set(compactCart.map((x) => x.productId))]
-      const prods = await getProductsSnapshot(ids)
-      const byId = new Map<string, any>((prods || []).map((p: any) => [String(p._id), p]))
+  // ✅ Si el mayorista viene como item con cantidad, respetamos cantidad
+  const qty = Number(rawItems?.[0]?.cantidad ?? 1)
 
-      mpItems = compactCart
-        .map((it) => {
-          const prod = byId.get(it.productId)
-          if (!prod) return null
-          const unit_price = getUnitPriceProduct(prod)
-          const title = `${prod?.nombre || "Producto"}${it.talle ? ` - Talle ${it.talle}` : ""}`
-          return { title, quantity: it.cantidad, unit_price, currency_id: "ARS" }
-        })
-        .filter(Boolean)
-    }
+  mpItems = [
+    {
+      title: pack.title,
+      quantity: qty,
+      unit_price: packPrice,
+      currency_id: "ARS",
+    },
+  ]
+} else {
+  // cobrar por productos...
+}
+
 
 
     // ==========================
@@ -266,8 +266,10 @@ console.log("🟡 skipStock =>", skipStock)
   source: "preference_redirect",
   orderId,
   comboId: comboId || null,
-  packType: comboId ? (await getPackSnapshot(comboId))?._type || null : null,
-  packTitle: comboId ? (await getPackSnapshot(comboId))?.title || null : null,
+packId: packResolvedId || null,
+packType: packResolved?._type || null,
+packTitle: packResolved?.title || null,
+
   cart: JSON.stringify(compactCart),
 
   // ✅ NUEVO: datos del cliente
