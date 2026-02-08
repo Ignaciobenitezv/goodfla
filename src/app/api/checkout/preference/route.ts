@@ -13,9 +13,9 @@ const sanity = createClient({
   useCdn: false,
 })
 
-type CompactProductItem = { productId: string; talle?: string | null; cantidad: number }
-type ParsedLine = { productId: string; talle?: string | null; cantidad: number }
+type CompactProductItem = { productId: string; talle?: string | null; cantidad: number; comboId?: string | null }
 
+type ParsedLine = { productId: string; talle?: string | null; cantidad: number; comboId?: string | null }
 function toMoney(n: any) {
   const v = Number(n || 0)
   return Math.round(v * 100) / 100
@@ -106,21 +106,23 @@ export async function POST(req: Request) {
     // ✅ siempre parseamos cart de productos (para stock + metadata)
     const rawItems = Array.isArray(body?.items) ? body.items : []
 
-  const parsed: ParsedLine[] = rawItems
-  .map((i: any) => ({
-    productId: String(i._id ?? i.productId ?? "").trim(),
-    talle: i.talle ?? null,
-    cantidad: Number(i.cantidad ?? 1),
-  }))
-    .filter((x: ParsedLine) => x.productId && x.cantidad > 0)
+    const parsed: ParsedLine[] = rawItems
+      .map((i: any) => ({
+        productId: String(i._id ?? i.productId ?? "").trim(),
+        talle: i.talle ?? null,
+        cantidad: Number(i.cantidad ?? 1),
+        comboId: i.comboId ? String(i.comboId).trim() : null,
+      }))
+      .filter((x: ParsedLine) => x.productId && x.cantidad > 0)
 
 
-
-    const compactCart: CompactProductItem[] = parsed.map((x: any) => ({
+    const compactCart: CompactProductItem[] = parsed.map((x) => ({
       productId: x.productId,
       talle: x.talle,
       cantidad: x.cantidad,
+      comboId: x.comboId ?? null,
     }))
+
 
       .filter((x: any) => x.productId && x.cantidad > 0)
 
@@ -134,14 +136,16 @@ export async function POST(req: Request) {
     // ==========================
     const uniqueIds = [...new Set(parsed.map((x: any) => x.productId))]
     const snaps = await Promise.all(uniqueIds.map((id) => getPackSnapshot(id)))
-const validSnaps = snaps.filter(Boolean) as PackSnapshot[]
+    const validSnaps = snaps.filter(Boolean) as PackSnapshot[]
 
-const typeById = new Map<string, string>(validSnaps.map((p) => [String(p._id), String(p._type)]))
-const packById = new Map<string, PackSnapshot>(validSnaps.map((p) => [String(p._id), p]))
+    const typeById = new Map<string, string>(validSnaps.map((p) => [String(p._id), String(p._type)]))
+    const packById = new Map<string, PackSnapshot>(validSnaps.map((p) => [String(p._id), p]))
 
 
     const mayoristaLines = parsed.filter((x: any) => typeById.get(x.productId) === "packMayorista")
     const productLines = parsed.filter((x: any) => typeById.get(x.productId) !== "packMayorista")
+    const comboLines = productLines.filter((x) => !!x.comboId)
+    const normalProductLines = productLines.filter((x) => !x.comboId)
 
     console.log("🔎 CLASSIFY", {
       mayorista: mayoristaLines.map((x: any) => x.productId),
@@ -152,14 +156,21 @@ const packById = new Map<string, PackSnapshot>(validSnaps.map((p) => [String(p._
     // - SOLO para productos normales (productLines)
     // - NUNCA para packMayorista (mayoristaLines)
     // ==========================
-    if (productLines.length) {
-      const ids = [...new Set(productLines.map((x: any) => x.productId))]
+    // ==========================
+    // 1) VALIDACIÓN DE STOCK
+    // - SOLO para productos (normal + combo)
+    // - NUNCA para packMayorista
+    // ==========================
+    const stockLines: ParsedLine[] = [...comboLines, ...normalProductLines]
+
+    if (stockLines.length) {
+      const ids = [...new Set(stockLines.map((x) => x.productId))]
       const prods = await getProductsSnapshot(ids)
       const byId = new Map<string, any>((prods || []).map((p: any) => [String(p._id), p]))
 
       const stockErrors: any[] = []
 
-      for (const it of productLines) {
+      for (const it of stockLines) {
         const prod = byId.get(it.productId)
         if (!prod) {
           stockErrors.push({ productId: it.productId, talle: it.talle, requested: it.cantidad, available: 0 })
@@ -181,7 +192,6 @@ const packById = new Map<string, PackSnapshot>(validSnaps.map((p) => [String(p._
     }
 
 
-
     // ==========================
     // ==========================
     // 2) ARMADO DE ITEMS PARA MP
@@ -193,7 +203,7 @@ const packById = new Map<string, PackSnapshot>(validSnaps.map((p) => [String(p._
 
     // A) mayorista
     for (const line of mayoristaLines) {
-     const pack = packById.get(line.productId) || null
+      const pack = packById.get(line.productId) || null
       const unit = toMoney(Number(pack?.price ?? 0))
 
       if (!pack?._id || pack._type !== "packMayorista" || !unit || unit <= 0) {
@@ -205,14 +215,60 @@ const packById = new Map<string, PackSnapshot>(validSnaps.map((p) => [String(p._
 
       mpItems.push({ title: pack.title, quantity: line.cantidad, unit_price: unit, currency_id: "ARS" })
     }
+    // B) combos (ej zapatillas2x1 / combo) => 1 ítem de oferta por comboId
+    if (comboLines.length) {
+      // Agrupar por comboId
+      const group = new Map<string, ParsedLine[]>()
+      for (const line of comboLines) {
+        const cid = String(line.comboId || "").trim()
+        if (!cid) continue
+        const arr = group.get(cid) || []
+        arr.push(line)
+        group.set(cid, arr)
+      }
 
-    // B) productos
-    if (productLines.length) {
-      const ids = [...new Set(productLines.map((x: any) => x.productId))]
+      const comboIds = [...group.keys()]
+      const comboSnaps = await Promise.all(comboIds.map((id) => getPackSnapshot(id)))
+      const comboById = new Map<string, PackSnapshot>(
+        (comboSnaps.filter(Boolean) as PackSnapshot[]).map((p) => [String(p._id), p])
+      )
+
+      for (const cid of comboIds) {
+        const pack = comboById.get(cid) || null
+        const unit = toMoney(Number(pack?.price ?? 0))
+
+        if (!pack?._id || !unit || unit <= 0) {
+          return NextResponse.json(
+            { ok: false, error: "invalid_combo", message: "Combo/2x1 inválido.", comboId: cid, pack },
+            { status: 400 }
+          )
+        }
+
+        // Regla: zapatillas2x1 cobra 1 “pack” cada 2 unidades
+        const lines = group.get(cid) || []
+        const totalUnits = lines.reduce((acc, l) => acc + Number(l.cantidad || 0), 0)
+
+        const qty =
+          pack._type === "zapatillas2x1"
+            ? Math.max(1, Math.ceil(totalUnits / 2))
+            : 1 // combo genérico: 1 por compra (si necesitás >1 lo ajustamos luego)
+
+        mpItems.push({
+          title: pack.title,
+          quantity: qty,
+          unit_price: unit,
+          currency_id: "ARS",
+        })
+      }
+    }
+
+    // C) productos normales (precio unitario server)
+    if (normalProductLines.length) {
+      const ids = [...new Set(normalProductLines.map((x) => x.productId))]
       const prods = await getProductsSnapshot(ids)
       const byId = new Map<string, any>((prods || []).map((p: any) => [String(p._id), p]))
 
-      for (const it of productLines) {
+      for (const it of normalProductLines) {
         const prod = byId.get(it.productId)
         if (!prod) continue
         const unit_price = getUnitPriceProduct(prod)
@@ -220,10 +276,6 @@ const packById = new Map<string, PackSnapshot>(validSnaps.map((p) => [String(p._
         mpItems.push({ title, quantity: it.cantidad, unit_price, currency_id: "ARS" })
       }
     }
-
-
-
-
     // ==========================
     // 3) MP preference
     // ==========================
@@ -272,6 +324,21 @@ const packById = new Map<string, PackSnapshot>(validSnaps.map((p) => [String(p._
 
           cart: JSON.stringify(compactCart),
 
+          combos: JSON.stringify(
+            [...new Map(
+              comboLines
+                .filter(l => l.comboId)
+                .map(l => [String(l.comboId), true])
+            ).keys()]
+          ),
+
+
+          comboLines: JSON.stringify(comboLines.map(l => ({
+            productId: l.productId,
+            talle: l.talle ?? null,
+            cantidad: l.cantidad,
+            comboId: l.comboId ?? null,
+          }))),
           // ✅ NUEVO: datos del cliente
           customer: {
             nombre: body?.customer?.nombre?.trim() || null,

@@ -14,7 +14,8 @@ const sanity = createClient({
   useCdn: false,
 })
 
-type CartItem = { productId: string; talle?: string | null; cantidad: number }
+type CartItem = { productId: string; talle?: string | null; cantidad: number; comboId?: string | null }
+
 
 function respond200(payload: Record<string, any>, startedAt: number) {
   console.log("✅ webhook_responding_200", { ms: Date.now() - startedAt, ...payload })
@@ -141,13 +142,14 @@ function parseCartFromPref(pref: any): CartItem[] {
     }
   }
 
-  cart = (cart || [])
-    .map((x: any) => ({
-      productId: String(x?.productId ?? x?._id ?? "").trim(),
-      talle: x?.talle ?? null,
-      cantidad: Number(x?.cantidad ?? 1),
-    }))
-    .filter((x: any) => x.productId && x.cantidad > 0)
+cart = (cart || [])
+  .map((x: any) => ({
+    productId: String(x?.productId ?? x?._id ?? "").trim(),
+    talle: x?.talle ?? null,
+    cantidad: Number(x?.cantidad ?? 1),
+    comboId: x?.comboId ? String(x.comboId).trim() : null,
+  }))
+  .filter((x: any) => x.productId && x.cantidad > 0)
 
   return cart
 }
@@ -180,13 +182,15 @@ function parseCartFromMetadata(meta: any): CartItem[] {
     } catch {}
   }
 
-  return (arr || [])
-    .map((x: any) => ({
-      productId: String(x?.productId ?? x?._id ?? "").trim(),
-      talle: x?.talle ?? null,
-      cantidad: Number(x?.cantidad ?? 1),
-    }))
-    .filter((x: any) => x.productId && x.cantidad > 0)
+ return (arr || [])
+  .map((x: any) => ({
+    productId: String(x?.productId ?? x?._id ?? "").trim(),
+    talle: x?.talle ?? null,
+    cantidad: Number(x?.cantidad ?? 1),
+    comboId: x?.comboId ? String(x.comboId).trim() : null,
+  }))
+  .filter((x: any) => x.productId && x.cantidad > 0)
+
 }
 
 function buildShippingFromCustomer(customer: MetaCustomer | null | undefined): string {
@@ -227,6 +231,73 @@ async function getProductTitles(cart: CartItem[]) {
   })
 }
 
+async function buildEmailItems(cart: CartItem[], meta: any) {
+  const packIds: string[] = Array.isArray(meta?.packIds) ? meta.packIds.map(String) : []
+  const packIdSet = new Set(packIds)
+
+  // 1) Packs mayoristas (se listan como items)
+  let packItems: { title: string; talle: string | null; qty: number }[] = []
+  if (packIds.length) {
+    const packCart = cart.filter((x) => packIdSet.has(String(x.productId)))
+    if (packCart.length) {
+      const docs = await sanity.fetch(
+        `*[_id in $ids]{ _id, _type, "nombre": coalesce(nombre, title) }`,
+        { ids: packIds }
+      )
+      const byId = new Map<string, any>((docs || []).map((d: any) => [String(d._id), d]))
+
+      packItems = packCart.map((it) => ({
+        title: String(byId.get(String(it.productId))?.nombre || it.productId),
+        talle: null,
+        qty: Number(it.cantidad || 1),
+      }))
+    }
+  }
+
+  // 2) Combos / zapatillas2x1: se cobran como “pack” pero se descuentan por unidades del cart
+  // Armamos un item por comboId
+  const comboLines = cart.filter((x) => !!x.comboId && !packIdSet.has(String(x.productId)))
+
+  const comboGroup = new Map<string, CartItem[]>()
+  for (const line of comboLines) {
+    const cid = String(line.comboId || "").trim()
+    if (!cid) continue
+    const arr = comboGroup.get(cid) || []
+    arr.push(line)
+    comboGroup.set(cid, arr)
+  }
+
+  const comboIds = [...comboGroup.keys()]
+  const comboSnaps = await Promise.all(comboIds.map((id) => getPackSnapshot(id)))
+  const comboById = new Map<string, PackSnapshot>(
+    (comboSnaps.filter(Boolean) as PackSnapshot[]).map((p) => [String(p._id), p])
+  )
+
+  const comboItems: { title: string; talle: string | null; qty: number }[] = []
+
+  for (const cid of comboIds) {
+    const pack = comboById.get(cid)
+    if (!pack?._id) continue
+
+    const lines = comboGroup.get(cid) || []
+    const totalUnits = lines.reduce((acc, l) => acc + Number(l.cantidad || 0), 0)
+
+    // misma regla que tu preference:
+    const qty =
+      pack._type === "zapatillas2x1"
+        ? Math.max(1, Math.ceil(totalUnits / 2))
+        : 1
+
+    comboItems.push({ title: pack.title, talle: null, qty })
+  }
+
+  // 3) Productos normales: líneas que NO son pack y NO tienen comboId
+  const normalCart = cart.filter((x) => !packIdSet.has(String(x.productId)) && !x.comboId)
+  const normalItems = await getProductTitles(normalCart)
+
+  // Resultado final: packs + combos + normales
+  return [...packItems, ...comboItems, ...normalItems]
+}
 
 function buildShippingAddress(payment: any) {
   // MP puede traer shipping / additional_info en distintos lugares según el flujo
@@ -365,14 +436,17 @@ const buyerEmail =
   const shippingAddress = buildShippingFromCustomer(customer) || undefined
 
   // items: si es mayorista, usamos packTitle; si no, usamos cart
-  const packType = meta?.packType || null
-  const isMayorista = packType === "packMayorista"
+ const cart = parseCartFromMetadata(meta)
+// packIds = ids de documentos packMayorista (para excluir de stock)
+const packIds = Array.isArray(meta?.packIds) ? meta.packIds.map(String) : []
+const packIdSet = new Set(packIds)
 
-  const cart = isMayorista ? [] : parseCartFromMetadata(meta)
+// ✅ items SIEMPRE desde el cart (incluye packMayorista y productos)
+const items = await buildEmailItems(cart, meta)
 
-  const items = isMayorista
-    ? [{ title: String(meta?.packTitle || "Pack Mayorista"), talle: null, qty: 1 }]
-    : await getProductTitles(cart)
+// ✅ si en algún futuro querés “no stock” para packMayorista:
+// filtrás SOLO para stock
+const cartForStock = cart.filter((x) => !packIdSet.has(String(x.productId)))
 
   // idempotencia de email
   const updated = await sanity
@@ -496,11 +570,18 @@ else if (topic === "merchant_order") {
 // 4) Reservar stock
 // - NO se descuenta para packMayorista
 // =========================
-const packType = pref?.metadata?.packType || null
-const isMayorista = packType === "packMayorista"
 
-if (!isMayorista) {
-  const r = await reserveStockAtomic(cart, markerId)
+
+// packIds = ids de documentos packMayorista (para excluir de stock)
+const meta = pref?.metadata || {}
+const packIds = Array.isArray(meta?.packIds) ? meta.packIds.map(String) : []
+const packIdSet = new Set(packIds)
+
+// ✅ SOLO descontar stock de líneas que NO sean packMayorista
+const cartForStock = cart.filter((x) => !packIdSet.has(String(x.productId)))
+
+if (cartForStock.length) {
+  const r = await reserveStockAtomic(cartForStock, markerId)
 
   if (!r.ok) {
     console.log("❌ Sin stock — marcando orden como failed_stock")
@@ -515,13 +596,10 @@ if (!isMayorista) {
       .commit()
       .catch(() => {})
 
-    return respond200(
-      { ignored: true, reason: "failed_stock", markerId, paymentId },
-      startedAt
-    )
+    return respond200({ ignored: true, reason: "failed_stock", markerId, paymentId }, startedAt)
   }
 } else {
-  console.log("📦 packMayorista: skipping stock reserve", { markerId, paymentId })
+  console.log("📦 only packMayorista lines: skipping stock reserve", { markerId, paymentId })
 }
 
 
@@ -586,13 +664,7 @@ if (updated && updated.ownerNotified !== true) {
       undefined
 
     // ✅ items: si pack mayorista, mandamos packTitle. Si no, títulos desde Sanity usando cart.
-    const packType = meta?.packType || null
-    const isMayorista = packType === "packMayorista"
-
-    const items = isMayorista
-      ? [{ title: String(meta?.packTitle || "Pack Mayorista"), talle: null, qty: 1 }]
-      : await getProductTitles(cart)
-
+   const items = await buildEmailItems(cart, meta)
     // ✅ orderId para el mail: preferí tu orderId (external_reference)
     const emailOrderId =
       String(meta?.orderId || "").trim() ||
