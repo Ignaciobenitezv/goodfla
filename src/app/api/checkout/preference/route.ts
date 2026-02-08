@@ -112,7 +112,7 @@ export async function POST(req: Request) {
     talle: i.talle ?? null,
     cantidad: Number(i.cantidad ?? 1),
   }))
-  .filter((x) => x.productId && x.cantidad > 0)
+    .filter((x: ParsedLine) => x.productId && x.cantidad > 0)
 
 
 
