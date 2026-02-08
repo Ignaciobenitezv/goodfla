@@ -426,6 +426,11 @@ export async function POST(req: Request) {
 
     // 2) Items
     const rawItems = Array.isArray(body.items) ? body.items : []
+    const firstProductId = String(rawItems?.[0]?._id ?? rawItems?.[0]?.productId ?? "").trim()
+const packByProductId = firstProductId ? await getPackSnapshot(firstProductId) : null
+const isMayoristaByProductId = packByProductId?._type === "packMayorista"
+
+    
     if (!rawItems.length) {
       return NextResponse.json({ ok: false, error: "empty_cart", message: "Carrito vacío." }, { status: 400 })
     }
@@ -449,22 +454,23 @@ export async function POST(req: Request) {
 // ==========================
 const comboId = String(body.comboId || "").trim()
 const packDebug = comboId ? await getPackSnapshot(comboId) : null
-console.log("PACK_DEBUG", { comboId, packDebug })
 
-// Si el front mandó comboId pero no existe el doc, cortamos con error claro
-if (comboId && !packDebug?._id) {
-  return NextResponse.json(
-    { ok: false, error: "invalid_comboId", message: "comboId no existe en Sanity.", comboId },
-    { status: 400 }
-  )
-}
+// ✅ Resolver pack aunque NO venga comboId (mayorista puede venir como item normal)
+const packResolved = packDebug || packByProductId
+const isPackMayorista = packResolved?._type === "packMayorista"
+const isComboLike =
+  !!packDebug && (packDebug._type === "combo" || packDebug._type === "zapatillas2x1")
 
-// Tipos
-const isPackMayorista = packDebug?._type === "packMayorista"
-const isComboLike = !!packDebug && (packDebug._type === "combo" || packDebug._type === "zapatillas2x1")
+console.log("PACK_DEBUG", {
+  comboId,
+  packDebug,
+  firstProductId,
+  packByProductId,
+  packResolved,
+})
 
-// Solo mayorista NO valida stock ni descuenta stock
 const skipStock = isPackMayorista
+
 
 let subtotal = 0
 const stockErrors: any[] = []
@@ -499,13 +505,24 @@ if (!skipStock) {
 
 // 3B) Subtotal de cobro (regla correcta)
 if (isPackMayorista) {
-  subtotal = toMoney(Number(packDebug?.price ?? 0))
-  if (!subtotal || subtotal <= 0) {
+  // ✅ Pack mayorista: cobra precio del pack * cantidad (puede venir sin comboId)
+  const qty = Number(rawItems?.[0]?.cantidad ?? 1)
+  const unit = toMoney(Number(packResolved?.price ?? 0))
+
+  if (!unit || unit <= 0) {
     return NextResponse.json(
-      { ok: false, error: "invalid_pack_price", message: "Pack mayorista sin precio válido.", comboId, packDebug },
+      {
+        ok: false,
+        error: "invalid_pack_price",
+        message: "Pack mayorista sin precio válido.",
+        comboId: comboId || null,
+        pack: packResolved ?? null,
+      },
       { status: 400 }
     )
   }
+
+  subtotal = toMoney(unit * qty)
 } else if (isComboLike) {
   // ✅ Cobra precio del combo / 2x1, NO suma productos
   subtotal = toMoney(Number(packDebug?.price ?? 0))
@@ -596,8 +613,9 @@ if (clientAmount != null && Math.abs(clientAmount - computedTotal) > 0.01) {
   source: "card_inline",
 
   comboId: comboId || null,
-  packType: packDebug?._type || null,
-  packTitle: packDebug?.title || null,
+  packType: packResolved?._type || null,
+packTitle: packResolved?.title || null,
+
 
   // ✅ datos humanos (vienen del front)
   customer: {
