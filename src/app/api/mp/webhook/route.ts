@@ -65,6 +65,60 @@ function pickTopicAndId(req: Request, body: any) {
   return { topic, id }
 }
 
+type PackSnapshot = { _id: string; _type: string; title: string; price: number }
+
+async function getPackSnapshot(id: string): Promise<PackSnapshot | null> {
+  const doc = await sanity.fetch(
+    `*[
+      _id == $id
+      && _type in ["combo", "zapatillas2x1", "packMayorista"]
+    ][0]{
+      _id,
+      _type,
+      // combo
+      "comboNombre": nombre,
+      "comboPrecio": precio,
+      // zapatillas2x1
+      "zapasNombre": nombre,
+      "zapasPrecio": precioActual,
+      // packMayorista
+      "mayoristaNombre": title,
+      "mayoristaPrecio": precioActual
+    }`,
+    { id }
+  )
+
+  if (!doc?._id) return null
+
+  if (doc._type === "combo") {
+    return {
+      _id: doc._id,
+      _type: doc._type,
+      title: String(doc.comboNombre || "Combo"),
+      price: Number(doc.comboPrecio ?? 0),
+    }
+  }
+
+  if (doc._type === "zapatillas2x1") {
+    return {
+      _id: doc._id,
+      _type: doc._type,
+      title: String(doc.zapasNombre || "Zapatillas 2x1"),
+      price: Number(doc.zapasPrecio ?? 0),
+    }
+  }
+
+  if (doc._type === "packMayorista") {
+    return {
+      _id: doc._id,
+      _type: doc._type,
+      title: String(doc.mayoristaNombre || "Pack Mayorista"),
+      price: Number(doc.mayoristaPrecio ?? 0),
+    }
+  }
+
+  return null
+}
 
 async function reserveStockAtomic(cart: CartItem[], lockId: string) {
   const existing = await sanity.getDocument(lockId)
