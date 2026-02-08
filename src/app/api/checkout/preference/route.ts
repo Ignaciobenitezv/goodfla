@@ -215,52 +215,95 @@ export async function POST(req: Request) {
 
       mpItems.push({ title: pack.title, quantity: line.cantidad, unit_price: unit, currency_id: "ARS" })
     }
-    // B) combos (ej zapatillas2x1 / combo) => 1 ítem de oferta por comboId
-    if (comboLines.length) {
-      // Agrupar por comboId
-      const group = new Map<string, ParsedLine[]>()
-      for (const line of comboLines) {
-        const cid = String(line.comboId || "").trim()
-        if (!cid) continue
-        const arr = group.get(cid) || []
-        arr.push(line)
-        group.set(cid, arr)
-      }
+// B) combos (ej zapatillas2x1 / combo)
+if (comboLines.length) {
+  // 1) Agrupar por comboId
+  const group = new Map<string, ParsedLine[]>()
+  for (const line of comboLines) {
+    const cid = String(line.comboId || "").trim()
+    if (!cid) continue
+    const arr = group.get(cid) || []
+    arr.push(line)
+    group.set(cid, arr)
+  }
 
-      const comboIds = [...group.keys()]
-      const comboSnaps = await Promise.all(comboIds.map((id) => getPackSnapshot(id)))
-      const comboById = new Map<string, PackSnapshot>(
-        (comboSnaps.filter(Boolean) as PackSnapshot[]).map((p) => [String(p._id), p])
+  const comboIds = [...group.keys()]
+  const comboSnaps = await Promise.all(comboIds.map((id) => getPackSnapshot(id)))
+  const comboById = new Map<string, PackSnapshot>(
+    (comboSnaps.filter(Boolean) as PackSnapshot[]).map((p) => [String(p._id), p])
+  )
+
+  // 2) Traer precios unitarios de los productos que participan en combos
+  const comboProductIds = [...new Set(comboLines.map((l) => l.productId))]
+  const comboProds = await getProductsSnapshot(comboProductIds)
+  const prodById = new Map<string, any>((comboProds || []).map((p: any) => [String(p._id), p]))
+
+  // 3) Para cada comboId, calcular pairs + remainder
+  for (const cid of comboIds) {
+    const pack = comboById.get(cid) || null
+    const promoUnit = toMoney(Number(pack?.price ?? 0))
+
+    if (!pack?._id || !promoUnit || promoUnit <= 0) {
+      return NextResponse.json(
+        { ok: false, error: "invalid_combo", message: "Combo/2x1 inválido.", comboId: cid, pack },
+        { status: 400 }
       )
-
-      for (const cid of comboIds) {
-        const pack = comboById.get(cid) || null
-        const unit = toMoney(Number(pack?.price ?? 0))
-
-        if (!pack?._id || !unit || unit <= 0) {
-          return NextResponse.json(
-            { ok: false, error: "invalid_combo", message: "Combo/2x1 inválido.", comboId: cid, pack },
-            { status: 400 }
-          )
-        }
-
-        // Regla: zapatillas2x1 cobra 1 “pack” cada 2 unidades
-        const lines = group.get(cid) || []
-        const totalUnits = lines.reduce((acc, l) => acc + Number(l.cantidad || 0), 0)
-
-        const qty =
-          pack._type === "zapatillas2x1"
-            ? Math.max(1, Math.ceil(totalUnits / 2))
-            : 1 // combo genérico: 1 por compra (si necesitás >1 lo ajustamos luego)
-
-        mpItems.push({
-          title: pack.title,
-          quantity: qty,
-          unit_price: unit,
-          currency_id: "ARS",
-        })
-      }
     }
+
+    const lines = group.get(cid) || []
+    const totalUnits = lines.reduce((acc, l) => acc + Number(l.cantidad || 0), 0)
+
+    // ✅ pares promo
+    const pairs = Math.floor(totalUnits / 2)
+    // ✅ 1 suelta si impar
+    const remainder = totalUnits % 2
+
+    // 3.a) Cobro promo (pairs)
+    if (pairs > 0) {
+      mpItems.push({
+        title: pack.title,
+        quantity: pairs,
+        unit_price: promoUnit,
+        currency_id: "ARS",
+      })
+    }
+
+    // 3.b) Cobro 1 suelta (si remainder=1)
+    if (remainder === 1) {
+      // expandimos unidades para decidir cuál queda suelta
+      const expanded: { productId: string; talle: string | null; unit_price: number; title: string }[] = []
+
+      for (const l of lines) {
+        const prod = prodById.get(l.productId)
+        const unit_price = getUnitPriceProduct(prod)
+        const title = `${prod?.nombre || "Producto"}${l.talle ? ` - Talle ${l.talle}` : ""}`
+
+        for (let k = 0; k < Number(l.cantidad || 0); k++) {
+          expanded.push({ productId: l.productId, talle: l.talle ?? null, unit_price, title })
+        }
+      }
+
+      // Política comercial: cobrar suelta la más cara (no perder margen)
+      expanded.sort((a, b) => (b.unit_price || 0) - (a.unit_price || 0))
+      const single = expanded[0]
+
+      if (!single || !single.unit_price || single.unit_price <= 0) {
+        return NextResponse.json(
+          { ok: false, error: "invalid_combo_single", message: "No se pudo calcular la suelta del combo.", comboId: cid },
+          { status: 400 }
+        )
+      }
+
+      mpItems.push({
+        title: single.title,
+        quantity: 1,
+        unit_price: single.unit_price,
+        currency_id: "ARS",
+      })
+    }
+  }
+}
+
 
     // C) productos normales (precio unitario server)
     if (normalProductLines.length) {

@@ -264,7 +264,6 @@ function buildBuyerNameFromCustomer(customer: MetaCustomer | null | undefined): 
 
 
 
-
 async function getProductTitles(cart: CartItem[]) {
   const ids = [...new Set(cart.map((x) => x.productId))]
 
@@ -273,17 +272,24 @@ async function getProductTitles(cart: CartItem[]) {
     { ids }
   )
 
-  const byId = new Map<string, any>((docs || []).map((p: any) => [String(p._id), p]))
+  const byId = new Map<string, any>(
+    (docs || []).map((p: any) => [String(p._id), p])
+  )
 
   return (cart || []).map((it) => {
     const doc = byId.get(it.productId)
+
+    const base = String(doc?.nombre || it.productId)
+    const title = `${base}${it.talle ? ` - Talle ${it.talle}` : ""}`
+
     return {
-      title: String(doc?.nombre || it.productId),
+      title,
       talle: it.talle ?? null,
       qty: it.cantidad,
     }
   })
 }
+
 
 async function buildEmailItems(cart: CartItem[], meta: any) {
   const packIds: string[] = Array.isArray(meta?.packIds) ? meta.packIds.map(String) : []
