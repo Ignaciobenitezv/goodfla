@@ -14,6 +14,7 @@ const sanity = createClient({
 })
 
 type CompactProductItem = { productId: string; talle?: string | null; cantidad: number }
+type ParsedLine = { productId: string; talle?: string | null; cantidad: number }
 
 function toMoney(n: any) {
   const v = Number(n || 0)
@@ -101,68 +102,70 @@ export async function POST(req: Request) {
   try {
     const body = await req.json().catch(() => ({}))
     console.log("🟣 PREFERENCE BODY =>", body)
-    // ✅ puede venir comboId explícito o dentro de un item
-    const comboId =
-      String(body?.comboId || "").trim() ||
-      String(
-        (Array.isArray(body?.items) ? body.items : []).find((x: any) => x?.comboId)?.comboId || ""
-      ).trim()
-
-
-      // ==========================
-// DEBUG pack / combo
-// ==========================
-const packDebug = comboId ? await getPackSnapshot(comboId) : null
-console.log("🟡 comboId =>", comboId)
-console.log("🟡 packDebug =>", packDebug)
 
     // ✅ siempre parseamos cart de productos (para stock + metadata)
     const rawItems = Array.isArray(body?.items) ? body.items : []
-      // ✅ Detectar packMayorista aunque NO venga comboId (mayorista manda el id del pack en productId)
-const firstProductId = String(rawItems?.[0]?._id ?? rawItems?.[0]?.productId ?? "").trim()
-const packByProductId = firstProductId ? await getPackSnapshot(firstProductId) : null
-const isMayoristaByProductId = packByProductId?._type === "packMayorista"
 
-const packResolved = packDebug || packByProductId
-const packResolvedId = comboId || (isMayoristaByProductId ? firstProductId : "")
+  const parsed: ParsedLine[] = rawItems
+  .map((i: any) => ({
+    productId: String(i._id ?? i.productId ?? "").trim(),
+    talle: i.talle ?? null,
+    cantidad: Number(i.cantidad ?? 1),
+  }))
+  .filter((x) => x.productId && x.cantidad > 0)
 
-    const compactCart: CompactProductItem[] = rawItems
-      .map((i: any) => ({
-        productId: String(i._id ?? i.productId ?? "").trim(),
-        talle: i.talle ?? null,
-        cantidad: Number(i.cantidad || 1),
-      }))
+
+
+    const compactCart: CompactProductItem[] = parsed.map((x: any) => ({
+      productId: x.productId,
+      talle: x.talle,
+      cantidad: x.cantidad,
+    }))
+
       .filter((x: any) => x.productId && x.cantidad > 0)
 
     if (!compactCart.length) {
       return NextResponse.json({ ok: false, error: "empty_cart" }, { status: 400 })
     }
 
-// 1) VALIDACIÓN DE STOCK
-// - NO se valida para packMayorista
-// ==========================
-let skipStock = false
+    // ==========================
+    // ✅ Clasificar líneas por tipo real en Sanity
+    // (esto habilita carrito mixto: mayorista + productos)
+    // ==========================
+    const uniqueIds = [...new Set(parsed.map((x: any) => x.productId))]
+    const snaps = await Promise.all(uniqueIds.map((id) => getPackSnapshot(id)))
+const validSnaps = snaps.filter(Boolean) as PackSnapshot[]
 
-if (packDebug?._type === "packMayorista" || isMayoristaByProductId) {
-  skipStock = true
-}
+const typeById = new Map<string, string>(validSnaps.map((p) => [String(p._id), String(p._type)]))
+const packById = new Map<string, PackSnapshot>(validSnaps.map((p) => [String(p._id), p]))
 
 
-console.log("🟡 skipStock =>", skipStock)
+    const mayoristaLines = parsed.filter((x: any) => typeById.get(x.productId) === "packMayorista")
+    const productLines = parsed.filter((x: any) => typeById.get(x.productId) !== "packMayorista")
 
+    console.log("🔎 CLASSIFY", {
+      mayorista: mayoristaLines.map((x: any) => x.productId),
+      productos: productLines.map((x: any) => x.productId),
+    })
 
-    if (!skipStock) {
-      const ids = [...new Set(compactCart.map((x) => x.productId))]
+    // 1) VALIDACIÓN DE STOCK
+    // - SOLO para productos normales (productLines)
+    // - NUNCA para packMayorista (mayoristaLines)
+    // ==========================
+    if (productLines.length) {
+      const ids = [...new Set(productLines.map((x: any) => x.productId))]
       const prods = await getProductsSnapshot(ids)
       const byId = new Map<string, any>((prods || []).map((p: any) => [String(p._id), p]))
 
       const stockErrors: any[] = []
-      for (const it of compactCart) {
+
+      for (const it of productLines) {
         const prod = byId.get(it.productId)
         if (!prod) {
           stockErrors.push({ productId: it.productId, talle: it.talle, requested: it.cantidad, available: 0 })
           continue
         }
+
         const available = getAvailable(prod, it.talle)
         if (available < it.cantidad) {
           stockErrors.push({ productId: it.productId, talle: it.talle, requested: it.cantidad, available })
@@ -178,49 +181,46 @@ console.log("🟡 skipStock =>", skipStock)
     }
 
 
+
     // ==========================
     // ==========================
     // 2) ARMADO DE ITEMS PARA MP
     // - Si hay comboId => COBRO PACK (1 item)
     // - Si NO hay comboId => COBRO PRODUCTOS
     // ==========================
+
     let mpItems: any[] = []
 
-if (comboId || isMayoristaByProductId) {
-  const packId = comboId || firstProductId
-  const pack = await getPackSnapshot(packId)
+    // A) mayorista
+    for (const line of mayoristaLines) {
+     const pack = packById.get(line.productId) || null
+      const unit = toMoney(Number(pack?.price ?? 0))
 
-  const packPrice = toMoney(Number(pack?.price ?? 0))
+      if (!pack?._id || pack._type !== "packMayorista" || !unit || unit <= 0) {
+        return NextResponse.json(
+          { ok: false, error: "invalid_pack", message: "Pack mayorista inválido.", productId: line.productId, pack },
+          { status: 400 }
+        )
+      }
 
-  if (!pack?._id || !packPrice || packPrice <= 0) {
-    return NextResponse.json(
-      {
-        ok: false,
-        error: "invalid_pack",
-        message: "No pudimos obtener el precio del pack mayorista.",
-        packId,
-        foundType: pack?._type ?? null,
-        foundTitle: pack?.title ?? null,
-        foundPrice: pack?.price ?? null,
-      },
-      { status: 400 }
-    )
-  }
+      mpItems.push({ title: pack.title, quantity: line.cantidad, unit_price: unit, currency_id: "ARS" })
+    }
 
-  // ✅ Si el mayorista viene como item con cantidad, respetamos cantidad
-  const qty = Number(rawItems?.[0]?.cantidad ?? 1)
+    // B) productos
+    if (productLines.length) {
+      const ids = [...new Set(productLines.map((x: any) => x.productId))]
+      const prods = await getProductsSnapshot(ids)
+      const byId = new Map<string, any>((prods || []).map((p: any) => [String(p._id), p]))
 
-  mpItems = [
-    {
-      title: pack.title,
-      quantity: qty,
-      unit_price: packPrice,
-      currency_id: "ARS",
-    },
-  ]
-} else {
-  // cobrar por productos...
-}
+      for (const it of productLines) {
+        const prod = byId.get(it.productId)
+        if (!prod) continue
+        const unit_price = getUnitPriceProduct(prod)
+        const title = `${prod?.nombre || "Producto"}${it.talle ? ` - Talle ${it.talle}` : ""}`
+        mpItems.push({ title, quantity: it.cantidad, unit_price, currency_id: "ARS" })
+      }
+    }
+
 
 
 
@@ -263,26 +263,26 @@ if (comboId || isMayoristaByProductId) {
         auto_return: "approved",
         notification_url: `${baseUrl}/api/mp/webhook`,
         metadata: {
-  source: "preference_redirect",
-  orderId,
-  comboId: comboId || null,
-packId: packResolvedId || null,
-packType: packResolved?._type || null,
-packTitle: packResolved?.title || null,
+          source: "preference_redirect",
+          orderId,
+          packIds: [...new Set(mayoristaLines.map((x) => x.productId))],
+          packType: mayoristaLines.length ? "packMayorista" : null,
+          packTitle: null,
 
-  cart: JSON.stringify(compactCart),
 
-  // ✅ NUEVO: datos del cliente
-  customer: {
-    nombre: body?.customer?.nombre?.trim() || null,
-    apellido: body?.customer?.apellido?.trim() || null,
-    telefono: body?.customer?.telefono?.trim() || null,
-    email: body?.customer?.email?.trim() || null,
-    envio: body?.customer?.envio || null,
-    cp: body?.customer?.cp || null,
-    direccion: body?.customer?.direccion || null,
-  },
-},
+          cart: JSON.stringify(compactCart),
+
+          // ✅ NUEVO: datos del cliente
+          customer: {
+            nombre: body?.customer?.nombre?.trim() || null,
+            apellido: body?.customer?.apellido?.trim() || null,
+            telefono: body?.customer?.telefono?.trim() || null,
+            email: body?.customer?.email?.trim() || null,
+            envio: body?.customer?.envio || null,
+            cp: body?.customer?.cp || null,
+            direccion: body?.customer?.direccion || null,
+          },
+        },
 
       }),
       cache: "no-store",
