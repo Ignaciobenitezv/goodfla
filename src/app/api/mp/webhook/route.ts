@@ -265,30 +265,23 @@ function buildBuyerNameFromCustomer(customer: MetaCustomer | null | undefined): 
 
 
 async function getProductTitles(cart: CartItem[]) {
-  const ids = [...new Set(cart.map((x) => x.productId))]
+  const ids = [...new Set((cart || []).map((x) => x.productId))]
 
   const docs = await sanity.fetch(
     `*[_id in $ids]{ _id, _type, "nombre": coalesce(nombre, title) }`,
     { ids }
   )
 
-  const byId = new Map<string, any>(
-    (docs || []).map((p: any) => [String(p._id), p])
-  )
+  const byId = new Map<string, any>((docs || []).map((p: any) => [String(p._id), p]))
 
   return (cart || []).map((it) => {
     const doc = byId.get(it.productId)
-
     const base = String(doc?.nombre || it.productId)
     const title = `${base}${it.talle ? ` - Talle ${it.talle}` : ""}`
-
-    return {
-      title,
-      talle: it.talle ?? null,
-      qty: it.cantidad,
-    }
+    return { title, talle: it.talle ?? null, qty: it.cantidad }
   })
 }
+
 
 
 async function buildEmailItems(cart: CartItem[], meta: any) {
