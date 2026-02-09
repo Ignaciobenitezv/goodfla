@@ -520,6 +520,7 @@ async function handle(req: Request) {
   if (!merchantOrderId) {
   // ✅ Flujo Brick/card_inline: no hay merchant_order, usamos payment.metadata
   const meta = payment?.metadata || {}
+    console.log("🧩 payment_metadata_keys", Object.keys(meta || {}))
 
 // candado idempotente
 await sanity.createIfNotExists({
@@ -563,13 +564,38 @@ const buyerEmail =
   const shippingAddress = buildShippingFromCustomer(customer) || undefined
 
   // items: si es mayorista, usamos packTitle; si no, usamos cart
- const cart = parseCartFromMetadata(meta)
+let cart = parseCartFromMetadata(meta)
+
+// fallback extra por si MP te devuelve cart como string raro o viene en cartJson
+if (!cart.length && meta?.cart && typeof meta.cart === "string") {
+  try {
+    const parsed = JSON.parse(meta.cart)
+    if (Array.isArray(parsed)) cart = parsed
+  } catch {}
+}
+if (!cart.length && meta?.cartJson && typeof meta.cartJson === "string") {
+  try {
+    const parsed = JSON.parse(meta.cartJson)
+    if (Array.isArray(parsed)) cart = parsed
+  } catch {}
+}
+
 // packIds = ids de documentos packMayorista (para excluir de stock)
 const packIds = Array.isArray(meta?.packIds) ? meta.packIds.map(String) : []
 const packIdSet = new Set(packIds)
 
 // ✅ items SIEMPRE desde el cart (incluye packMayorista y productos)
-const items = await buildEmailItems(cart, meta)
+let items = await buildEmailItems(cart, meta)
+
+// fallback: si por algún motivo no pudo armar items con nombres,
+// al menos listamos “productId” para no perder el detalle.
+if (!items.length && cart.length) {
+  items = cart.map((it) => ({
+    title: String(it.productId),
+    talle: it.talle ?? null,
+    qty: Number(it.cantidad || 1),
+  }))
+}
 
 // ✅ si en algún futuro querés “no stock” para packMayorista:
 // filtrás SOLO para stock
@@ -607,6 +633,7 @@ const cartForStock = cart.filter((x) => !packIdSet.has(String(x.productId)))
     .commit({ returnDocuments: true })
     .catch(() => null)
 console.log("📧 attempting_owner_email_card_inline", {
+  
   markerId,
   paymentId,
   orderId: String(meta?.orderId || paymentId),
@@ -615,6 +642,10 @@ console.log("📧 attempting_owner_email_card_inline", {
   buyerPhone,
   shippingAddress,
   itemsCount: items?.length || 0,
+    metaHasCart: !!(meta?.cart || meta?.cartJson),
+  cartCount: cart?.length || 0,
+  firstCartItem: cart?.[0] || null,
+
 })
 
   if (updated && updated.ownerNotified !== true) {

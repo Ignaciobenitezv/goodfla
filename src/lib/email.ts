@@ -46,12 +46,16 @@ export async function sendOwnerSaleEmail(params: {
 
   const subject = `✅ Venta aprobada — Orden ${orderId}`
 
-  const itemsHtml = items
-    .map((i) => {
-      const talle = i.talle ? ` (Talle ${i.talle})` : ""
-      return `<li><b>${i.title}</b>${talle} — x ${i.qty}</li>`
-    })
-    .join("")
+  const itemsHtml =
+  Array.isArray(items) && items.length
+    ? items
+        .map((i) => {
+          const talle = i.talle ? ` (Talle ${i.talle})` : ""
+          return `<li><b>${i.title}</b>${talle} — x ${i.qty}</li>`
+        })
+        .join("")
+    : `<li><i>(Sin items en metadata)</i></li>`
+
 
   const html = `
   <div style="font-family:Arial,sans-serif;line-height:1.4">
