@@ -267,7 +267,6 @@ async function persistCardInlineOrder(markerId: string, payload: any) {
     .commit({ autoGenerateArrayKeys: true })
 }
 
-
 function parseCartFromPref(pref: any): CartItem[] {
   let cart: any[] = []
   const rawCart = pref?.metadata?.cart
@@ -283,7 +282,7 @@ function parseCartFromPref(pref: any): CartItem[] {
     }
   }
 
-  // ✅ normalizar SIEMPRE (array o string)
+  // ✅ normalizar SIEMPRE (venga array o string)
   return (cart || [])
     .map((x: any) => ({
       productId: String(x?.productId ?? x?._id ?? "").trim(),
@@ -293,6 +292,7 @@ function parseCartFromPref(pref: any): CartItem[] {
     }))
     .filter((x: any) => x.productId && x.cantidad > 0)
 }
+
 
 
 function parseComboLinesFromPref(pref: any): CartItem[] {
