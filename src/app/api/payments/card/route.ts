@@ -16,7 +16,7 @@ type CompactItem = {
 
 
 type BrickPayload = {
-  token: string
+  token?: string
   issuer_id?: string | number
   payment_method_id?: string
   paymentMethodId?: string
@@ -400,6 +400,7 @@ async function reserveStockAtomic(cart: CartItem[], lockId: string) {
 export async function POST(req: Request) {
   try {
     const body = (await req.json()) as BrickPayload
+    const isQuoteOnly = !!(body as any).quoteOnly
 
 
     console.log("PAYMENT_CARD_IN", {
@@ -426,27 +427,30 @@ export async function POST(req: Request) {
     const installmentsRaw = Number(body.installments ?? 1)
     const installments = Number.isFinite(installmentsRaw) && installmentsRaw >= 1 ? installmentsRaw : 1
 
-    if (!token || !payment_method_id) {
-      return NextResponse.json(
-        { ok: false, error: "missing_payment_data", message: "Faltan datos de la tarjeta (token o método de pago)." },
-        { status: 400 }
-      )
-    }
+    if (!isQuoteOnly && (!token || !payment_method_id)) {
+  return NextResponse.json(
+    { ok: false, error: "missing_payment_data", message: "Faltan datos de la tarjeta (token o método de pago)." },
+    { status: 400 }
+  )
+}
+
 
     // 1.1) Email + DNI (Brick) — soporta body.email o payer.email
     const email = String(body.email || body.payer?.email || (body as any)?.payer?.email || "").trim()
     const identification = normalizeIdentification(body)
 
-    if (!email) {
-      return NextResponse.json({ ok: false, error: "missing_email", message: "Falta el email del pagador." }, { status: 400 })
-    }
+   if (!isQuoteOnly) {
+  if (!email) {
+    return NextResponse.json({ ok: false, error: "missing_email", message: "Falta el email del pagador." }, { status: 400 })
+  }
 
-    if (!identification.type || !identification.number) {
-      return NextResponse.json(
-        { ok: false, error: "missing_identification", message: "Falta DNI/Documento del titular." },
-        { status: 400 }
-      )
-    }
+  if (!identification.type || !identification.number) {
+    return NextResponse.json(
+      { ok: false, error: "missing_identification", message: "Falta DNI/Documento del titular." },
+      { status: 400 }
+    )
+  }
+}
 
     // 2) Items
     const rawItems = Array.isArray(body.items) ? body.items : []
