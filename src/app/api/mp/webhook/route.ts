@@ -127,7 +127,7 @@ async function reserveStockAtomic(cart: CartItem[], lockId: string) {
   const MAX_RETRIES = 8
 
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
-    const ids = [...new Set(cart.map((x) => x.productId))]
+    const ids = [...new Set((cart || []).map((x) => String(x.productId)))]
 
     const prods = await sanity.fetch(
       `*[_type=="producto" && _id in $ids]{ _id,_rev,stock,talles[]{_key,label,stock} }`,
@@ -136,42 +136,95 @@ async function reserveStockAtomic(cart: CartItem[], lockId: string) {
 
     const byId = new Map<string, any>((prods || []).map((p: any) => [String(p._id), p]))
 
-    // 1) validar stock ANTES (con el snapshot actual)
+    // =========================
+    // 1) VALIDACIÓN DE STOCK (agrupada por productId+talle)
+    // =========================
+    const need = new Map<string, number>()
+    for (const it of cart || []) {
+      const pid = String(it?.productId || "").trim()
+      if (!pid) continue
+      const talle = it?.talle ? String(it.talle).trim() : ""
+      const qty = Number(it?.cantidad ?? 0)
+      if (!qty || qty <= 0) continue
+
+      const key = `${pid}::${talle}`
+      need.set(key, (need.get(key) || 0) + qty)
+    }
+
     const out: any[] = []
-    for (const it of cart) {
-      const prod = byId.get(it.productId)
+    for (const [key, qty] of need.entries()) {
+      const [pid, talleRaw] = key.split("::")
+      const talle = talleRaw || null
+
+      const prod = byId.get(pid)
       if (!prod) {
-        out.push({ productId: it.productId, talle: it.talle ?? null, ok: false, reason: "product_not_found" })
+        out.push({ productId: pid, talle, ok: false, reason: "product_not_found" })
         continue
       }
 
       const available =
-        Array.isArray(prod.talles) && it.talle
-          ? Number((prod.talles.find((t: any) => t?.label === it.talle)?.stock) ?? 0)
+        Array.isArray(prod.talles) && talle
+          ? Number((prod.talles.find((t: any) => String(t?.label ?? "").trim() === talle)?.stock) ?? 0)
           : Number(prod.stock ?? 0)
 
-      if (available < it.cantidad) {
-        out.push({ productId: it.productId, talle: it.talle ?? null, ok: false, requested: it.cantidad, available })
+      if (available < qty) {
+        out.push({ productId: pid, talle, ok: false, requested: qty, available })
       }
     }
+
     if (out.length) return { ok: false, reason: "out_of_stock", details: out }
 
-    // 2) armar transacción: TODOS los descuentos juntos
+    // =========================
+    // 2) DESCUENTO ATÓMICO (1 patch por producto, no pisa talles)
+    // =========================
     try {
+      // agrupar líneas por productId
+      const group = new Map<string, CartItem[]>()
+      for (const it of cart || []) {
+        const pid = String(it?.productId || "").trim()
+        if (!pid) continue
+
+        const arr = group.get(pid) || []
+        arr.push({
+          ...it,
+          talle: it?.talle ? String(it.talle).trim() : null,
+          cantidad: Number(it?.cantidad ?? 0),
+        })
+        group.set(pid, arr)
+      }
+
       let tx = sanity.transaction()
 
-      for (const it of cart) {
-        const prod = byId.get(it.productId)
+      for (const [productId, lines] of group.entries()) {
+        const prod = byId.get(productId)
         if (!prod) continue
 
-        if (Array.isArray(prod.talles) && it.talle) {
-          const newTalles = (prod.talles || []).map((t: any) =>
-            t?.label === it.talle ? { ...t, stock: Math.max(0, Number(t.stock || 0) - it.cantidad) } : t
-          )
+        const hasTalles = Array.isArray(prod.talles) && prod.talles.length
+
+        if (hasTalles) {
+          // sumar decrementos por talle
+          const decByTalle = new Map<string, number>()
+          for (const l of lines) {
+            const t = l?.talle ? String(l.talle).trim() : ""
+            const qty = Number(l?.cantidad ?? 0)
+            if (!t || qty <= 0) continue
+            decByTalle.set(t, (decByTalle.get(t) || 0) + qty)
+          }
+
+          const newTalles = (prod.talles || []).map((t: any) => {
+            const label = String(t?.label ?? "").trim()
+            const dec = decByTalle.get(label) || 0
+            if (!dec) return t
+            return { ...t, stock: Math.max(0, Number(t.stock || 0) - dec) }
+          })
 
           tx = tx.patch(prod._id, (p: any) => p.ifRevisionId(prod._rev).set({ talles: newTalles }))
         } else {
-          tx = tx.patch(prod._id, (p: any) => p.ifRevisionId(prod._rev).dec({ stock: it.cantidad }))
+          // stock global: sumar todo el descuento
+          const totalDec = lines.reduce((acc, l) => acc + Number(l?.cantidad ?? 0), 0)
+          if (totalDec > 0) {
+            tx = tx.patch(prod._id, (p: any) => p.ifRevisionId(prod._rev).dec({ stock: totalDec }))
+          }
         }
       }
 
@@ -179,9 +232,7 @@ async function reserveStockAtomic(cart: CartItem[], lockId: string) {
       return { ok: true }
     } catch (e: any) {
       const msg = String(e?.message || "").toLowerCase()
-      if (msg.includes("revision") || msg.includes("_rev") || msg.includes("conflict")) {
-        continue // reintenta con nuevo snapshot
-      }
+      if (msg.includes("revision") || msg.includes("_rev") || msg.includes("conflict")) continue
       throw e
     }
   }
@@ -522,6 +573,30 @@ const items = await buildEmailItems(cart, meta)
 // ✅ si en algún futuro querés “no stock” para packMayorista:
 // filtrás SOLO para stock
 const cartForStock = cart.filter((x) => !packIdSet.has(String(x.productId)))
+  if (cartForStock.length) {
+  const r = await reserveStockAtomic(cartForStock, markerId)
+
+  if (!r.ok) {
+    const reason = (r as any).reason
+
+    if (reason === "conflict") {
+      await sanity.patch(markerId).set({ status: "retry_conflict" }).commit().catch(() => {})
+      return respond200({ msg: "retry_conflict", markerId, paymentId }, startedAt)
+    }
+
+    await sanity
+      .patch(markerId)
+      .set({
+        status: "failed_stock",
+        detailsJson: JSON.stringify((r as any).details ?? []),
+        failedAt: new Date().toISOString(),
+      })
+      .commit()
+      .catch(() => {})
+
+    return respond200({ ignored: true, reason: "failed_stock", markerId, paymentId }, startedAt)
+  }
+}
 
   // idempotencia de email
   const updated = await sanity
