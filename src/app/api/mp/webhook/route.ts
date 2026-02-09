@@ -331,7 +331,8 @@ type MetaCustomer = {
 
 
 function parseCartFromMetadata(meta: any): CartItem[] {
-  const raw = meta?.cart
+  const raw = meta?.cart ?? meta?.cartJson
+
 
   let arr: any[] = []
   if (Array.isArray(raw)) arr = raw

@@ -11,7 +11,9 @@ type CompactItem = {
   productId?: string
   talle?: string | null
   cantidad: number
+  comboId?: string | null // ✅ NUEVO
 }
+
 
 type BrickPayload = {
   token: string
@@ -145,7 +147,7 @@ async function getShippingPrice(origin: string, cp?: string) {
   return toMoney(data?.price ?? 0)
 }
 
-type CartItem = { productId: string; talle?: string | null; cantidad: number }
+type CartItem = { productId: string; talle?: string | null; cantidad: number; comboId?: string | null } // ✅
 
   // ==========================
 // Helpers para email / resumen
@@ -309,58 +311,78 @@ async function rollbackStockAtomic(cart: CartItem[], lockId: string) {
 }
 
 async function reserveStockAtomic(cart: CartItem[], lockId: string) {
-  // Idempotencia: si YA quedó processed, no tocamos stock
   const existing = await sanity.getDocument(lockId)
   if ((existing as any)?.status === "processed") return { ok: true, already: true }
 
+  // 1) Agrupar por productId::talle
+  const need = new Map<string, { productId: string; talle: string | null; qty: number }>()
+  for (const it of cart) {
+    const key = `${it.productId}::${it.talle ?? ""}`
+    const prev = need.get(key)
+    need.set(key, {
+      productId: it.productId,
+      talle: it.talle ?? null,
+      qty: (prev?.qty ?? 0) + Number(it.cantidad || 0),
+    })
+  }
+
+  const grouped = [...need.values()]
+  const ids = [...new Set(grouped.map((g) => g.productId))]
+
   const MAX_RETRIES = 8
-
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
-    const ids = cart.map((x) => x.productId)
-
     const prods = await sanity.fetch(
-      `*[_type=="producto" && _id in $ids]{
-        _id,_rev,stock,talles[]{_key,label,stock}
-      }`,
+      `*[_type=="producto" && _id in $ids]{ _id,_rev,stock,talles[]{_key,label,stock} }`,
       { ids }
     )
     const byId = new Map<string, any>((prods || []).map((p: any) => [String(p._id), p]))
 
-    const out: any[] = []
-    for (const it of cart) {
-      const prod = byId.get(it.productId)
+    // 2) Validar stock con cantidades agrupadas
+    const errors: any[] = []
+    for (const g of grouped) {
+      const prod = byId.get(g.productId)
       if (!prod) {
-        out.push({ productId: it.productId, talle: it.talle ?? null, ok: false, reason: "product_not_found" })
+        errors.push({ productId: g.productId, talle: g.talle, requested: g.qty, available: 0, ok: false })
         continue
       }
-
       const available =
-        Array.isArray(prod.talles) && it.talle
-          ? Number(prod.talles.find((t: any) => t?.label === it.talle)?.stock ?? 0)
+        Array.isArray(prod.talles) && g.talle
+          ? Number(prod.talles.find((t: any) => t?.label === g.talle)?.stock ?? 0)
           : Number(prod.stock ?? 0)
 
-      if (available < it.cantidad) {
-        out.push({ productId: it.productId, talle: it.talle ?? null, ok: false, requested: it.cantidad, available })
+      if (available < g.qty) {
+        errors.push({ productId: g.productId, talle: g.talle, requested: g.qty, available, ok: false })
       }
     }
+    if (errors.length) return { ok: false, reason: "out_of_stock", details: errors }
 
-    if (out.length) return { ok: false, reason: "out_of_stock", details: out }
-
+    // 3) Descontar con transaction (evita pisadas)
     try {
-      for (const it of cart) {
-        const prod = byId.get(it.productId)
+      let tx = sanity.transaction()
+
+      for (const prodId of ids) {
+        const prod = byId.get(prodId)
         if (!prod) continue
 
-        if (Array.isArray(prod.talles) && it.talle) {
-          const newTalles = (prod.talles || []).map((t: any) =>
-            t?.label === it.talle ? { ...t, stock: Math.max(0, Number(t.stock || 0) - it.cantidad) } : t
-          )
-          await sanity.patch(prod._id).ifRevisionId(prod._rev).set({ talles: newTalles }).commit()
+        // todas las necesidades de este producto (por talle o global)
+        const wants = grouped.filter((g) => g.productId === prodId)
+
+        if (Array.isArray(prod.talles) && wants.some((w) => !!w.talle)) {
+          const talles = prod.talles || []
+          const nextTalles = talles.map((t: any) => {
+            const w = wants.find((x) => x.talle && x.talle === t?.label)
+            if (!w) return t
+            return { ...t, stock: Math.max(0, Number(t.stock || 0) - w.qty) }
+          })
+
+          tx = tx.patch(prodId, (p: any) => p.ifRevisionId(prod._rev).set({ talles: nextTalles }))
         } else {
-          await sanity.patch(prod._id).ifRevisionId(prod._rev).dec({ stock: it.cantidad }).commit()
+          const total = wants.reduce((a, w) => a + Number(w.qty || 0), 0)
+          tx = tx.patch(prodId, (p: any) => p.ifRevisionId(prod._rev).dec({ stock: total }))
         }
       }
 
+      await tx.commit()
       return { ok: true }
     } catch (e: any) {
       const msg = String(e?.message || "").toLowerCase()
@@ -426,22 +448,21 @@ export async function POST(req: Request) {
 
     // 2) Items
     const rawItems = Array.isArray(body.items) ? body.items : []
-    const firstProductId = String(rawItems?.[0]?._id ?? rawItems?.[0]?.productId ?? "").trim()
-const packByProductId = firstProductId ? await getPackSnapshot(firstProductId) : null
-const isMayoristaByProductId = packByProductId?._type === "packMayorista"
-
+    
     
     if (!rawItems.length) {
       return NextResponse.json({ ok: false, error: "empty_cart", message: "Carrito vacío." }, { status: 400 })
     }
 
     const cart: CartItem[] = rawItems
-      .map((i) => ({
-        productId: String(i._id ?? i.productId ?? "").trim(),
-        talle: i.talle ?? null,
-        cantidad: Number(i.cantidad ?? 1),
-      }))
-      .filter((x) => x.productId && x.cantidad > 0)
+  .map((i) => ({
+    productId: String(i._id ?? i.productId ?? "").trim(),
+    talle: i.talle ?? null,
+    cantidad: Number(i.cantidad ?? 1),
+    comboId: i.comboId ? String(i.comboId).trim() : null, // ✅
+  }))
+  .filter((x) => x.productId && x.cantidad > 0)
+
 
     if (!cart.length) {
       return NextResponse.json({ ok: false, error: "invalid_cart", message: "Items inválidos (sin productId)." }, { status: 400 })
@@ -449,27 +470,26 @@ const isMayoristaByProductId = packByProductId?._type === "packMayorista"
 
     const ids = cart.map((x) => x.productId)
 
+    // ==========================
+// 3) Clasificar líneas (como Preference): mayorista vs producto, combo vs normal
 // ==========================
-// 3) Detectar pack/combo + stock/subtotal
-// ==========================
-const comboId = String(body.comboId || "").trim()
-const packDebug = comboId ? await getPackSnapshot(comboId) : null
+const uniqueIds = [...new Set(cart.map((x) => x.productId))]
+const snaps = await Promise.all(uniqueIds.map((id) => getPackSnapshot(id)))
+const validSnaps = snaps.filter(Boolean) as PackSnapshot[]
 
-// ✅ Resolver pack aunque NO venga comboId (mayorista puede venir como item normal)
-const packResolved = packDebug || packByProductId
-const isPackMayorista = packResolved?._type === "packMayorista"
-const isComboLike =
-  !!packDebug && (packDebug._type === "combo" || packDebug._type === "zapatillas2x1")
+const typeByProductId = new Map<string, string>(validSnaps.map((p) => [String(p._id), String(p._type)]))
+const packByProductId = new Map<string, PackSnapshot>(validSnaps.map((p) => [String(p._id), p]))
 
-console.log("PACK_DEBUG", {
-  comboId,
-  packDebug,
-  firstProductId,
-  packByProductId,
-  packResolved,
-})
+const mayoristaLines = cart.filter((x) => typeByProductId.get(x.productId) === "packMayorista")
+const productLines = cart.filter((x) => typeByProductId.get(x.productId) !== "packMayorista")
 
-const skipStock = isPackMayorista
+const comboLines = productLines.filter((x) => !!x.comboId)          // ✅ items de productos que pertenecen a un combo/2x1
+const normalProductLines = productLines.filter((x) => !x.comboId)   // ✅ productos normales
+
+// Stock SOLO para productos (combo + normal). NUNCA para packMayorista.
+const stockCart = [...comboLines, ...normalProductLines]
+const skipStock = stockCart.length === 0
+
 
 
 let subtotal = 0
@@ -478,10 +498,12 @@ let byId = new Map<string, any>()
 
 // 3A) Validación de stock (si aplica) SIEMPRE por productos del carrito
 if (!skipStock) {
+  const ids = [...new Set(stockCart.map((x) => x.productId))]
   const prods = await getProductsSnapshot(ids)
   byId = new Map<string, any>((prods || []).map((p: any) => [String(p._id), p]))
 
-  for (const it of cart) {
+  for (const it of stockCart) {
+
     const prod = byId.get(it.productId)
     if (!prod) {
       stockErrors.push({ productId: it.productId, talle: it.talle, requested: it.cantidad, available: 0, ok: false })
@@ -503,45 +525,92 @@ if (!skipStock) {
   }
 }
 
-// 3B) Subtotal de cobro (regla correcta)
-if (isPackMayorista) {
-  // ✅ Pack mayorista: cobra precio del pack * cantidad (puede venir sin comboId)
-  const qty = Number(rawItems?.[0]?.cantidad ?? 1)
-  const unit = toMoney(Number(packResolved?.price ?? 0))
+// ==========================
+// 3B) Subtotal (igual que Preference)
+// - mayorista: pack.price * cantidad
+// - combos 2x1: pairs * promo + (si impar) 1 suelta (la más cara)
+// - normales: unitPrice * cantidad
+// ==========================
+let subtotalCalc = 0
 
-  if (!unit || unit <= 0) {
+// A) Pack mayorista (por línea)
+for (const line of mayoristaLines) {
+  const pack = packByProductId.get(line.productId) || null
+  const unit = toMoney(Number(pack?.price ?? 0))
+  if (!pack?._id || pack._type !== "packMayorista" || !unit || unit <= 0) {
     return NextResponse.json(
-      {
-        ok: false,
-        error: "invalid_pack_price",
-        message: "Pack mayorista sin precio válido.",
-        comboId: comboId || null,
-        pack: packResolved ?? null,
-      },
+      { ok: false, error: "invalid_pack_price", message: "Pack mayorista sin precio válido.", productId: line.productId, pack },
       { status: 400 }
     )
   }
-
-  subtotal = toMoney(unit * qty)
-} else if (isComboLike) {
-  // ✅ Cobra precio del combo / 2x1, NO suma productos
-  subtotal = toMoney(Number(packDebug?.price ?? 0))
-  if (!subtotal || subtotal <= 0) {
-    return NextResponse.json(
-      { ok: false, error: "invalid_combo_price", message: "Combo sin precio válido.", comboId, packDebug },
-      { status: 400 }
-    )
-  }
-} else {
-  // ✅ Producto normal: suma de productos
-  let sum = 0
-  for (const it of cart) {
-    const prod = byId.get(it.productId)
-    if (!prod) continue
-    sum += getUnitPrice(prod) * it.cantidad
-  }
-  subtotal = toMoney(sum)
+  subtotalCalc += toMoney(unit * Number(line.cantidad || 1))
 }
+
+// B) Combos / 2x1 (agrupado por comboId)
+if (comboLines.length) {
+  // 1) agrupar por comboId
+  const group = new Map<string, CartItem[]>()
+  for (const line of comboLines) {
+    const cid = String(line.comboId || "").trim()
+    if (!cid) continue
+    const arr = group.get(cid) || []
+    arr.push(line)
+    group.set(cid, arr)
+  }
+
+  const comboIds = [...group.keys()]
+  const comboSnaps = await Promise.all(comboIds.map((id) => getPackSnapshot(id)))
+  const comboById = new Map<string, PackSnapshot>(
+    (comboSnaps.filter(Boolean) as PackSnapshot[]).map((p) => [String(p._id), p])
+  )
+
+  for (const cid of comboIds) {
+    const pack = comboById.get(cid) || null
+    const promoUnit = toMoney(Number(pack?.price ?? 0))
+    if (!pack?._id || !promoUnit || promoUnit <= 0) {
+      return NextResponse.json(
+        { ok: false, error: "invalid_combo_price", message: "Combo/2x1 sin precio válido.", comboId: cid, pack },
+        { status: 400 }
+      )
+    }
+
+    const lines = group.get(cid) || []
+    const totalUnits = lines.reduce((acc, l) => acc + Number(l.cantidad || 0), 0)
+
+    const pairs = Math.floor(totalUnits / 2)
+    const remainder = totalUnits % 2
+
+    // promo pairs
+    if (pairs > 0) subtotalCalc += toMoney(pairs * promoUnit)
+
+    // suelta (si impar): cobrar la más cara
+    if (remainder === 1) {
+      let maxUnit = 0
+      for (const l of lines) {
+        const prod = byId.get(l.productId)
+        const unit = getUnitPrice(prod)
+        if (unit > maxUnit) maxUnit = unit
+      }
+      if (!maxUnit || maxUnit <= 0) {
+        return NextResponse.json(
+          { ok: false, error: "invalid_combo_single", message: "No se pudo calcular la suelta del combo.", comboId: cid },
+          { status: 400 }
+        )
+      }
+      subtotalCalc += toMoney(maxUnit)
+    }
+  }
+}
+
+// C) Productos normales
+for (const it of normalProductLines) {
+  const prod = byId.get(it.productId)
+  if (!prod) continue
+  subtotalCalc += toMoney(getUnitPrice(prod) * Number(it.cantidad || 1))
+}
+
+subtotal = toMoney(subtotalCalc)
+
 
 
 
@@ -634,7 +703,9 @@ packTitle: packResolved?.title || null,
   subtotal,
 
   // ✅ mantenemos tu formato actual (string / null)
-  cart: JSON.stringify(cart),
+ cart, // ✅ array real
+cartJson: JSON.stringify(cart), // ✅ compat por si tu webhook todavía parsea string
+
 },
 
     }
@@ -726,8 +797,7 @@ const markerId = `mp_payment_${paymentId}`
 
 // A) Reservar stock SOLO si NO es mayorista
 if (!skipStock) {
-  const r = await reserveStockAtomic(cart, markerId)
-
+  const r = await reserveStockAtomic(stockCart, markerId)
   if ((r as any)?.already) {
     return NextResponse.json({
       ok: true,
@@ -805,7 +875,7 @@ if (!skipStock) {
 
       // 3) 🔁 ROLLBACK DE STOCK (idempotente)
       if (!skipStock) {
-  await rollbackStockAtomic(cart, markerId).catch(() => null)
+ await rollbackStockAtomic(stockCart, markerId)
 }
 
       await sanity
