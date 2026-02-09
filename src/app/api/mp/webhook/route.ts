@@ -282,7 +282,7 @@ function parseCartFromPref(pref: any): CartItem[] {
     }
   }
 
-  // ✅ normalizar SIEMPRE (venga array o string)
+  // ✅ normalizar SIEMPRE (vennga array o string)
   return (cart || [])
     .map((x: any) => ({
       productId: String(x?.productId ?? x?._id ?? "").trim(),
