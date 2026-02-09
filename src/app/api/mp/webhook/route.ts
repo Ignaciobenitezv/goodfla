@@ -127,7 +127,7 @@ async function reserveStockAtomic(cart: CartItem[], lockId: string) {
   const MAX_RETRIES = 8
 
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
-    const ids = cart.map((x) => x.productId)
+    const ids = [...new Set(cart.map((x) => x.productId))]
 
     const prods = await sanity.fetch(
       `*[_type=="producto" && _id in $ids]{ _id,_rev,stock,talles[]{_key,label,stock} }`,
@@ -136,6 +136,7 @@ async function reserveStockAtomic(cart: CartItem[], lockId: string) {
 
     const byId = new Map<string, any>((prods || []).map((p: any) => [String(p._id), p]))
 
+    // 1) validar stock ANTES (con el snapshot actual)
     const out: any[] = []
     for (const it of cart) {
       const prod = byId.get(it.productId)
@@ -153,33 +154,41 @@ async function reserveStockAtomic(cart: CartItem[], lockId: string) {
         out.push({ productId: it.productId, talle: it.talle ?? null, ok: false, requested: it.cantidad, available })
       }
     }
-
     if (out.length) return { ok: false, reason: "out_of_stock", details: out }
 
+    // 2) armar transacción: TODOS los descuentos juntos
     try {
+      let tx = sanity.transaction()
+
       for (const it of cart) {
         const prod = byId.get(it.productId)
+        if (!prod) continue
 
         if (Array.isArray(prod.talles) && it.talle) {
           const newTalles = (prod.talles || []).map((t: any) =>
             t?.label === it.talle ? { ...t, stock: Math.max(0, Number(t.stock || 0) - it.cantidad) } : t
           )
-          await sanity.patch(prod._id).ifRevisionId(prod._rev).set({ talles: newTalles }).commit()
+
+          tx = tx.patch(prod._id, (p: any) => p.ifRevisionId(prod._rev).set({ talles: newTalles }))
         } else {
-          await sanity.patch(prod._id).ifRevisionId(prod._rev).dec({ stock: it.cantidad }).commit()
+          tx = tx.patch(prod._id, (p: any) => p.ifRevisionId(prod._rev).dec({ stock: it.cantidad }))
         }
       }
 
+      await tx.commit()
       return { ok: true }
     } catch (e: any) {
       const msg = String(e?.message || "").toLowerCase()
-      if (msg.includes("revision") || msg.includes("_rev") || msg.includes("conflict")) continue
+      if (msg.includes("revision") || msg.includes("_rev") || msg.includes("conflict")) {
+        continue // reintenta con nuevo snapshot
+      }
       throw e
     }
   }
 
   return { ok: false, reason: "conflict" }
 }
+
 
 function parseCartFromPref(pref: any): CartItem[] {
   let cart: CartItem[] = []
@@ -650,21 +659,29 @@ const cartForStock = mergedCart.filter((x) => !packIdSet.has(String(x.productId)
 if (cartForStock.length) {
   const r = await reserveStockAtomic(cartForStock, markerId)
 
-  if (!r.ok) {
-    console.log("❌ Sin stock — marcando orden como failed_stock")
+if (!r.ok) {
+  const reason = (r as any).reason
 
-    await sanity
-      .patch(markerId)
-      .set({
-        status: "failed_stock",
-        detailsJson: JSON.stringify((r as any).details ?? []),
-        failedAt: new Date().toISOString(),
-      })
-      .commit()
-      .catch(() => {})
-
-    return respond200({ ignored: true, reason: "failed_stock", markerId, paymentId }, startedAt)
+  if (reason === "conflict") {
+    // no lo marques como failed_stock
+    await sanity.patch(markerId).set({ status: "retry_conflict" }).commit().catch(() => {})
+    return respond200({ msg: "retry_conflict", markerId, paymentId }, startedAt)
   }
+
+  // out_of_stock real
+  await sanity
+    .patch(markerId)
+    .set({
+      status: "failed_stock",
+      detailsJson: JSON.stringify((r as any).details ?? []),
+      failedAt: new Date().toISOString(),
+    })
+    .commit()
+    .catch(() => {})
+
+  return respond200({ ignored: true, reason: "failed_stock", markerId, paymentId }, startedAt)
+}
+
 } else {
   console.log("📦 only packMayorista lines: skipping stock reserve", { markerId, paymentId })
 }
