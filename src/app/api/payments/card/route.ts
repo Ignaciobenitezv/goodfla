@@ -36,21 +36,23 @@ type BrickPayload = {
   comboId?: string
   shipping?: { type: "domicilio" | "sucursal"; cp?: string }
 
+  quoteOnly?: boolean
+
   // ✅ PASO 2 – agregar esto
   customer?: {
-  nombre?: string
-  apellido?: string
-  telefono?: string
-  email?: string // ✅ NUEVO
-  envio?: "domicilio" | "sucursal"
-  cp?: string | null
-  direccion?: {
-    calle?: string
-    numero?: string
-    barrio?: string
-    ciudad?: string
-  } | null
-}
+    nombre?: string
+    apellido?: string
+    telefono?: string
+    email?: string // ✅ NUEVO
+    envio?: "domicilio" | "sucursal"
+    cp?: string | null
+    direccion?: {
+      calle?: string
+      numero?: string
+      barrio?: string
+      ciudad?: string
+    } | null
+  }
 }
 
 
@@ -149,7 +151,7 @@ async function getShippingPrice(origin: string, cp?: string) {
 
 type CartItem = { productId: string; talle?: string | null; cantidad: number; comboId?: string | null } // ✅
 
-  // ==========================
+// ==========================
 // Helpers para email / resumen
 // ==========================
 async function getProductTitles(cart: CartItem[]) {
@@ -401,12 +403,12 @@ export async function POST(req: Request) {
 
 
     console.log("PAYMENT_CARD_IN", {
-  orderId: body.orderId,
-  clientAmount: body.amount,
-  comboId: body.comboId,
-  itemsCount: Array.isArray(body.items) ? body.items.length : 0,
-  firstItem: Array.isArray(body.items) ? body.items[0] : null,
-})
+      orderId: body.orderId,
+      clientAmount: body.amount,
+      comboId: body.comboId,
+      itemsCount: Array.isArray(body.items) ? body.items.length : 0,
+      firstItem: Array.isArray(body.items) ? body.items[0] : null,
+    })
 
     // 1) Datos mínimos (robusto a distintos formatos del Brick)
     const token = body.token
@@ -448,20 +450,20 @@ export async function POST(req: Request) {
 
     // 2) Items
     const rawItems = Array.isArray(body.items) ? body.items : []
-    
-    
+
+
     if (!rawItems.length) {
       return NextResponse.json({ ok: false, error: "empty_cart", message: "Carrito vacío." }, { status: 400 })
     }
 
     const cart: CartItem[] = rawItems
-  .map((i) => ({
-    productId: String(i._id ?? i.productId ?? "").trim(),
-    talle: i.talle ?? null,
-    cantidad: Number(i.cantidad ?? 1),
-    comboId: i.comboId ? String(i.comboId).trim() : null, // ✅
-  }))
-  .filter((x) => x.productId && x.cantidad > 0)
+      .map((i) => ({
+        productId: String(i._id ?? i.productId ?? "").trim(),
+        talle: i.talle ?? null,
+        cantidad: Number(i.cantidad ?? 1),
+        comboId: i.comboId ? String(i.comboId).trim() : null, // ✅
+      }))
+      .filter((x) => x.productId && x.cantidad > 0)
 
 
     if (!cart.length) {
@@ -471,145 +473,145 @@ export async function POST(req: Request) {
     const ids = cart.map((x) => x.productId)
 
     // ==========================
-// 3) Clasificar líneas (como Preference): mayorista vs producto, combo vs normal
-// ==========================
-const uniqueIds = [...new Set(cart.map((x) => x.productId))]
-const snaps = await Promise.all(uniqueIds.map((id) => getPackSnapshot(id)))
-const validSnaps = snaps.filter(Boolean) as PackSnapshot[]
+    // 3) Clasificar líneas (como Preference): mayorista vs producto, combo vs normal
+    // ==========================
+    const uniqueIds = [...new Set(cart.map((x) => x.productId))]
+    const snaps = await Promise.all(uniqueIds.map((id) => getPackSnapshot(id)))
+    const validSnaps = snaps.filter(Boolean) as PackSnapshot[]
 
-const typeByProductId = new Map<string, string>(validSnaps.map((p) => [String(p._id), String(p._type)]))
-const packByProductId = new Map<string, PackSnapshot>(validSnaps.map((p) => [String(p._id), p]))
+    const typeByProductId = new Map<string, string>(validSnaps.map((p) => [String(p._id), String(p._type)]))
+    const packByProductId = new Map<string, PackSnapshot>(validSnaps.map((p) => [String(p._id), p]))
 
-const mayoristaLines = cart.filter((x) => typeByProductId.get(x.productId) === "packMayorista")
-const productLines = cart.filter((x) => typeByProductId.get(x.productId) !== "packMayorista")
+    const mayoristaLines = cart.filter((x) => typeByProductId.get(x.productId) === "packMayorista")
+    const productLines = cart.filter((x) => typeByProductId.get(x.productId) !== "packMayorista")
 
-const comboLines = productLines.filter((x) => !!x.comboId)          // ✅ items de productos que pertenecen a un combo/2x1
-const normalProductLines = productLines.filter((x) => !x.comboId)   // ✅ productos normales
+    const comboLines = productLines.filter((x) => !!x.comboId)          // ✅ items de productos que pertenecen a un combo/2x1
+    const normalProductLines = productLines.filter((x) => !x.comboId)   // ✅ productos normales
 
-// Stock SOLO para productos (combo + normal). NUNCA para packMayorista.
-const stockCart = [...comboLines, ...normalProductLines]
-const skipStock = stockCart.length === 0
+    // Stock SOLO para productos (combo + normal). NUNCA para packMayorista.
+    const stockCart = [...comboLines, ...normalProductLines]
+    const skipStock = stockCart.length === 0
 
 
 
-let subtotal = 0
-const stockErrors: any[] = []
-let byId = new Map<string, any>()
+    let subtotal = 0
+    const stockErrors: any[] = []
+    let byId = new Map<string, any>()
 
-// 3A) Validación de stock (si aplica) SIEMPRE por productos del carrito
-if (!skipStock) {
-  const ids = [...new Set(stockCart.map((x) => x.productId))]
-  const prods = await getProductsSnapshot(ids)
-  byId = new Map<string, any>((prods || []).map((p: any) => [String(p._id), p]))
+    // 3A) Validación de stock (si aplica) SIEMPRE por productos del carrito
+    if (!skipStock) {
+      const ids = [...new Set(stockCart.map((x) => x.productId))]
+      const prods = await getProductsSnapshot(ids)
+      byId = new Map<string, any>((prods || []).map((p: any) => [String(p._id), p]))
 
-  for (const it of stockCart) {
+      for (const it of stockCart) {
 
-    const prod = byId.get(it.productId)
-    if (!prod) {
-      stockErrors.push({ productId: it.productId, talle: it.talle, requested: it.cantidad, available: 0, ok: false })
-      continue
-    }
+        const prod = byId.get(it.productId)
+        if (!prod) {
+          stockErrors.push({ productId: it.productId, talle: it.talle, requested: it.cantidad, available: 0, ok: false })
+          continue
+        }
 
-    const available = getAvailable(prod, it.talle)
-    if (available < it.cantidad) {
-      stockErrors.push({ productId: it.productId, talle: it.talle, requested: it.cantidad, available, ok: false })
-      continue
-    }
-  }
-
-  if (stockErrors.length) {
-    return NextResponse.json(
-      { ok: false, error: "out_of_stock", message: "No hay stock suficiente.", details: stockErrors },
-      { status: 409 }
-    )
-  }
-}
-
-// ==========================
-// 3B) Subtotal (igual que Preference)
-// - mayorista: pack.price * cantidad
-// - combos 2x1: pairs * promo + (si impar) 1 suelta (la más cara)
-// - normales: unitPrice * cantidad
-// ==========================
-let subtotalCalc = 0
-
-// A) Pack mayorista (por línea)
-for (const line of mayoristaLines) {
-  const pack = packByProductId.get(line.productId) || null
-  const unit = toMoney(Number(pack?.price ?? 0))
-  if (!pack?._id || pack._type !== "packMayorista" || !unit || unit <= 0) {
-    return NextResponse.json(
-      { ok: false, error: "invalid_pack_price", message: "Pack mayorista sin precio válido.", productId: line.productId, pack },
-      { status: 400 }
-    )
-  }
-  subtotalCalc += toMoney(unit * Number(line.cantidad || 1))
-}
-
-// B) Combos / 2x1 (agrupado por comboId)
-if (comboLines.length) {
-  // 1) agrupar por comboId
-  const group = new Map<string, CartItem[]>()
-  for (const line of comboLines) {
-    const cid = String(line.comboId || "").trim()
-    if (!cid) continue
-    const arr = group.get(cid) || []
-    arr.push(line)
-    group.set(cid, arr)
-  }
-
-  const comboIds = [...group.keys()]
-  const comboSnaps = await Promise.all(comboIds.map((id) => getPackSnapshot(id)))
-  const comboById = new Map<string, PackSnapshot>(
-    (comboSnaps.filter(Boolean) as PackSnapshot[]).map((p) => [String(p._id), p])
-  )
-
-  for (const cid of comboIds) {
-    const pack = comboById.get(cid) || null
-    const promoUnit = toMoney(Number(pack?.price ?? 0))
-    if (!pack?._id || !promoUnit || promoUnit <= 0) {
-      return NextResponse.json(
-        { ok: false, error: "invalid_combo_price", message: "Combo/2x1 sin precio válido.", comboId: cid, pack },
-        { status: 400 }
-      )
-    }
-
-    const lines = group.get(cid) || []
-    const totalUnits = lines.reduce((acc, l) => acc + Number(l.cantidad || 0), 0)
-
-    const pairs = Math.floor(totalUnits / 2)
-    const remainder = totalUnits % 2
-
-    // promo pairs
-    if (pairs > 0) subtotalCalc += toMoney(pairs * promoUnit)
-
-    // suelta (si impar): cobrar la más cara
-    if (remainder === 1) {
-      let maxUnit = 0
-      for (const l of lines) {
-        const prod = byId.get(l.productId)
-        const unit = getUnitPrice(prod)
-        if (unit > maxUnit) maxUnit = unit
+        const available = getAvailable(prod, it.talle)
+        if (available < it.cantidad) {
+          stockErrors.push({ productId: it.productId, talle: it.talle, requested: it.cantidad, available, ok: false })
+          continue
+        }
       }
-      if (!maxUnit || maxUnit <= 0) {
+
+      if (stockErrors.length) {
         return NextResponse.json(
-          { ok: false, error: "invalid_combo_single", message: "No se pudo calcular la suelta del combo.", comboId: cid },
+          { ok: false, error: "out_of_stock", message: "No hay stock suficiente.", details: stockErrors },
+          { status: 409 }
+        )
+      }
+    }
+
+    // ==========================
+    // 3B) Subtotal (igual que Preference)
+    // - mayorista: pack.price * cantidad
+    // - combos 2x1: pairs * promo + (si impar) 1 suelta (la más cara)
+    // - normales: unitPrice * cantidad
+    // ==========================
+    let subtotalCalc = 0
+
+    // A) Pack mayorista (por línea)
+    for (const line of mayoristaLines) {
+      const pack = packByProductId.get(line.productId) || null
+      const unit = toMoney(Number(pack?.price ?? 0))
+      if (!pack?._id || pack._type !== "packMayorista" || !unit || unit <= 0) {
+        return NextResponse.json(
+          { ok: false, error: "invalid_pack_price", message: "Pack mayorista sin precio válido.", productId: line.productId, pack },
           { status: 400 }
         )
       }
-      subtotalCalc += toMoney(maxUnit)
+      subtotalCalc += toMoney(unit * Number(line.cantidad || 1))
     }
-  }
-}
 
-// C) Productos normales
-for (const it of normalProductLines) {
-  const prod = byId.get(it.productId)
-  if (!prod) continue
-  subtotalCalc += toMoney(getUnitPrice(prod) * Number(it.cantidad || 1))
-}
+    // B) Combos / 2x1 (agrupado por comboId)
+    if (comboLines.length) {
+      // 1) agrupar por comboId
+      const group = new Map<string, CartItem[]>()
+      for (const line of comboLines) {
+        const cid = String(line.comboId || "").trim()
+        if (!cid) continue
+        const arr = group.get(cid) || []
+        arr.push(line)
+        group.set(cid, arr)
+      }
 
-subtotal = toMoney(subtotalCalc)
+      const comboIds = [...group.keys()]
+      const comboSnaps = await Promise.all(comboIds.map((id) => getPackSnapshot(id)))
+      const comboById = new Map<string, PackSnapshot>(
+        (comboSnaps.filter(Boolean) as PackSnapshot[]).map((p) => [String(p._id), p])
+      )
+
+      for (const cid of comboIds) {
+        const pack = comboById.get(cid) || null
+        const promoUnit = toMoney(Number(pack?.price ?? 0))
+        if (!pack?._id || !promoUnit || promoUnit <= 0) {
+          return NextResponse.json(
+            { ok: false, error: "invalid_combo_price", message: "Combo/2x1 sin precio válido.", comboId: cid, pack },
+            { status: 400 }
+          )
+        }
+
+        const lines = group.get(cid) || []
+        const totalUnits = lines.reduce((acc, l) => acc + Number(l.cantidad || 0), 0)
+
+        const pairs = Math.floor(totalUnits / 2)
+        const remainder = totalUnits % 2
+
+        // promo pairs
+        if (pairs > 0) subtotalCalc += toMoney(pairs * promoUnit)
+
+        // suelta (si impar): cobrar la más cara
+        if (remainder === 1) {
+          let maxUnit = 0
+          for (const l of lines) {
+            const prod = byId.get(l.productId)
+            const unit = getUnitPrice(prod)
+            if (unit > maxUnit) maxUnit = unit
+          }
+          if (!maxUnit || maxUnit <= 0) {
+            return NextResponse.json(
+              { ok: false, error: "invalid_combo_single", message: "No se pudo calcular la suelta del combo.", comboId: cid },
+              { status: 400 }
+            )
+          }
+          subtotalCalc += toMoney(maxUnit)
+        }
+      }
+    }
+
+    // C) Productos normales
+    for (const it of normalProductLines) {
+      const prod = byId.get(it.productId)
+      if (!prod) continue
+      subtotalCalc += toMoney(getUnitPrice(prod) * Number(it.cantidad || 1))
+    }
+
+    subtotal = toMoney(subtotalCalc)
 
 
 
@@ -624,31 +626,43 @@ subtotal = toMoney(subtotalCalc)
       return NextResponse.json({ ok: false, error: "invalid_amount", message: "Monto inválido." }, { status: 400 })
     }
 
+    if ((body as any).quoteOnly) {
+      return NextResponse.json({
+        ok: true,
+        quoteOnly: true,
+        computedTotal,
+        subtotal,
+        shippingPrice,
+        shippingType,
+      })
+    }
+
+
     // (Opcional) sanity-check del monto que manda el front: NO afecta el cobro (cobramos computedTotal)
-   const clientAmount = body.amount != null ? toMoney(body.amount) : null
+    const clientAmount = body.amount != null ? toMoney(body.amount) : null
 
-if (clientAmount != null && Math.abs(clientAmount - computedTotal) > 0.01) {
-  console.warn("Amount mismatch:", {
-    clientAmount,
-    computedTotal,
-    comboId: body.comboId || null,
-    orderId: body.orderId,
-  })
+    if (clientAmount != null && Math.abs(clientAmount - computedTotal) > 0.01) {
+      console.warn("Amount mismatch:", {
+        clientAmount,
+        computedTotal,
+        comboId: body.comboId || null,
+        orderId: body.orderId,
+      })
 
-  // 🔒 Airbag: si el front está inicializando el Brick con un total mayor (ej combo),
-  // pero el backend no lo puede justificar (comboId faltante o lógica rota), NO cobramos.
-  return NextResponse.json(
-    {
-      ok: false,
-      error: "amount_mismatch",
-      message: "El monto del checkout no coincide con el monto calculado por el servidor.",
-      clientAmount,
-      serverAmount: computedTotal,
-      comboId: body.comboId || null,
-    },
-    { status: 400 }
-  )
-}
+      // 🔒 Airbag: si el front está inicializando el Brick con un total mayor (ej combo),
+      // pero el backend no lo puede justificar (comboId faltante o lógica rota), NO cobramos.
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "amount_mismatch",
+          message: "El monto del checkout no coincide con el monto calculado por el servidor.",
+          clientAmount,
+          serverAmount: computedTotal,
+          comboId: body.comboId || null,
+        },
+        { status: 400 }
+      )
+    }
 
 
     // 5) Idempotencia (orderId)
@@ -678,35 +692,35 @@ if (clientAmount != null && Math.abs(clientAmount - computedTotal) > 0.01) {
       capture: false,
       notification_url: `${origin}/api/mp/webhook`,
       metadata: {
-  orderId,
-  source: "card_inline",
+        orderId,
+        source: "card_inline",
 
-  comboId: comboId || null,
-  packType: packResolved?._type || null,
-packTitle: packResolved?.title || null,
-
-
-  // ✅ datos humanos (vienen del front)
-  customer: {
-  nombre: body.customer?.nombre || null,
-  apellido: body.customer?.apellido || null,
-  telefono: body.customer?.telefono || null,
-  email: email || null,
-  envio: body.customer?.envio || shippingType,
-  cp: body.customer?.cp || body.shipping?.cp || null,
-  direccion: body.customer?.direccion || null,
-},
+        comboId: body.comboId ? String(body.comboId).trim() : null,
+        packType: null,
+        packTitle: null,
 
 
-  shippingType,
-  shippingPrice,
-  subtotal,
+        // ✅ datos humanos (vienen del front)
+        customer: {
+          nombre: body.customer?.nombre || null,
+          apellido: body.customer?.apellido || null,
+          telefono: body.customer?.telefono || null,
+          email: email || null,
+          envio: body.customer?.envio || shippingType,
+          cp: body.customer?.cp || body.shipping?.cp || null,
+          direccion: body.customer?.direccion || null,
+        },
 
-  // ✅ mantenemos tu formato actual (string / null)
- cart, // ✅ array real
-cartJson: JSON.stringify(cart), // ✅ compat por si tu webhook todavía parsea string
 
-},
+        shippingType,
+        shippingPrice,
+        subtotal,
+
+        // ✅ mantenemos tu formato actual (string / null)
+        cart, // ✅ array real
+        cartJson: JSON.stringify(cart), // ✅ compat por si tu webhook todavía parsea string
+
+      },
 
     }
 
@@ -793,59 +807,59 @@ cartJson: JSON.stringify(cart), // ✅ compat por si tu webhook todavía parsea 
       })
     }
 
-const markerId = `mp_payment_${paymentId}`
+    const markerId = `mp_payment_${paymentId}`
 
-// A) Reservar stock SOLO si NO es mayorista
-if (!skipStock) {
-  const r = await reserveStockAtomic(stockCart, markerId)
-  if ((r as any)?.already) {
-    return NextResponse.json({
-      ok: true,
-      id: paymentId,
-      status,
-      status_detail: statusDetail,
-      orderId,
-      computedTotal,
-      subtotal,
-      shippingPrice,
-      shippingType,
-      already: true,
-    })
-  }
+    // A) Reservar stock SOLO si NO es mayorista
+    if (!skipStock) {
+      const r = await reserveStockAtomic(stockCart, markerId)
+      if ((r as any)?.already) {
+        return NextResponse.json({
+          ok: true,
+          id: paymentId,
+          status,
+          status_detail: statusDetail,
+          orderId,
+          computedTotal,
+          subtotal,
+          shippingPrice,
+          shippingType,
+          already: true,
+        })
+      }
 
-  if (!r.ok) {
-    await mpCancel(paymentId, mpToken)
+      if (!r.ok) {
+        await mpCancel(paymentId, mpToken)
 
-    await sanity.createIfNotExists({
-      _id: markerId,
-      _type: "mpWebhook",
-      paymentId,
-      orderId,
-      createdAt: new Date().toISOString(),
-      status: "stock_insufficient",
-      source: "card_inline",
-      detailsJson: JSON.stringify((r as any).details ?? []),
-    })
+        await sanity.createIfNotExists({
+          _id: markerId,
+          _type: "mpWebhook",
+          paymentId,
+          orderId,
+          createdAt: new Date().toISOString(),
+          status: "stock_insufficient",
+          source: "card_inline",
+          detailsJson: JSON.stringify((r as any).details ?? []),
+        })
 
-    return NextResponse.json(
-      {
-        ok: false,
-        error: "out_of_stock_after_auth",
-        message: "Se quedó sin stock mientras pagabas. No se realizó el cobro.",
-        details: (r as any).details ?? null,
-        id: paymentId,
-        status,
-        status_detail: statusDetail,
-        orderId,
-        computedTotal,
-        subtotal,
-        shippingPrice,
-        shippingType,
-      },
-      { status: 409 }
-    )
-  }
-}
+        return NextResponse.json(
+          {
+            ok: false,
+            error: "out_of_stock_after_auth",
+            message: "Se quedó sin stock mientras pagabas. No se realizó el cobro.",
+            details: (r as any).details ?? null,
+            id: paymentId,
+            status,
+            status_detail: statusDetail,
+            orderId,
+            computedTotal,
+            subtotal,
+            shippingPrice,
+            shippingType,
+          },
+          { status: 409 }
+        )
+      }
+    }
 
 
     // C) Capturar
@@ -875,8 +889,8 @@ if (!skipStock) {
 
       // 3) 🔁 ROLLBACK DE STOCK (idempotente)
       if (!skipStock) {
- await rollbackStockAtomic(stockCart, markerId)
-}
+        await rollbackStockAtomic(stockCart, markerId)
+      }
 
       await sanity
         .patch(markerId)

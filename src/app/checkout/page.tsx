@@ -135,10 +135,21 @@ export default function CheckoutPage() {
 
 
   // ✅ ID efectivo del combo (prioriza contexto, fallback al item)
-const effectiveComboId =
-  (comboId && comboId.trim()) ||
-  (items?.length === 1 ? String((items[0] as any)?.comboId || "").trim() : "") ||
-  ""
+  const effectiveComboId =
+    (comboId && comboId.trim()) ||
+    (items?.length === 1 ? String((items[0] as any)?.comboId || "").trim() : "") ||
+    ""
+
+  // ✅ ACA VA
+  const compactItems = (items || []).map((i: any) => ({
+    _id: i._id ?? i.productId,
+    productId: i.productId ?? i._id,
+    talle: i.talle ?? null,
+    cantidad: Number(i.cantidad ?? 1),
+    comboId: i.comboId
+      ? String(i.comboId).trim()
+      : (effectiveComboId ? String(effectiveComboId).trim() : null),
+  }))
 
 
   const calcularEnvio = async () => {
@@ -181,28 +192,28 @@ const effectiveComboId =
       // ===============================
       // payload final
       const customer = {
-  nombre: nombre.trim(),
-  apellido: apellido.trim(),
-  telefono: telefono.trim(),
-  email: "", // 👈 no lo tenés en UI todavía, abajo te digo qué hacer
-  envio: envio || null,
-  cp: cp || null,
-  direccion:
-    envio === "domicilio"
-      ? {
-          calle: destinatario.calle || "",
-          numero: destinatario.numero || "",
-          barrio: destinatario.barrio || "",
-          ciudad: destinatario.ciudad || "",
-        }
-      : null,
-}
+        nombre: nombre.trim(),
+        apellido: apellido.trim(),
+        telefono: telefono.trim(),
+        email: "", // 👈 no lo tenés en UI todavía, abajo te digo qué hacer
+        envio: envio || null,
+        cp: cp || null,
+        direccion:
+          envio === "domicilio"
+            ? {
+              calle: destinatario.calle || "",
+              numero: destinatario.numero || "",
+              barrio: destinatario.barrio || "",
+              ciudad: destinatario.ciudad || "",
+            }
+            : null,
+      }
 
-const payload = {
-  items,
-  comboId: effectiveComboId,// ✅ el comboId del useCart()
-  customer,
-}
+      const payload = {
+        items,
+        comboId: effectiveComboId,// ✅ el comboId del useCart()
+        customer,
+      }
 
 
 
@@ -257,6 +268,15 @@ const payload = {
   const cardBrickRef = useRef<any>(null)
   const [cardLoading, setCardLoading] = useState(false)
   const [cardMsg, setCardMsg] = useState("")
+  const [serverTotals, setServerTotals] = useState<{
+    computedTotal: number
+    subtotal: number
+    shippingPrice: number
+    shippingType: "domicilio" | "sucursal"
+  } | null>(null)
+  const amountToPay = serverTotals?.computedTotal ?? 0
+
+  const [quoteLoading, setQuoteLoading] = useState(false)
 
   // ✅ orderId estable para idempotencia
   const orderIdRef = useRef<string>("")
@@ -269,9 +289,68 @@ const payload = {
     return orderIdRef.current
   }
 
+  const fetchServerTotals = async () => {
+    setQuoteLoading(true)
+    try {
+      const orderId = ensureOrderId()
+
+      const payload = {
+        quoteOnly: true,
+        orderId,
+        comboId: effectiveComboId,
+        items: compactItems,
+        shipping: {
+          type: envio === "domicilio" ? "domicilio" : "sucursal",
+          cp: envio === "domicilio" ? cp : undefined,
+        },
+        customer: {
+          nombre: nombre.trim(),
+          apellido: apellido.trim(),
+          telefono: telefono.trim(),
+          envio,
+          cp: cp || null,
+          direccion:
+            envio === "domicilio"
+              ? {
+                calle: destinatario.calle || "",
+                numero: destinatario.numero || "",
+                barrio: destinatario.barrio || "",
+                ciudad: destinatario.ciudad || "",
+              }
+              : null,
+        },
+      }
+
+      const res = await fetch("/api/payments/card", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      })
+
+      const json = await res.json().catch(() => null)
+
+      if (!res.ok || !json?.ok) {
+        throw new Error(json?.message || "No se pudo calcular el total")
+      }
+
+      setServerTotals({
+        computedTotal: Number(json.computedTotal),
+        subtotal: Number(json.subtotal),
+        shippingPrice: Number(json.shippingPrice),
+        shippingType: json.shippingType,
+      })
+    } catch (e) {
+      setServerTotals(null)
+      setCardMsg("No se pudo calcular el total del servidor.")
+    } finally {
+      setQuoteLoading(false)
+    }
+  }
+
   // ✅ Montar el Card Brick cuando elijan “Tarjeta (pagar acá mismo)”
   useEffect(() => {
-    if (step !== "pago" || payMethod !== "card_inline") return
+   if (step !== "pago" || payMethod !== "card_inline") return
+if (!serverTotals?.computedTotal) return // ✅ esperar cálculo del server
 
     const containerId = "card-payment-brick"
 
@@ -296,7 +375,7 @@ const payload = {
         return
       }
 
-      const amount = Number(total)
+      const amount = Number(serverTotals.computedTotal) // ✅ SIEMPRE server
       if (!amount || amount <= 0) {
         setCardMsg("No se pudo cargar el formulario (monto inválido).")
         setCardLoading(false)
@@ -330,13 +409,6 @@ const payload = {
                 setCardMsg("")
                 setCardLoading(true)
 
-                // ✅ PASO A: compactItems (evita empty_cart)
-                const compactItems = (items || []).map((i: any) => ({
-                  _id: i._id ?? i.productId,
-                  productId: i.productId ?? i._id,
-                  talle: i.talle ?? null,
-                  cantidad: Number(i.cantidad ?? 1),
-                }))
 
                 if (!compactItems.length) {
                   setCardMsg("Carrito vacío. Volvé a agregar productos.")
@@ -345,53 +417,53 @@ const payload = {
                 }
 
                 const orderId = ensureOrderId()
-              
+
                 // ✅ PASO B: payload hacia tu backend
                 const payload = {
-  token: String(data.token),
-  issuer_id: data.issuer_id != null ? String(data.issuer_id) : undefined,
-  payment_method_id: String(data.paymentMethodId || data.payment_method_id),
-  installments: Number(data.installments ?? 1),
-  email: data.payer?.email ? String(data.payer.email) : undefined,
-  identification: data.payer?.identification
-    ? {
-        type: String(data.payer.identification.type),
-        number: String(data.payer.identification.number),
-      }
-    : undefined,
+                  token: String(data.token),
+                  issuer_id: data.issuer_id != null ? String(data.issuer_id) : undefined,
+                  payment_method_id: String(data.paymentMethodId || data.payment_method_id),
+                  installments: Number(data.installments ?? 1),
+                  email: data.payer?.email ? String(data.payer.email) : undefined,
+                  identification: data.payer?.identification
+                    ? {
+                      type: String(data.payer.identification.type),
+                      number: String(data.payer.identification.number),
+                    }
+                    : undefined,
 
-  // ✅ lo importante
-  items: compactItems,
-  amount: Number(total),
-  orderId,
-  comboId: effectiveComboId,
-
-
-
-  // ✅ NUEVO: datos del cliente / entrega
-  customer: {
-  nombre: nombre.trim(),
-  apellido: apellido.trim(),
-  telefono: telefono.trim(),
-  envio: envio, // "domicilio" | "sucursal"
-  cp: cp || null,
-  direccion:
-    envio === "domicilio"
-      ? {
-          calle: destinatario.calle || "",
-          numero: destinatario.numero || "",
-          barrio: destinatario.barrio || "",
-          ciudad: destinatario.ciudad || "",
-        }
-      : null,
-},
+                  // ✅ lo importante
+                  items: compactItems,
+                  amount: Number(total),
+                  orderId,
+                  comboId: effectiveComboId,
 
 
-  shipping: {
-    type: envio === "domicilio" ? "domicilio" : "sucursal",
-    cp: envio === "domicilio" ? cp : undefined,
-  },
-}
+
+                  // ✅ NUEVO: datos del cliente / entrega
+                  customer: {
+                    nombre: nombre.trim(),
+                    apellido: apellido.trim(),
+                    telefono: telefono.trim(),
+                    envio: envio, // "domicilio" | "sucursal"
+                    cp: cp || null,
+                    direccion:
+                      envio === "domicilio"
+                        ? {
+                          calle: destinatario.calle || "",
+                          numero: destinatario.numero || "",
+                          barrio: destinatario.barrio || "",
+                          ciudad: destinatario.ciudad || "",
+                        }
+                        : null,
+                  },
+
+
+                  shipping: {
+                    type: envio === "domicilio" ? "domicilio" : "sucursal",
+                    cp: envio === "domicilio" ? cp : undefined,
+                  },
+                }
 
 
                 const res = await fetch("/api/payments/card", {
@@ -477,7 +549,7 @@ const payload = {
     return () => {
       cardBrickRef.current?.unmount?.()
     }
-  }, [step, payMethod, total, items, envio, cp, router])
+  }, [step, payMethod, serverTotals, items, envio, cp, router])
 
   return (
     <main className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-8 p-6 mt-20">
@@ -605,8 +677,8 @@ const payload = {
                   handleTransferOrCashWhatsApp()
                 }}
                 className={`flex items-center justify-between border rounded p-4 cursor-pointer transition ${payMethod === "transfer"
-                    ? "border-amber-600 bg-amber-50"
-                    : "hover:border-black"
+                  ? "border-amber-600 bg-amber-50"
+                  : "hover:border-black"
                   }`}
               >
                 <div>
@@ -621,9 +693,11 @@ const payload = {
               <label
                 onClick={() => {
                   setPayMethod("card_inline")
-                  // reiniciamos orderId para un nuevo intento al elegir el método (opcional pero recomendable)
                   orderIdRef.current = ""
+                  setServerTotals(null)
+                  fetchServerTotals() // ✅ solo acá
                 }}
+
                 className={`flex items-center justify-between border rounded p-4 cursor-pointer transition ${payMethod === "card_inline" ? "border-blue-600 bg-blue-50" : "hover:border-black"
                   }`}
               >
