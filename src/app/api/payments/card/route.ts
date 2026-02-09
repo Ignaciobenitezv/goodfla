@@ -733,85 +733,116 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: "missing_mp_token", message: "Falta MP_ACCESS_TOKEN" }, { status: 500 })
     }
 
-    // 7) Crear pago
-    const res = await fetch("https://api.mercadopago.com/v1/payments", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${mpToken}`,
-        "Content-Type": "application/json",
-        "X-Idempotency-Key": String(orderId),
-      },
-      body: JSON.stringify(mpPayload),
-    })
+  // 7) Crear pago
+const res = await fetch("https://api.mercadopago.com/v1/payments", {
+  method: "POST",
+  headers: {
+    Authorization: `Bearer ${mpToken}`,
+    "Content-Type": "application/json",
+    "X-Idempotency-Key": String(orderId),
+  },
+  body: JSON.stringify(mpPayload),
+})
 
-    const data = await res.json().catch(() => null)
+const data = await res.json().catch(() => null)
 
-    if (!res.ok) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: "mp_error",
-          message: data?.message || "Error procesando el pago",
-          status_detail: data?.cause?.[0]?.code || data?.status_detail,
-          mp: data,
-        },
-        { status: res.status }
-      )
-    }
+if (!res.ok) {
+  return NextResponse.json(
+    {
+      ok: false,
+      error: "mp_error",
+      message: data?.message || "Error procesando el pago",
+      status_detail: data?.cause?.[0]?.code || data?.status_detail,
+      mp: data,
+    },
+    { status: res.status }
+  )
+}
 
-    // 8) Estado MP
-    const status = String(data?.status || "").toLowerCase()
-    const paymentId = data?.id != null ? String(data.id) : ""
-    const statusDetail = data?.status_detail != null ? String(data.status_detail) : ""
+// 8) Estado MP
+const status = String(data?.status || "").toLowerCase()
+const paymentId = data?.id != null ? String(data.id) : ""
+const statusDetail = data?.status_detail != null ? String(data.status_detail) : ""
 
-    if (!paymentId) {
-      return NextResponse.json(
-        { ok: false, error: "mp_no_payment_id", message: "MP no devolvió payment id", mp: data },
-        { status: 502 }
-      )
-    }
+if (!paymentId) {
+  return NextResponse.json(
+    { ok: false, error: "mp_no_payment_id", message: "MP no devolvió payment id", mp: data },
+    { status: 502 }
+  )
+}
 
-    if (status === "rejected" || status === "cancelled") {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: "payment_not_authorized",
-          message: "El pago no fue autorizado.",
-          id: paymentId,
-          status,
-          status_detail: statusDetail,
-          orderId,
-        },
-        { status: 402 }
-      )
-    }
+/**
+ * ✅ NUEVO (CRÍTICO):
+ * Guardar cart + customer en Sanity usando mp_payment_<paymentId>
+ * para que el webhook (card_inline) pueda armar el mail con items
+ */
+const markerId = `mp_payment_${paymentId}`
 
-    if (status === "in_process" || status === "pending") {
-      await sanity.createIfNotExists({
-        _id: `mp_payment_${paymentId}`,
-        _type: "mpWebhook",
-        paymentId,
-        orderId,
-        createdAt: new Date().toISOString(),
-        status: "pending",
-        statusDetail,
-        source: "card_inline",
-      })
+await sanity.createIfNotExists({
+  _id: markerId,
+  _type: "mpWebhook",
+  paymentId,
+  orderId,
+  createdAt: new Date().toISOString(),
+  status: "created_card_inline",
+  source: "card_inline",
+})
 
-      return NextResponse.json({
-        ok: true,
-        id: paymentId,
-        status,
-        status_detail: statusDetail,
-        orderId,
-        computedTotal,
-        subtotal,
-        shippingPrice,
-        shippingType,
-      })
-    }
+await sanity
+  .patch(markerId)
+  .set({
+    orderId,
+    cartJson: JSON.stringify(cart || []),
+   customerJson: JSON.stringify(mpPayload?.metadata?.customer || null),
 
-    const markerId = `mp_payment_${paymentId}`
+    persistedAt: new Date().toISOString(),
+  })
+  .commit({ autoGenerateArrayKeys: true })
+
+// (desde acá seguís con tu lógica normal)
+if (status === "rejected" || status === "cancelled") {
+  return NextResponse.json(
+    {
+      ok: false,
+      error: "payment_not_authorized",
+      message: "El pago no fue autorizado.",
+      id: paymentId,
+      status,
+      status_detail: statusDetail,
+      orderId,
+    },
+    { status: 402 }
+  )
+}
+
+if (status === "in_process" || status === "pending") {
+  await sanity.createIfNotExists({
+    _id: markerId,
+    _type: "mpWebhook",
+    paymentId,
+    orderId,
+    createdAt: new Date().toISOString(),
+    status: "pending",
+    statusDetail,
+    source: "card_inline",
+  })
+
+  return NextResponse.json({
+    ok: true,
+    id: paymentId,
+    status,
+    status_detail: statusDetail,
+    orderId,
+    computedTotal,
+    subtotal,
+    shippingPrice,
+    shippingType,
+  })
+}
+
+// 👇 OJO: vos ya tenías markerId más abajo.
+//     Como ahora lo definimos acá, BORRÁ el que tenías después para no redeclarar.
+
 
     // A) Reservar stock SOLO si NO es mayorista
     if (!skipStock) {

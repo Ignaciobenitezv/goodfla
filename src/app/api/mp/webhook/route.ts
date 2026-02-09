@@ -240,33 +240,60 @@ async function reserveStockAtomic(cart: CartItem[], lockId: string) {
   return { ok: false, reason: "conflict" }
 }
 
+async function persistCardInlineOrder(markerId: string, payload: any) {
+  await sanity.createIfNotExists({
+    _id: markerId,
+    _type: "mpWebhook",
+    createdAt: new Date().toISOString(),
+    status: "processing",
+  })
+
+  await sanity
+    .patch(markerId)
+    .set({
+      source: "card_inline",
+      orderId: payload.orderId,
+      paymentId: payload.paymentId,
+      total: payload.total,
+      currency: payload.currency,
+      shippingAddress: payload.shippingAddress,
+      buyerName: payload.buyerName,
+      buyerEmail: payload.buyerEmail,
+      buyerPhone: payload.buyerPhone,
+      cartJson: JSON.stringify(payload.cart || []),
+      customerJson: JSON.stringify(payload.customer || null),
+      persistedAt: new Date().toISOString(),
+    })
+    .commit({ autoGenerateArrayKeys: true })
+}
+
 
 function parseCartFromPref(pref: any): CartItem[] {
-  let cart: CartItem[] = []
+  let cart: any[] = []
   const rawCart = pref?.metadata?.cart
 
   if (Array.isArray(rawCart)) {
-    cart = rawCart as CartItem[]
+    cart = rawCart
   } else if (typeof rawCart === "string") {
     try {
       const parsed = JSON.parse(rawCart)
-      if (Array.isArray(parsed)) cart = parsed as CartItem[]
+      if (Array.isArray(parsed)) cart = parsed
     } catch (e) {
       console.warn("⚠️ No se pudo parsear metadata.cart (string)", e)
     }
   }
 
-cart = (cart || [])
-  .map((x: any) => ({
-    productId: String(x?.productId ?? x?._id ?? "").trim(),
-    talle: x?.talle ?? null,
-    cantidad: Number(x?.cantidad ?? 1),
-    comboId: x?.comboId ? String(x.comboId).trim() : null,
-  }))
-  .filter((x: any) => x.productId && x.cantidad > 0)
-
-  return cart
+  // ✅ normalizar SIEMPRE (array o string)
+  return (cart || [])
+    .map((x: any) => ({
+      productId: String(x?.productId ?? x?._id ?? "").trim(),
+      talle: x?.talle ?? null,
+      cantidad: Number(x?.cantidad ?? 1),
+      comboId: x?.comboId ? String(x.comboId).trim() : null,
+    }))
+    .filter((x: any) => x.productId && x.cantidad > 0)
 }
+
 
 function parseComboLinesFromPref(pref: any): CartItem[] {
   const raw = pref?.metadata?.comboLines
@@ -566,6 +593,24 @@ const buyerEmail =
   // items: si es mayorista, usamos packTitle; si no, usamos cart
 let cart = parseCartFromMetadata(meta)
 
+// ✅ Fallback: si MP no trae metadata (Brick), leer lo persistido en Sanity
+if (!cart.length) {
+  const saved = await sanity.getDocument(markerId)
+
+  const savedCartJson =
+    (saved as any)?.cartJson ||
+    (saved as any)?.cart ||
+    null
+
+  if (savedCartJson) {
+    try {
+      const parsed = typeof savedCartJson === "string" ? JSON.parse(savedCartJson) : savedCartJson
+      if (Array.isArray(parsed)) cart = parsed
+    } catch {}
+  }
+}
+
+
 // fallback extra por si MP te devuelve cart como string raro o viene en cartJson
 if (!cart.length && meta?.cart && typeof meta.cart === "string") {
   try {
@@ -586,9 +631,6 @@ const packIdSet = new Set(packIds)
 
 // ✅ items SIEMPRE desde el cart (incluye packMayorista y productos)
 let items = await buildEmailItems(cart, meta)
-
-// fallback: si por algún motivo no pudo armar items con nombres,
-// al menos listamos “productId” para no perder el detalle.
 if (!items.length && cart.length) {
   items = cart.map((it) => ({
     title: String(it.productId),
@@ -599,31 +641,7 @@ if (!items.length && cart.length) {
 
 // ✅ si en algún futuro querés “no stock” para packMayorista:
 // filtrás SOLO para stock
-const cartForStock = cart.filter((x) => !packIdSet.has(String(x.productId)))
-  if (cartForStock.length) {
-  const r = await reserveStockAtomic(cartForStock, markerId)
 
-  if (!r.ok) {
-    const reason = (r as any).reason
-
-    if (reason === "conflict") {
-      await sanity.patch(markerId).set({ status: "retry_conflict" }).commit().catch(() => {})
-      return respond200({ msg: "retry_conflict", markerId, paymentId }, startedAt)
-    }
-
-    await sanity
-      .patch(markerId)
-      .set({
-        status: "failed_stock",
-        detailsJson: JSON.stringify((r as any).details ?? []),
-        failedAt: new Date().toISOString(),
-      })
-      .commit()
-      .catch(() => {})
-
-    return respond200({ ignored: true, reason: "failed_stock", markerId, paymentId }, startedAt)
-  }
-}
 
   // idempotencia de email
   const updated = await sanity
