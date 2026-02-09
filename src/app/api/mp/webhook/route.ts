@@ -683,7 +683,7 @@ if (!r.ok) {
 }
 
 } else {
-  console.log("📦 only packMayorista lines: skipping stock reserve", { markerId, paymentId })
+  console.log("📦 onlyy packMayorista lines: skipping stock reserve", { markerId, paymentId })
 }
 
 
