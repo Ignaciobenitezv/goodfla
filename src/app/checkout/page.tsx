@@ -142,14 +142,13 @@ export default function CheckoutPage() {
 
   // ✅ ACA VA
   const compactItems = (items || []).map((i: any) => ({
-    _id: i._id ?? i.productId,
-    productId: i.productId ?? i._id,
-    talle: i.talle ?? null,
-    cantidad: Number(i.cantidad ?? 1),
-    comboId: i.comboId
-      ? String(i.comboId).trim()
-      : (effectiveComboId ? String(effectiveComboId).trim() : null),
-  }))
+  _id: i._id ?? i.productId,
+  productId: i.productId ?? i._id,
+  talle: i.talle ?? null,
+  cantidad: Number(i.cantidad ?? 1),
+  comboId: i.comboId ? String(i.comboId).trim() : null, // ✅ NO inyectar
+}))
+
 
 
   const calcularEnvio = async () => {
@@ -417,6 +416,13 @@ if (!serverTotals?.computedTotal) return // ✅ esperar cálculo del server
                 }
 
                 const orderId = ensureOrderId()
+                const serverAmount = Number(serverTotals?.computedTotal ?? 0)
+
+if (!serverAmount) {
+  setCardMsg("No se pudo obtener el total del servidor.")
+  setCardLoading(false)
+  throw new Error("missing_server_total")
+}
 
                 // ✅ PASO B: payload hacia tu backend
                 const payload = {
@@ -434,7 +440,7 @@ if (!serverTotals?.computedTotal) return // ✅ esperar cálculo del server
 
                   // ✅ lo importante
                   items: compactItems,
-                  amount: Number(total),
+                  amount: serverAmount,
                   orderId,
                   comboId: effectiveComboId,
 

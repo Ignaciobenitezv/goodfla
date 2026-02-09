@@ -83,44 +83,64 @@ async function getProductsSnapshot(ids: string[]) {
   )
 }
 
-type PackSnapshot = { _id: string; _type: string; title: string; price: number }
+type PackSnapshot = { _id: string; _type: string; title: string; price: number; bundleSize: number }
 
 async function getPackSnapshot(id: string): Promise<PackSnapshot | null> {
   if (!id) return null
 
   const doc = await sanity.fetch(
-    `*[
-      _id == $id
-      && _type in ["combo", "zapatillas2x1", "packMayorista"]
-    ][0]{
-      _id,
-      _type,
-      // combo
-      "comboNombre": nombre,
-      "comboPrecio": precio,
-      // zapatillas2x1
-      "zapasNombre": nombre,
-      "zapasPrecio": precioActual,
-      // packMayorista
-      "mayoristaNombre": title,
-      "mayoristaPrecio": precioActual
-    }`,
-    { id }
-  )
+  `*[
+    _id == $id
+    && _type in ["combo", "zapatillas2x1", "packMayorista"]
+  ][0]{
+    _id,
+    _type,
+    "bundleSize": coalesce(math::sum(categoriasIncluidas[].cantidad), 0),
+
+    "comboNombre": nombre,
+    "comboPrecio": precio,
+
+    "zapasNombre": nombre,
+    "zapasPrecio": precioActual,
+
+    "mayoristaNombre": title,
+    "mayoristaPrecio": precioActual
+  }`,
+  { id }
+)
+
 
   if (!doc?._id) return null
-
-  if (doc._type === "combo") {
-    return { _id: doc._id, _type: doc._type, title: String(doc.comboNombre || "Combo"), price: Number(doc.comboPrecio ?? 0) }
+if (doc._type === "combo") {
+  return {
+    _id: doc._id,
+    _type: doc._type,
+    title: String(doc.comboNombre || "Combo"),
+    price: Number(doc.comboPrecio ?? 0),
+    bundleSize: Number(doc.bundleSize ?? 0),
   }
+}
 
-  if (doc._type === "zapatillas2x1") {
-    return { _id: doc._id, _type: doc._type, title: String(doc.zapasNombre || "Zapatillas 2x1"), price: Number(doc.zapasPrecio ?? 0) }
+if (doc._type === "zapatillas2x1") {
+  return {
+    _id: doc._id,
+    _type: doc._type,
+    title: String(doc.zapasNombre || "Zapatillas 2x1"),
+    price: Number(doc.zapasPrecio ?? 0),
+    bundleSize: Number(doc.bundleSize ?? 0),
   }
+}
 
-  if (doc._type === "packMayorista") {
-    return { _id: doc._id, _type: doc._type, title: String(doc.mayoristaNombre || "Pack Mayorista"), price: Number(doc.mayoristaPrecio ?? 0) }
+if (doc._type === "packMayorista") {
+  return {
+    _id: doc._id,
+    _type: doc._type,
+    title: String(doc.mayoristaNombre || "Pack Mayorista"),
+    price: Number(doc.mayoristaPrecio ?? 0),
+    bundleSize: 1, // no aplica
   }
+}
+
 
   return null
 }
@@ -571,42 +591,48 @@ export async function POST(req: Request) {
       )
 
       for (const cid of comboIds) {
-        const pack = comboById.get(cid) || null
-        const promoUnit = toMoney(Number(pack?.price ?? 0))
-        if (!pack?._id || !promoUnit || promoUnit <= 0) {
-          return NextResponse.json(
-            { ok: false, error: "invalid_combo_price", message: "Combo/2x1 sin precio válido.", comboId: cid, pack },
-            { status: 400 }
-          )
-        }
+  const pack = comboById.get(cid) || null
+  const promoUnit = toMoney(Number(pack?.price ?? 0))
+  if (!pack?._id || !promoUnit || promoUnit <= 0) {
+    return NextResponse.json(
+      { ok: false, error: "invalid_combo_price", message: "Combo/2x1 sin precio válido.", comboId: cid, pack },
+      { status: 400 }
+    )
+  }
 
-        const lines = group.get(cid) || []
-        const totalUnits = lines.reduce((acc, l) => acc + Number(l.cantidad || 0), 0)
+  const lines = group.get(cid) || []
+  const totalUnits = lines.reduce((acc, l) => acc + Number(l.cantidad || 0), 0)
 
-        const pairs = Math.floor(totalUnits / 2)
-        const remainder = totalUnits % 2
+  const bundleSize = Math.max(1, Number(pack?.bundleSize ?? 2)) // fallback 2
+  const bundles = Math.floor(totalUnits / bundleSize)
+  const remainder = totalUnits % bundleSize
 
-        // promo pairs
-        if (pairs > 0) subtotalCalc += toMoney(pairs * promoUnit)
+  if (bundles > 0) subtotalCalc += toMoney(bundles * promoUnit)
 
-        // suelta (si impar): cobrar la más cara
-        if (remainder === 1) {
-          let maxUnit = 0
-          for (const l of lines) {
-            const prod = byId.get(l.productId)
-            const unit = getUnitPrice(prod)
-            if (unit > maxUnit) maxUnit = unit
-          }
-          if (!maxUnit || maxUnit <= 0) {
-            return NextResponse.json(
-              { ok: false, error: "invalid_combo_single", message: "No se pudo calcular la suelta del combo.", comboId: cid },
-              { status: 400 }
-            )
-          }
-          subtotalCalc += toMoney(maxUnit)
-        }
-      }
+  if (remainder > 0) {
+    const unitPrices: number[] = []
+
+    for (const l of lines) {
+      const prod = byId.get(l.productId)
+      const unit = getUnitPrice(prod)
+      for (let k = 0; k < Number(l.cantidad || 0); k++) unitPrices.push(unit)
     }
+
+    unitPrices.sort((a, b) => b - a) // más caras primero
+    const remainderSum = unitPrices.slice(0, remainder).reduce((acc, v) => acc + v, 0)
+
+    if (!remainderSum || remainderSum <= 0) {
+      return NextResponse.json(
+        { ok: false, error: "invalid_combo_remainder", message: "No se pudo calcular los sobrantes del combo.", comboId: cid },
+        { status: 400 }
+      )
+    }
+
+    subtotalCalc += toMoney(remainderSum)
+  }
+} // ✅ CIERRA for cid
+} // ✅ CIERRA if (comboLines.length)
+
 
     // C) Productos normales
     for (const it of normalProductLines) {
