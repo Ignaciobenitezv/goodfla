@@ -1,7 +1,8 @@
 // src/app/api/mp/webhook/route.ts
 import { NextResponse } from "next/server"
 import { createClient } from "@sanity/client"
-import { sendOwnerSaleEmail } from "@/lib/email"
+import { sendOwnerSaleEmail, sendCustomerPurchaseEmail } from "@/lib/email"
+
 
 export const dynamic = "force-dynamic"
 export const runtime = "nodejs"
@@ -304,7 +305,7 @@ function parseComboLinesFromPref(pref: any): CartItem[] {
     try {
       const parsed = JSON.parse(raw)
       if (Array.isArray(parsed)) arr = parsed
-    } catch {}
+    } catch { }
   }
 
   return (arr || [])
@@ -367,17 +368,17 @@ function parseCartFromMetadata(meta: any): CartItem[] {
     try {
       const parsed = JSON.parse(raw)
       if (Array.isArray(parsed)) arr = parsed
-    } catch {}
+    } catch { }
   }
 
- return (arr || [])
-  .map((x: any) => ({
-    productId: String(x?.productId ?? x?._id ?? "").trim(),
-    talle: x?.talle ?? null,
-    cantidad: Number(x?.cantidad ?? 1),
-    comboId: x?.comboId ? String(x.comboId).trim() : null,
-  }))
-  .filter((x: any) => x.productId && x.cantidad > 0)
+  return (arr || [])
+    .map((x: any) => ({
+      productId: String(x?.productId ?? x?._id ?? "").trim(),
+      talle: x?.talle ?? null,
+      cantidad: Number(x?.cantidad ?? 1),
+      comboId: x?.comboId ? String(x.comboId).trim() : null,
+    }))
+    .filter((x: any) => x.productId && x.cantidad > 0)
 
 }
 
@@ -404,11 +405,11 @@ function buildShippingObjectFromCustomer(customer: MetaCustomer | null | undefin
     cp: customer?.cp ?? undefined,
     direccion: d
       ? {
-          calle: d.calle ?? undefined,
-          numero: d.numero ?? undefined,
-          barrio: d.barrio ?? undefined,
-          ciudad: d.ciudad ?? undefined,
-        }
+        calle: d.calle ?? undefined,
+        numero: d.numero ?? undefined,
+        barrio: d.barrio ?? undefined,
+        ciudad: d.ciudad ?? undefined,
+      }
       : undefined,
   }
 }
@@ -466,7 +467,7 @@ async function buildEmailItems(cart: CartItem[], meta: any) {
     }
   }
 
-   // 2) Productos elegidos dentro de combos (2x1 / combo): listar UNITARIOS
+  // 2) Productos elegidos dentro de combos (2x1 / combo): listar UNITARIOS
   const comboCart = cart.filter((x) => !!x.comboId && !packIdSet.has(String(x.productId)))
   const comboUnitItems = await getProductTitles(comboCart)
 
@@ -500,7 +501,7 @@ function buildShippingAddress(payment: any) {
 }
 
 
-  function buildItemsText(cart: CartItem[]) {
+function buildItemsText(cart: CartItem[]) {
   return cart
     .map((i) => `• ${i.productId}${i.talle ? ` (Talle ${i.talle})` : ""} x ${i.cantidad}`)
     .join("\n")
@@ -540,203 +541,219 @@ async function handle(req: Request) {
     let paymentId: string | null = null
 
     if (topic === "payment") {
-  // OJO: data.id a veces NO es el paymentId real (puede ser notification id).
-  // Probamos resolverlo como paymentId y si no existe, respondemos 200 sin cortar el flujo.
+      // OJO: data.id a veces NO es el paymentId real (puede ser notification id).
+      // Probamos resolverlo como paymentId y si no existe, respondemos 200 sin cortar el flujo.
 
-  const paymentTry = await mpGetSoft(`https://api.mercadopago.com/v1/payments/${id}`)
+      const paymentTry = await mpGetSoft(`https://api.mercadopago.com/v1/payments/${id}`)
 
-  if ((paymentTry as any).__error) {
-    // ✅ No rompemos: esperamos a que llegue merchant_order o a un retry de MP
-    return respond200(
-      { msg: "payment_id_not_resolvable_yet", receivedId: id, topic },
-      startedAt
-    )
-  }
+      if ((paymentTry as any).__error) {
+        // ✅ No rompemos: esperamos a que llegue merchant_order o a un retry de MP
+        return respond200(
+          { msg: "payment_id_not_resolvable_yet", receivedId: id, topic },
+          startedAt
+        )
+      }
 
-  const payment = paymentTry
-  console.log("💳 payment", { id: payment?.id, status: payment?.status, order: payment?.order })
+      const payment = paymentTry
+      console.log("💳 payment", { id: payment?.id, status: payment?.status, order: payment?.order })
 
-  if (String(payment?.status || "").toLowerCase() !== "approved") {
-    return respond200(
-      { msg: "payment_not_approved_yet", paymentId: payment?.id, status: payment?.status },
-      startedAt
-    )
-  }
+      if (String(payment?.status || "").toLowerCase() !== "approved") {
+        return respond200(
+          { msg: "payment_not_approved_yet", paymentId: payment?.id, status: payment?.status },
+          startedAt
+        )
+      }
 
-  paymentId = String(payment?.id || "")
-  const markerId = `mp_payment_${paymentId}`
+      paymentId = String(payment?.id || "")
+      const markerId = `mp_payment_${paymentId}`
 
-  const merchantOrderId =
-    payment?.order?.id || payment?.order_id || payment?.merchant_order_id
+      const merchantOrderId =
+        payment?.order?.id || payment?.order_id || payment?.merchant_order_id
 
-  if (!merchantOrderId) {
-  // ✅ Flujo Brick/card_inline: no hay merchant_order, usamos payment.metadata
-  const meta = payment?.metadata || {}
-    console.log("🧩 payment_metadata_keys", Object.keys(meta || {}))
+      if (!merchantOrderId) {
+        // ✅ Flujo Brick/card_inline: no hay merchant_order, usamos payment.metadata
+        const meta = payment?.metadata || {}
+        console.log("🧩 payment_metadata_keys", Object.keys(meta || {}))
 
-// candado idempotente
-await sanity.createIfNotExists({
-  _id: markerId,
-  _type: "mpWebhook",
-  paymentId,
-  orderId: meta?.orderId || null,
-  createdAt: new Date().toISOString(),
-  status: "processing",
-})
+        // candado idempotente
+        await sanity.createIfNotExists({
+          _id: markerId,
+          _type: "mpWebhook",
+          paymentId,
+          orderId: meta?.orderId || null,
+          createdAt: new Date().toISOString(),
+          status: "processing",
+        })
 
-// 🔥 en vez de confiar en "marker", traemos el doc real
-const existing = await sanity.getDocument(markerId)
+        // 🔥 en vez de confiar en "marker", traemos el doc real
+        const existing = await sanity.getDocument(markerId)
 
-if ((existing as any)?.status === "processed" && (existing as any)?.ownerNotified === true) {
-  return respond200(
-    { msg: "already_processed_card_inline", markerId, paymentId },
-    startedAt
-  )
-}
+        if ((existing as any)?.status === "processed" && (existing as any)?.ownerNotified === true) {
+          return respond200(
+            { msg: "already_processed_card_inline", markerId, paymentId },
+            startedAt
+          )
+        }
 
-// si está processed pero ownerNotified NO, dejamos seguir para reintentar mail
-
-
-  // armar comprador desde metadata.customer
-  const customer: any = meta?.customer || null
-  // 🔎 DEBUG EMAIL
-console.log("email_debug", {
-  metaCustomerEmail: meta?.customer?.email,
-  payerEmail: payment?.payer?.email,
-})
-  const buyerName = buildBuyerNameFromCustomer(customer) || undefined
-  const buyerPhone = String(customer?.telefono || "").trim() || undefined
-
-const buyerEmail =
-  String(meta?.customer?.email || "").trim() ||
-  String(payment?.payer?.email || "").trim() ||
-  undefined
-
-  // envío desde metadata.customer
-  const shippingAddress = buildShippingFromCustomer(customer) || undefined
-
-  // items: si es mayorista, usamos packTitle; si no, usamos cart
-let cart = parseCartFromMetadata(meta)
-
-// ✅ Fallback: si MP no trae metadata (Brick), leer lo persistido en Sanity
-if (!cart.length) {
-  const saved = await sanity.getDocument(markerId)
-
-  const savedCartJson =
-    (saved as any)?.cartJson ||
-    (saved as any)?.cart ||
-    null
-
-  if (savedCartJson) {
-    try {
-      const parsed = typeof savedCartJson === "string" ? JSON.parse(savedCartJson) : savedCartJson
-      if (Array.isArray(parsed)) cart = parsed
-    } catch {}
-  }
-}
+        // si está processed pero ownerNotified NO, dejamos seguir para reintentar mail
 
 
-// fallback extra por si MP te devuelve cart como string raro o viene en cartJson
-if (!cart.length && meta?.cart && typeof meta.cart === "string") {
-  try {
-    const parsed = JSON.parse(meta.cart)
-    if (Array.isArray(parsed)) cart = parsed
-  } catch {}
-}
-if (!cart.length && meta?.cartJson && typeof meta.cartJson === "string") {
-  try {
-    const parsed = JSON.parse(meta.cartJson)
-    if (Array.isArray(parsed)) cart = parsed
-  } catch {}
-}
+        // armar comprador desde metadata.customer
+        const customer: any = meta?.customer || null
+        // 🔎 DEBUG EMAIL
+        console.log("email_debug", {
+          metaCustomerEmail: meta?.customer?.email,
+          payerEmail: payment?.payer?.email,
+        })
+        const buyerName = buildBuyerNameFromCustomer(customer) || undefined
+        const buyerPhone = String(customer?.telefono || "").trim() || undefined
 
-// packIds = ids de documentos packMayorista (para excluir de stock)
-const packIds = Array.isArray(meta?.packIds) ? meta.packIds.map(String) : []
-const packIdSet = new Set(packIds)
+        const buyerEmail =
+          String(meta?.customer?.email || "").trim() ||
+          String(payment?.payer?.email || "").trim() ||
+          undefined
 
-// ✅ items SIEMPRE desde el cart (incluye packMayorista y productos)
-let items = await buildEmailItems(cart, meta)
-if (!items.length && cart.length) {
-  items = cart.map((it) => ({
-    title: String(it.productId),
-    talle: it.talle ?? null,
-    qty: Number(it.cantidad || 1),
-  }))
-}
+        // envío desde metadata.customer
+        const shippingAddress = buildShippingFromCustomer(customer) || undefined
 
-// ✅ si en algún futuro querés “no stock” para packMayorista:
-// filtrás SOLO para stock
+        // items: si es mayorista, usamos packTitle; si no, usamos cart
+        let cart = parseCartFromMetadata(meta)
 
+        // ✅ Fallback: si MP no trae metadata (Brick), leer lo persistido en Sanity
+        if (!cart.length) {
+          const saved = await sanity.getDocument(markerId)
 
-  // idempotencia de email
-  const updated = await sanity
-    .patch(markerId)
-    .setIfMissing({ ownerNotified: false })
-    .set({ status: "processed", processedAt: new Date().toISOString() })
-    .commit({ returnDocuments: true })
-    .catch(() => null)
-console.log("📧 attempting_owner_email_card_inline", {
-  
-  markerId,
-  paymentId,
-  orderId: String(meta?.orderId || paymentId),
-  buyerName,
-  buyerEmail,
-  buyerPhone,
-  shippingAddress,
-  itemsCount: items?.length || 0,
-    metaHasCart: !!(meta?.cart || meta?.cartJson),
-  cartCount: cart?.length || 0,
-  firstCartItem: cart?.[0] || null,
+          const savedCartJson =
+            (saved as any)?.cartJson ||
+            (saved as any)?.cart ||
+            null
 
-})
-
-  if (updated && updated.ownerNotified !== true) {
-    try {
-      const orderIdForEmail = String(meta?.orderId || paymentId)
-      const shipping = buildShippingObjectFromCustomer(customer)
-
-await sendOwnerSaleEmail({
-  orderId: orderIdForEmail,
-  paymentId,
-  total: Number(payment?.transaction_amount ?? 0) || undefined,
-  currency: String(payment?.currency_id || "ARS"),
-  buyerName,
-  buyerEmail,
-  buyerPhone,
-
-  // ✅ nuevo (para que el email muestre domicilio vs sucursal)
-  shipping,
-
-  // ✅ dejo esto para backwards-compat (por si tu email.ts todavía lo usa en algún lado)
-  shippingAddress,
-
-  items,
-})
+          if (savedCartJson) {
+            try {
+              const parsed = typeof savedCartJson === "string" ? JSON.parse(savedCartJson) : savedCartJson
+              if (Array.isArray(parsed)) cart = parsed
+            } catch { }
+          }
+        }
 
 
-      await sanity
-        .patch(markerId)
-        .set({ ownerNotified: true, ownerNotifiedAt: new Date().toISOString() })
-        .commit()
-        .catch(() => {})
-    } catch (e: any) {
-      console.error("❌ owner_notify_failed (card_inline)", {
-  message: e?.message,
-  name: e?.name,
-  stack: e?.stack,
-  raw: e,
-})
+        // fallback extra por si MP te devuelve cart como string raro o viene en cartJson
+        if (!cart.length && meta?.cart && typeof meta.cart === "string") {
+          try {
+            const parsed = JSON.parse(meta.cart)
+            if (Array.isArray(parsed)) cart = parsed
+          } catch { }
+        }
+        if (!cart.length && meta?.cartJson && typeof meta.cartJson === "string") {
+          try {
+            const parsed = JSON.parse(meta.cartJson)
+            if (Array.isArray(parsed)) cart = parsed
+          } catch { }
+        }
+
+        // packIds = ids de documentos packMayorista (para excluir de stock)
+        const packIds = Array.isArray(meta?.packIds) ? meta.packIds.map(String) : []
+        const packIdSet = new Set(packIds)
+
+        // ✅ items SIEMPRE desde el cart (incluye packMayorista y productos)
+        let items = await buildEmailItems(cart, meta)
+        if (!items.length && cart.length) {
+          items = cart.map((it) => ({
+            title: String(it.productId),
+            talle: it.talle ?? null,
+            qty: Number(it.cantidad || 1),
+          }))
+        }
+
+        // ✅ si en algún futuro querés “no stock” para packMayorista:
+        // filtrás SOLO para stock
+
+
+        // idempotencia de email
+        const updated = await sanity
+          .patch(markerId)
+          .setIfMissing({ ownerNotified: false, customerNotified: false })
+          .set({ status: "processed", processedAt: new Date().toISOString() })
+          .commit({ returnDocuments: true })
+          .catch(() => null)
+        console.log("📧 attempting_owner_email_card_inline", {
+
+          markerId,
+          paymentId,
+          orderId: String(meta?.orderId || paymentId),
+          buyerName,
+          buyerEmail,
+          buyerPhone,
+          shippingAddress,
+          itemsCount: items?.length || 0,
+          metaHasCart: !!(meta?.cart || meta?.cartJson),
+          cartCount: cart?.length || 0,
+          firstCartItem: cart?.[0] || null,
+
+        })
+        const orderIdForEmail = String(meta?.orderId || paymentId)
+        const shipping = buildShippingObjectFromCustomer(customer)
+
+        if (updated) {
+          // OWNER
+          if (updated.ownerNotified !== true) {
+            try {
+              await sendOwnerSaleEmail({
+                orderId: orderIdForEmail,
+                paymentId,
+                total: Number(payment?.transaction_amount ?? 0) || undefined,
+                currency: String(payment?.currency_id || "ARS"),
+                buyerName,
+                buyerEmail,
+                buyerPhone,
+                shipping,
+                shippingAddress,
+                items,
+              })
+
+              await sanity.patch(markerId)
+                .set({ ownerNotified: true, ownerNotifiedAt: new Date().toISOString() })
+                .commit()
+                .catch(() => { })
+            } catch (e: any) {
+              console.error("❌ owner_notify_failed (card_inline)", e?.message || e)
+            }
+          }
+
+          // CUSTOMER
+          if (buyerEmail && updated.customerNotified !== true) {
+            try {
+              await sendCustomerPurchaseEmail({
+                to: buyerEmail,
+                orderId: orderIdForEmail,
+                paymentId,
+                total: Number(payment?.transaction_amount ?? 0) || undefined,
+                currency: String(payment?.currency_id || "ARS"),
+                buyerName,
+                shipping,
+                shippingAddress,
+                items,
+              })
+
+              await sanity.patch(markerId)
+                .set({ customerNotified: true, customerNotifiedAt: new Date().toISOString() })
+                .commit()
+                .catch(() => { })
+            } catch (e: any) {
+              console.error("❌ customer_notify_failed (card_inline)", e?.message || e)
+            }
+          }
+        }
+
+
+
+        return respond200({ msg: "processed_card_inline_no_merchant_order", markerId, paymentId }, startedAt)
+      }
+
+
+      merchantOrder = await mpGet(`https://api.mercadopago.com/merchant_orders/${merchantOrderId}`)
     }
-  }
-
-  return respond200({ msg: "processed_card_inline_no_merchant_order", markerId, paymentId }, startedAt)
-}
-
-
-  merchantOrder = await mpGet(`https://api.mercadopago.com/merchant_orders/${merchantOrderId}`)
-}
-else if (topic === "merchant_order") {
+    else if (topic === "merchant_order") {
       merchantOrder = await mpGet(`https://api.mercadopago.com/merchant_orders/${id}`)
     } else {
       // otros topics: ignorar pero 200
@@ -787,173 +804,185 @@ else if (topic === "merchant_order") {
     // =========================
     const prefId = merchantOrder?.preference_id
     if (!prefId) {
-      await sanity.patch(markerId).set({ status: "no_preference_id" }).commit().catch(() => {})
+      await sanity.patch(markerId).set({ status: "no_preference_id" }).commit().catch(() => { })
       return respond200({ msg: "no_preference_id", markerId, paymentId }, startedAt)
     }
 
-const pref = await mpGet(`https://api.mercadopago.com/checkout/preferences/${prefId}`)
+    const pref = await mpGet(`https://api.mercadopago.com/checkout/preferences/${prefId}`)
 
-const cart = parseCartFromPref(pref)                  // fuente principal
-const comboCart = parseComboLinesFromPref(pref)       // fallback
+    const cart = parseCartFromPref(pref)                  // fuente principal
+    const comboCart = parseComboLinesFromPref(pref)       // fallback
 
-// ✅ Si cart ya viene con comboId, NO lo merges con comboCart porque duplicás unidades.
-const mergedCart =
-  cart.some((x) => !!x.comboId) ? cart : mergeCartItems([...cart, ...comboCart])
+    // ✅ Si cart ya viene con comboId, NO lo merges con comboCart porque duplicás unidades.
+    const mergedCart =
+      cart.some((x) => !!x.comboId) ? cart : mergeCartItems([...cart, ...comboCart])
 
-if (!mergedCart.length) {
-  await sanity.patch(markerId).set({ status: "no_cart_metadata" }).commit().catch(() => {})
-  return respond200({ msg: "no_cart_metadata", markerId, paymentId, preferenceId: prefId }, startedAt)
-}
+    if (!mergedCart.length) {
+      await sanity.patch(markerId).set({ status: "no_cart_metadata" }).commit().catch(() => { })
+      return respond200({ msg: "no_cart_metadata", markerId, paymentId, preferenceId: prefId }, startedAt)
+    }
 
 
 
-// packIds = ids de documentos packMayorista (para excluir de stock)
-const meta = pref?.metadata || {}
-const packIds = Array.isArray(meta?.packIds) ? meta.packIds.map(String) : []
-const packIdSet = new Set(packIds)
+    // packIds = ids de documentos packMayorista (para excluir de stock)
+    const meta = pref?.metadata || {}
+    const packIds = Array.isArray(meta?.packIds) ? meta.packIds.map(String) : []
+    const packIdSet = new Set(packIds)
 
-// ✅ SOLO descontar stock de líneas que NO sean packMayorista
-const cartForStock = mergedCart.filter((x) => !packIdSet.has(String(x.productId)))
+    // ✅ SOLO descontar stock de líneas que NO sean packMayorista
+    const cartForStock = mergedCart.filter((x) => !packIdSet.has(String(x.productId)))
 
-if (cartForStock.length) {
-  const r = await reserveStockAtomic(cartForStock, markerId)
+    if (cartForStock.length) {
+      const r = await reserveStockAtomic(cartForStock, markerId)
 
-if (!r.ok) {
-  const reason = (r as any).reason
+      if (!r.ok) {
+        const reason = (r as any).reason
 
-  if (reason === "conflict") {
-    // no lo marques como failed_stock
-    await sanity.patch(markerId).set({ status: "retry_conflict" }).commit().catch(() => {})
-    return respond200({ msg: "retry_conflict", markerId, paymentId }, startedAt)
-  }
+        if (reason === "conflict") {
+          // no lo marques como failed_stock
+          await sanity.patch(markerId).set({ status: "retry_conflict" }).commit().catch(() => { })
+          return respond200({ msg: "retry_conflict", markerId, paymentId }, startedAt)
+        }
 
-  // out_of_stock real
-  await sanity
-    .patch(markerId)
-    .set({
-      status: "failed_stock",
-      detailsJson: JSON.stringify((r as any).details ?? []),
-      failedAt: new Date().toISOString(),
-    })
-    .commit()
-    .catch(() => {})
+        // out_of_stock real
+        await sanity
+          .patch(markerId)
+          .set({
+            status: "failed_stock",
+            detailsJson: JSON.stringify((r as any).details ?? []),
+            failedAt: new Date().toISOString(),
+          })
+          .commit()
+          .catch(() => { })
 
-  return respond200({ ignored: true, reason: "failed_stock", markerId, paymentId }, startedAt)
-}
+        return respond200({ ignored: true, reason: "failed_stock", markerId, paymentId }, startedAt)
+      }
 
-} else {
-  console.log("📦 onlyy packMayorista lines: skipping stock reserve", { markerId, paymentId })
-}
+    } else {
+      console.log("📦 onlyy packMayorista lines: skipping stock reserve", { markerId, paymentId })
+    }
 
 
 
 
     // =========================
-// 5) Procesado + aviso por mail (idempotente)
-// =========================
-const processedAt = new Date().toISOString()
+    // 5) Procesado + aviso por mail (idempotente)
+    // =========================
+    const processedAt = new Date().toISOString()
 
-const updated = await sanity
-  .patch(markerId)
-  .setIfMissing({ ownerNotified: false })
-  .set({ status: "processed", processedAt })
-  .commit({ returnDocuments: true })
-  .catch(() => null)
-
-// 🟢 Avisar al dueño SOLO una vez
-// 🟢 Avisar al dueño SOLO una vez
-if (updated && updated.ownerNotified !== true) {
-  try {
-    const payment = await mpGetSoft(`https://api.mercadopago.com/v1/payments/${paymentId}`)
-    if ((payment as any)?.__error) {
-  console.error("❌ payment_fetch_failed_for_email", { paymentId, err: (payment as any)?.__message })
-  // no rompemos webhook; dejamos ownerNotified=false para reintento
-  return respond200({ msg: "payment_fetch_failed_for_email", markerId, paymentId }, startedAt)
-}
-
-    // ✅ metadata desde la preference (tu checkout)
-    const meta = pref?.metadata || {}
-    const metaCustomer = (meta?.customer || null) as MetaCustomer | null
-
-    // ✅ buyerName: primero lo tuyo (metadata.customer), si no existe, MP payer
-    const buyerName =
-      buildBuyerNameFromCustomer(metaCustomer) ||
-      (
-        String(payment?.payer?.first_name || "").trim() +
-        (payment?.payer?.last_name ? ` ${String(payment.payer.last_name).trim()}` : "")
-      ).trim() ||
-      undefined
-
-    // ✅ buyerEmail: primero lo tuyo (metadata.customer.email), si no existe, MP payer.email
-    const buyerEmail =
-      String(metaCustomer?.email || "").trim() ||
-      String(payment?.payer?.email || "").trim() ||
-      undefined
-
-    // ✅ buyerPhone: primero lo tuyo (metadata.customer.telefono), si no existe, MP payer.phone
-    const buyerPhone =
-      String(metaCustomer?.telefono || "").trim() ||
-      (
-        payment?.payer?.phone
-          ? `${payment.payer.phone?.area_code || ""}${payment.payer.phone?.number ? ` ${payment.payer.phone.number}` : ""}`.trim()
-          : ""
-      ) ||
-      undefined
-
-    // ✅ shipping: primero lo tuyo (metadata.customer), si no existe, lo de MP
-    const shippingAddress =
-      buildShippingFromCustomer(metaCustomer) ||
-      buildShippingAddress(payment) ||
-      undefined
-
-    // ✅ items: si pack mayorista, mandamos packTitle. Si no, títulos desde Sanity usando cart.
-   const items = await buildEmailItems(mergedCart, meta)
-
-    // ✅ orderId para el mail: preferí tu orderId (external_reference)
-    const emailOrderId =
-      String(meta?.orderId || "").trim() ||
-      String(merchantOrder?.id || "").trim() ||
-      String(paymentId)
-
-    const shipping = buildShippingObjectFromCustomer(metaCustomer)
-
-await sendOwnerSaleEmail({
-  orderId: emailOrderId,
-  paymentId,
-  total: Number(payment?.transaction_amount ?? 0) || undefined,
-  currency: String(payment?.currency_id || "ARS"),
-  buyerName,
-  buyerEmail,
-  buyerPhone,
-
-  // ✅ nuevo
-  shipping,
-
-  // ✅ compat
-  shippingAddress,
-
-  items,
-})
-
-
-    await sanity
+    const updated = await sanity
       .patch(markerId)
-      .set({
-        ownerNotified: true,
-        ownerNotifiedAt: new Date().toISOString(),
-      })
-      .commit()
-      .catch(() => {})
+      .setIfMissing({ ownerNotified: false, customerNotified: false })
+      .set({ status: "processed", processedAt })
+      .commit({ returnDocuments: true })
+      .catch(() => null)
 
-    console.log("📧 owner_notified_ok", { markerId })
-  } catch (e: any) {
-    console.error("❌ owner_notify_failed", e?.message || e)
-    // IMPORTANTE: no rompemos el webhook si falla el mail
-  }
-}
+    // 🟢 Avisar al dueño SOLO una vez
+
+    if (updated) {
+      try {
+        const payment = await mpGetSoft(`https://api.mercadopago.com/v1/payments/${paymentId}`)
+        if ((payment as any)?.__error) {
+          console.error("❌ payment_fetch_failed_for_email", { paymentId, err: (payment as any)?.__message })
+          return respond200({ msg: "payment_fetch_failed_for_email", markerId, paymentId }, startedAt)
+        }
+
+        const meta = pref?.metadata || {}
+        const metaCustomer = (meta?.customer || null) as MetaCustomer | null
+
+        const buyerName =
+          buildBuyerNameFromCustomer(metaCustomer) ||
+          (
+            String(payment?.payer?.first_name || "").trim() +
+            (payment?.payer?.last_name ? ` ${String(payment.payer.last_name).trim()}` : "")
+          ).trim() ||
+          undefined
+
+        const buyerEmail =
+          String(metaCustomer?.email || "").trim() ||
+          String(payment?.payer?.email || "").trim() ||
+          undefined
+
+        const buyerPhone =
+          String(metaCustomer?.telefono || "").trim() ||
+          (
+            payment?.payer?.phone
+              ? `${payment.payer.phone?.area_code || ""}${payment.payer.phone?.number ? ` ${payment.payer.phone.number}` : ""}`.trim()
+              : ""
+          ) ||
+          undefined
+
+        const shippingAddress =
+          buildShippingFromCustomer(metaCustomer) ||
+          buildShippingAddress(payment) ||
+          undefined
+
+        const shipping = buildShippingObjectFromCustomer(metaCustomer)
+
+        const items = await buildEmailItems(mergedCart, meta)
+
+        const emailOrderId =
+          String(meta?.orderId || "").trim() ||
+          String(merchantOrder?.id || "").trim() ||
+          String(paymentId)
+
+        // 1) OWNER mail
+        if (updated.ownerNotified !== true) {
+          try {
+            await sendOwnerSaleEmail({
+              orderId: emailOrderId,
+              paymentId,
+              total: Number(payment?.transaction_amount ?? 0) || undefined,
+              currency: String(payment?.currency_id || "ARS"),
+              buyerName,
+              buyerEmail,
+              buyerPhone,
+              shipping,
+              shippingAddress,
+              items,
+            })
+
+            await sanity
+              .patch(markerId)
+              .set({ ownerNotified: true, ownerNotifiedAt: new Date().toISOString() })
+              .commit()
+              .catch(() => { })
+          } catch (e: any) {
+            console.error("❌ owner_notify_failed", e?.message || e)
+          }
+        }
+
+        // 2) CUSTOMER mail
+        if (buyerEmail && updated.customerNotified !== true) {
+          try {
+            await sendCustomerPurchaseEmail({
+              to: buyerEmail,
+              orderId: emailOrderId,
+              paymentId,
+              total: Number(payment?.transaction_amount ?? 0) || undefined,
+              currency: String(payment?.currency_id || "ARS"),
+              buyerName,
+              shipping,
+              shippingAddress,
+              items,
+            })
+
+            await sanity
+              .patch(markerId)
+              .set({ customerNotified: true, customerNotifiedAt: new Date().toISOString() })
+              .commit()
+              .catch(() => { })
+          } catch (e: any) {
+            console.error("❌ customer_notify_failed", e?.message || e)
+          }
+        }
+      } catch (e: any) {
+        console.error("❌ notify_block_failed", e?.message || e)
+      }
+    }
+    return respond200({ msg: "processed", markerId, paymentId, preferenceId: prefId }, startedAt)
 
 
-return respond200({ msg: "processed", markerId, paymentId, preferenceId: prefId }, startedAt)
 
   } catch (err: any) {
     console.error("🔥 webhook_fatal_error", { message: err?.message, stack: err?.stack })

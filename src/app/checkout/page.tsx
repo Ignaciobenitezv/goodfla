@@ -119,7 +119,7 @@ export default function CheckoutPage() {
   const [nombre, setNombre] = useState("")
   const [apellido, setApellido] = useState("")
   const [telefono, setTelefono] = useState("")
-
+  const [email, setEmail] = useState("")
   // Paso 2: entrega
   const [envio, setEnvio] = useState<"" | "domicilio" | "sucursal">("")
   const [cp, setCp] = useState("")
@@ -209,7 +209,10 @@ const descuentoPromo = useMemo(() => {
     }
   }
 
-  const puedeContinuarContacto = [nombre, apellido, telefono].every((v) => v.trim() !== "")
+  const puedeContinuarContacto =
+  [nombre, apellido, telefono, email].every((v) => v.trim() !== "") &&
+  /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())
+
 
   // 🔹 MercadoPago redirect (preferencia)
   // 🔹 MercadoPago redirect (preferencia)
@@ -227,7 +230,7 @@ const descuentoPromo = useMemo(() => {
         nombre: nombre.trim(),
         apellido: apellido.trim(),
         telefono: telefono.trim(),
-        email: "", // 👈 no lo tenés en UI todavía, abajo te digo qué hacer
+        email: email.trim(),
         envio: envio || null,
         cp: cp || null,
         direccion:
@@ -340,6 +343,7 @@ const descuentoPromo = useMemo(() => {
           nombre: nombre.trim(),
           apellido: apellido.trim(),
           telefono: telefono.trim(),
+          email: email.trim(),
           envio,
           cp: cp || null,
           direccion:
@@ -500,7 +504,6 @@ if (!serverAmount) {
                   issuer_id: data.issuer_id != null ? String(data.issuer_id) : undefined,
                   payment_method_id: String(data.paymentMethodId || data.payment_method_id),
                   installments: Number(data.installments ?? 1),
-                  email: data.payer?.email ? String(data.payer.email) : undefined,
                   identification: data.payer?.identification
                     ? {
                       type: String(data.payer.identification.type),
@@ -521,6 +524,7 @@ if (!serverAmount) {
                     nombre: nombre.trim(),
                     apellido: apellido.trim(),
                     telefono: telefono.trim(),
+                    email: email.trim(),
                     envio: envio, // "domicilio" | "sucursal"
                     cp: cp || null,
                     direccion:
@@ -663,6 +667,8 @@ useEffect(() => {
                 <ValidatedInput placeholder="Apellido" value={apellido} onChange={setApellido} required />
               </div>
               <ValidatedInput placeholder="Teléfono" value={telefono} onChange={setTelefono} required />
+              <ValidatedInput placeholder="Email" value={email} onChange={setEmail} required />
+
             </section>
 
             <button
