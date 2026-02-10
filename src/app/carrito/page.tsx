@@ -142,7 +142,7 @@ const descuento = useMemo(() => {
 
 {/* Subtotal sin promo (precio “de lista”) */}
 <div className="flex justify-between text-sm mb-2">
-  <span className="text-gray-600">Subtotal (sin promo)</span>
+  <span className="text-gray-600">Subtotal</span>
   <span className="text-gray-600">
     ${subtotalSinPromo.toLocaleString("es-AR")}
   </span>
@@ -151,7 +151,7 @@ const descuento = useMemo(() => {
 {/* Descuento */}
 {!quoteLoading && descuento > 0 && (
   <div className="flex justify-between text-sm mb-3">
-    <span className="text-green-700 font-medium">Descuento promo</span>
+    <span className="text-green-700 font-medium">Descuento</span>
     <span className="text-green-700 font-semibold">
       -${descuento.toLocaleString("es-AR")}
     </span>
