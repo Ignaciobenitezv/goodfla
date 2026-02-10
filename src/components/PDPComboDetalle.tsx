@@ -355,22 +355,28 @@ const hasStockForCombo = () => {
 
               const itemsCombo = Object.values(selected).flat().filter(Boolean)
 
-              itemsCombo.forEach((prod: any) => {
+             itemsCombo.forEach((prod: any) => {
   const stockTalle = getStockTalle(prod, prod.talle)
 
+  const unitPrice = Number(prod?.precioActual ?? prod?.precio ?? 0)
+
+  if (!unitPrice || unitPrice <= 0) {
+    alert("Este producto no tiene precio válido.")
+    return
+  }
+
   addItem({
-    productId: prod._id, // SIEMPRE el _id real de Sanity
+    productId: prod._id,
     nombre: `${prod.nombre}${prod.talle ? ` (Talle ${prod.talle})` : ""}`,
-    precio: combo.precio / itemsCombo.length,
+    precio: unitPrice, // ✅ precio unitario real
     cantidad: 1,
     imagen: prod.imagen || "/placeholder.png",
     slug: prod.slug ?? undefined,
     talle: prod.talle ?? undefined,
     stock: stockTalle,
-    comboId: combo._id
+    comboId: combo._id,
   })
 })
-
 
               showAddedDialog({
                 title: combo.nombre,
