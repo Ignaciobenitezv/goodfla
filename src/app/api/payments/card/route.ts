@@ -461,7 +461,14 @@ export async function POST(req: Request) {
 
 
     // 1.1) Email + DNI (Brick) — soporta body.email o payer.email
-    const email = String(body.email || body.payer?.email || (body as any)?.payer?.email || "").trim()
+    const email = String(
+  body.email ||
+  body.payer?.email ||
+  body.customer?.email ||
+  (body as any)?.formData?.payer?.email ||
+  (body as any)?.formData?.email ||
+  ""
+).trim()
     const identification = normalizeIdentification(body)
 
    if (!isQuoteOnly) {
