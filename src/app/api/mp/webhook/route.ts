@@ -397,11 +397,19 @@ function buildShippingObjectFromCustomer(customer: MetaCustomer | null | undefin
     return { type: "sucursal" as const }
   }
 
-  // default: domicilio
+  const d = customer?.direccion || undefined
+
   return {
     type: "domicilio" as const,
-    cp: customer?.cp ?? null,
-    direccion: customer?.direccion ?? null,
+    cp: customer?.cp ?? undefined,
+    direccion: d
+      ? {
+          calle: d.calle ?? undefined,
+          numero: d.numero ?? undefined,
+          barrio: d.barrio ?? undefined,
+          ciudad: d.ciudad ?? undefined,
+        }
+      : undefined,
   }
 }
 
