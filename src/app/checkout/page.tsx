@@ -140,8 +140,9 @@ export default function CheckoutPage() {
   const datosEnvioCompletos =
   destinatario.calle.trim() !== "" &&
   destinatario.numero.trim() !== "" &&
+  
+  destinatario.barrio.trim() !== "" &&
   destinatario.ciudad.trim() !== ""
-
 const puedeContinuarEntrega =
   envio === "sucursal" ||
   (envio === "domicilio" && datosEnvioCompletos)
@@ -701,8 +702,15 @@ useEffect(() => {
               <div className="mb-6 space-y-3">
                 <h3 className="font-semibold">Datos de envío</h3>
                 <ValidatedInput placeholder="Calle" value={destinatario.calle} onChange={(v: string) => handleChangeDestinatario("calle", v)} />
-                <ValidatedInput placeholder="Número" value={destinatario.numero} onChange={(v: string) => handleChangeDestinatario("numero", v)} />
-                <ValidatedInput placeholder="Barrio (opcional)" value={destinatario.barrio} onChange={(v: string) => handleChangeDestinatario("barrio", v)} />
+                <ValidatedInput
+  placeholder="Número"
+  value={destinatario.numero}
+  onChange={(v: string) => {
+    const onlyNumbers = v.replace(/\D/g, "") // elimina todo lo que no sea dígito
+    handleChangeDestinatario("numero", onlyNumbers)
+  }}
+/>
+                <ValidatedInput placeholder="Provincia" value={destinatario.barrio} onChange={(v: string) => handleChangeDestinatario("barrio", v)} />
                 <ValidatedInput placeholder="Ciudad" value={destinatario.ciudad} onChange={(v: string) => handleChangeDestinatario("ciudad", v)} />
               </div>
             )}
