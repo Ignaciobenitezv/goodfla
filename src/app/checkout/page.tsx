@@ -140,14 +140,17 @@ export default function CheckoutPage() {
     (items?.length === 1 ? String((items[0] as any)?.comboId || "").trim() : "") ||
     ""
 
-  // ✅ ACA VA
   const compactItems = (items || []).map((i: any) => ({
+  cartKey: i.cartKey, // ✅ AGREGAR
   _id: i._id ?? i.productId,
   productId: i.productId ?? i._id,
   talle: i.talle ?? null,
   cantidad: Number(i.cantidad ?? 1),
-  comboId: i.comboId ? String(i.comboId).trim() : null, // ✅ NO inyectar
+  comboId: i.comboId
+    ? String(i.comboId).trim()
+    : (effectiveComboId ? String(effectiveComboId).trim() : null),
 }))
+
 
 
 

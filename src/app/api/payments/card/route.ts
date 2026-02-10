@@ -168,8 +168,13 @@ async function getShippingPrice(origin: string, cp?: string) {
   const data = await res.json().catch(() => null)
   return toMoney(data?.price ?? 0)
 }
-
-type CartItem = { productId: string; talle?: string | null; cantidad: number; comboId?: string | null } // ✅
+type CartItem = {
+  cartKey: string
+  productId: string
+  talle?: string | null
+  cantidad: number
+  comboId?: string | null
+}
 
 // ==========================
 // Helpers para email / resumen
@@ -480,15 +485,15 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: "empty_cart", message: "Carrito vacío." }, { status: 400 })
     }
 
-    const cart: CartItem[] = rawItems
-      .map((i) => ({
-        productId: String(i._id ?? i.productId ?? "").trim(),
-        talle: i.talle ?? null,
-        cantidad: Number(i.cantidad ?? 1),
-        comboId: i.comboId ? String(i.comboId).trim() : null, // ✅
-      }))
-      .filter((x) => x.productId && x.cantidad > 0)
-
+  const cart: CartItem[] = rawItems
+  .map((i: any) => ({
+    cartKey: String(i.cartKey || `${i._id ?? i.productId}__${i.talle ?? "default"}`), // ✅ clave
+    productId: String(i._id ?? i.productId ?? "").trim(),
+    talle: i.talle ?? null,
+    cantidad: Number(i.cantidad ?? 1),
+    comboId: i.comboId ? String(i.comboId).trim() : null,
+  }))
+  .filter((x) => x.productId && x.cantidad > 0)
 
     if (!cart.length) {
       return NextResponse.json({ ok: false, error: "invalid_cart", message: "Items inválidos (sin productId)." }, { status: 400 })
@@ -656,6 +661,98 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: "invalid_amount", message: "Monto inválido." }, { status: 400 })
     }
 
+    // ==========================
+// ✅ NUEVO: lines[] para UI (precio efectivo por línea)
+// ==========================
+const lines: Array<{ cartKey: string; unitPrice: number; lineTotal: number }> = []
+
+// A) Productos normales: unitario real
+for (const it of normalProductLines) {
+  const prod = byId.get(it.productId)
+  const unit = getUnitPrice(prod)
+  lines.push({
+    cartKey: it.cartKey,
+    unitPrice: unit,
+    lineTotal: toMoney(unit * Number(it.cantidad || 1)),
+  })
+}
+
+// B) Pack mayorista: unit = pack.price
+for (const it of mayoristaLines) {
+  const pack = packByProductId.get(it.productId) || null
+  const unit = toMoney(Number(pack?.price ?? 0))
+  lines.push({
+    cartKey: it.cartKey,
+    unitPrice: unit,
+    lineTotal: toMoney(unit * Number(it.cantidad || 1)),
+  })
+}
+
+// C) Combos / 2x1: agrupar por comboId y decidir sobrantes (las más caras quedan sueltas)
+if (comboLines.length) {
+  const group = new Map<string, CartItem[]>()
+  for (const line of comboLines) {
+    const cid = String(line.comboId || "").trim()
+    if (!cid) continue
+    group.set(cid, [...(group.get(cid) || []), line])
+  }
+
+  const comboIds = [...group.keys()]
+  const comboSnaps = await Promise.all(comboIds.map((id) => getPackSnapshot(id)))
+  const comboById = new Map<string, PackSnapshot>(
+    (comboSnaps.filter(Boolean) as PackSnapshot[]).map((p) => [String(p._id), p])
+  )
+
+  for (const cid of comboIds) {
+    const pack = comboById.get(cid) || null
+    const bundleSize = Math.max(1, Number(pack?.bundleSize ?? 2)) // 2 para 2x1, 3 para 3x..., etc.
+    const promoTotal = toMoney(Number(pack?.price ?? 0))
+    const promoUnitPerItem = toMoney(promoTotal / bundleSize)
+
+    const these = group.get(cid) || []
+
+    // Expandir unidades (para poder elegir cuáles sobran: las más caras)
+    const units: Array<{ cartKey: string; unit: number }> = []
+    for (const l of these) {
+      const prod = byId.get(l.productId)
+      const realUnit = getUnitPrice(prod)
+      for (let k = 0; k < Number(l.cantidad || 0); k++) {
+        units.push({ cartKey: l.cartKey, unit: realUnit })
+      }
+    }
+
+    units.sort((a, b) => b.unit - a.unit) // más caras primero
+
+    const totalUnits = units.length
+    const remainder = totalUnits % bundleSize
+
+    // remainder unidades (las más caras) quedan a precio real
+    const remainderQtyByKey = new Map<string, number>()
+    for (let i = 0; i < remainder; i++) {
+      const u = units[i]
+      remainderQtyByKey.set(u.cartKey, (remainderQtyByKey.get(u.cartKey) || 0) + 1)
+    }
+
+    // Ahora armamos lineTotal por cada línea (mezcla promo + sueltas)
+    for (const l of these) {
+      const prod = byId.get(l.productId)
+      const realUnit = getUnitPrice(prod)
+
+      const looseQty = remainderQtyByKey.get(l.cartKey) || 0
+      const promoQty = Math.max(0, Number(l.cantidad || 0) - looseQty)
+
+      const lineTotal = toMoney(looseQty * realUnit + promoQty * promoUnitPerItem)
+      const unitPriceForDisplay = toMoney(lineTotal / Number(l.cantidad || 1))
+
+      // reemplazar si ya estaba
+      const idx = lines.findIndex((x) => x.cartKey === l.cartKey)
+      if (idx >= 0) lines[idx] = { cartKey: l.cartKey, unitPrice: unitPriceForDisplay, lineTotal }
+      else lines.push({ cartKey: l.cartKey, unitPrice: unitPriceForDisplay, lineTotal })
+    }
+  }
+}
+
+
     if ((body as any).quoteOnly) {
       return NextResponse.json({
         ok: true,
@@ -664,6 +761,7 @@ export async function POST(req: Request) {
         subtotal,
         shippingPrice,
         shippingType,
+         lines,
       })
     }
 
