@@ -68,14 +68,15 @@ type Shipping =
   | { type: "sucursal" }
   | {
       type: "domicilio"
-      cp?: string | null
+      cp?: string | undefined
       direccion?: {
-        calle?: string | null
-        numero?: string | null
-        barrio?: string | null
-        ciudad?: string | null
-      } | null
+        calle?: string | undefined
+        numero?: string | undefined
+        barrio?: string | undefined
+        ciudad?: string | undefined
+      } | undefined
     }
+
 
 export async function sendOwnerSaleEmail(params: {
   orderId: string
