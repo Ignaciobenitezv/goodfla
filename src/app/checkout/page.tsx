@@ -28,6 +28,13 @@ export default function CheckoutPage() {
   const router = useRouter()
   const mpRedirectLock = useRef(false)
 
+  const [summaryTotals, setSummaryTotals] = useState<{
+    computedTotal: number
+    subtotal: number
+    shippingPrice: number
+  } | null>(null)
+
+  const [summaryLoading, setSummaryLoading] = useState(false)
 
 
   // ================= WHATSAPP (TRANSFERENCIA / EFECTIVO) =================
@@ -131,6 +138,7 @@ export default function CheckoutPage() {
   const handleChangeDestinatario = (field: string, value: string) =>
     setDestinatario((p) => ({ ...p, [field]: value }))
 
+  
   const subtotalSinPromo = useMemo(() => {
   return (items || []).reduce(
     (s, i: any) => s + Number(i.precio || 0) * Number(i.cantidad || 1),
@@ -292,14 +300,6 @@ const descuentoPromo = useMemo(() => {
   const amountToPay = serverTotals?.computedTotal ?? 0
 
   const [quoteLoading, setQuoteLoading] = useState(false)
-
-  const [summaryTotals, setSummaryTotals] = useState<{
-  computedTotal: number
-  subtotal: number
-  shippingPrice: number
-} | null>(null)
-
-const [summaryLoading, setSummaryLoading] = useState(false)
 
 
   // ✅ orderId estable para idempotencia
