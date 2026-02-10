@@ -1,5 +1,6 @@
 // app/api/payments/card/route.ts
 export const runtime = "nodejs"
+import { quoteBuyerHomeDelivery } from "@/lib/enviopack"
 
 import { sendOwnerSaleEmail } from "@/lib/email"
 import { NextResponse } from "next/server"
@@ -654,7 +655,28 @@ export async function POST(req: Request) {
     // 4) Shipping
     const { origin } = new URL(req.url)
     const shippingType = body.shipping?.type === "domicilio" ? "domicilio" : "sucursal"
-    const shippingPrice = shippingType === "domicilio" ? await getShippingPrice(origin, body.shipping?.cp) : 0
+    let shippingPrice = 0
+const cp = String(body.shipping?.cp || "").trim()
+
+if (shippingType === "domicilio" && cp) {
+  // MVP zapatillas
+  const qty = (stockCart.length ? stockCart : cart).reduce((a, it) => a + Number(it.cantidad || 0), 0)
+  const pesoKg = Math.max(0.1, Math.min(25, qty * 1.2)) // 1 par ~ 1.2kg
+  const paquetes = "35x25x15"
+
+  try {
+    const q = await quoteBuyerHomeDelivery({ cp, pesoKg, paquetes, servicio: "N" })
+    shippingPrice = toMoney(q.bestPrice)
+  } catch (e) {
+    if (!isQuoteOnly) {
+      return NextResponse.json(
+        { ok: false, error: "shipping_unavailable", message: "No se pudo cotizar el envío." },
+        { status: 502 }
+      )
+    }
+    shippingPrice = 0
+  }
+}
 
     const computedTotal = toMoney(subtotal + shippingPrice)
     if (!computedTotal || computedTotal <= 0) {

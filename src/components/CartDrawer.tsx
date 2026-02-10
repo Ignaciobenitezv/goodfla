@@ -84,7 +84,7 @@ const descuento = useMemo(() => {
   Precio de lista: <span className="font-semibold">${Number(item.precio).toLocaleString("es-AR")}</span>
 </p>
 <p className="text-xs text-green-700">
-  Promo 2x1 aplicada en el total ✅
+  Promociones aplicadas en el total ✅
 </p>
 
 
