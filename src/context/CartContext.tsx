@@ -2,6 +2,13 @@
 
 import { createContext, useContext, useState, useEffect, ReactNode } from "react"
 
+type Quote = {
+  subtotal: number
+  shippingPrice: number
+  computedTotal: number
+}
+
+
 type CartItem = {
   productId: string 
   comboId?: string    // 🔹 _id real de Sanity (producto)
@@ -18,6 +25,7 @@ type CartItem = {
 type CartContextType = {
   items: CartItem[]
   comboId: string | null
+  quote: Quote | null
 
   // ✅ setear/limpiar combo activo (para cobrar precio de combo)
   setActiveCombo: (id: string | null) => void
@@ -28,6 +36,7 @@ type CartContextType = {
   increaseQuantity: (cartKey: string) => void
   decreaseQuantity: (cartKey: string) => void
   checkout: () => void
+  
 }
 
 const CartContext = createContext<CartContextType | undefined>(undefined)
@@ -35,6 +44,7 @@ const CartContext = createContext<CartContextType | undefined>(undefined)
 export function CartProvider({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<CartItem[]>([])
   const [comboId, setComboId] = useState<string | null>(null)
+const [quote, setQuote] = useState<Quote | null>(null)
 
   // cargar desde localStorage
   useEffect(() => {
@@ -66,6 +76,63 @@ export function CartProvider({ children }: { children: ReactNode }) {
       console.warn("[Cart] no pude persistir cart", e)
     }
   }, [items])
+
+
+  useEffect(() => {
+  let cancelled = false
+
+  async function run() {
+    try {
+      if (!items.length) {
+        setQuote(null)
+        return
+      }
+
+      // armamos payload igual que en /api/payments/card
+      const payload = {
+        quoteOnly: true,
+        shipping: { type: "sucursal" as const }, // para carrito "a calcular"
+        items: items.map((i) => ({
+          _id: i.productId,
+          talle: i.talle ?? null,
+          cantidad: i.cantidad,
+          comboId: i.comboId ?? null, // 🔥 CLAVE
+        })),
+      }
+
+      const res = await fetch("/api/payments/card", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      })
+
+      const data = await res.json().catch(() => null)
+
+      if (cancelled) return
+
+      if (!res.ok || !data?.ok) {
+        console.warn("[Cart] quote failed:", data)
+        setQuote(null)
+        return
+      }
+
+      setQuote({
+        subtotal: Number(data.subtotal ?? 0),
+        shippingPrice: Number(data.shippingPrice ?? 0),
+        computedTotal: Number(data.computedTotal ?? 0),
+      })
+    } catch (e) {
+      console.warn("[Cart] quote error:", e)
+      if (!cancelled) setQuote(null)
+    }
+  }
+
+  run()
+  return () => {
+    cancelled = true
+  }
+}, [items])
+
 
   // guardar comboId
   useEffect(() => {
@@ -138,6 +205,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const clearCart = () => {
     setItems([])
     setComboId(null)
+    setQuote(null)
     try {
       localStorage.setItem("cart", "[]")
       localStorage.removeItem("cartComboId")
@@ -217,6 +285,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
       value={{
         items,
         comboId,
+        quote,
         setActiveCombo,
         addItem,
         removeItem,

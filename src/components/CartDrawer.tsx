@@ -4,15 +4,18 @@ import { useCart } from "@/context/CartContext"
 import { useUi } from "@/context/UiContext"
 import Image from "next/image"
 import Link from "next/link"
-import { useState } from "react"
+import { useMemo, useState } from "react"
+
 
 export default function CartDrawer() {
   const { isCartOpen, closeCart } = useUi()
-  const { items, removeItem, clearCart, increaseQuantity, decreaseQuantity } = useCart()
+  const { items, removeItem, clearCart, increaseQuantity, decreaseQuantity, quote } = useCart()
   const [cp, setCp] = useState("3500") // ejemplo
   const [envio, setEnvio] = useState("domicilio")
 
-  const total = items.reduce((sum, i) => sum + i.precio * i.cantidad, 0)
+const quoteLoading = items.length > 0 && !quote
+const subtotal = quote?.subtotal ?? 0
+const total = quote?.computedTotal ?? 0
 
   return (
     <div
@@ -113,7 +116,11 @@ export default function CartDrawer() {
             {/* Subtotal */}
             <div className="flex justify-between">
               <span className="font-medium">Subtotal (sin envío):</span>
-              <span className="font-bold">${total}</span>
+             <span className="font-bold">
+  {quoteLoading ? "Calculando..." : `$${Number(subtotal).toLocaleString("es-AR")}`}
+</span>
+
+
             </div>
 
             {/* CP */}
@@ -157,7 +164,10 @@ export default function CartDrawer() {
             {/* Total */}
             <div className="flex justify-between items-center border-t pt-4">
               <span className="text-xl font-bold">Total:</span>
-              <span className="text-2xl font-extrabold">${total}</span>
+              <span className="text-2xl font-extrabold">
+  {quoteLoading ? "Calculando..." : `$${Number(total).toLocaleString("es-AR")}`}
+</span>
+
             </div>
 
             {/* Botones */}

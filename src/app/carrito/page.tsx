@@ -5,13 +5,11 @@ import Image from "next/image"
 import { useRouter } from "next/navigation"
 
 export default function CarritoPage() {
-  const { items, addItem, removeItem } = useCart()
+  const { items, removeItem, increaseQuantity, decreaseQuantity, quote } = useCart()
   const router = useRouter()
 
-  const total = items.reduce(
-    (sum, i) => sum + i.precio * i.cantidad,
-    0
-  )
+  const quoteLoading = items.length > 0 && !quote
+  const total = quote?.computedTotal ?? 0
 
   return (
     <main className="max-w-5xl mx-auto px-4 py-10 mt-20">
@@ -43,7 +41,6 @@ export default function CarritoPage() {
                     shadow-sm
                   "
                 >
-                  {/* Imagen */}
                   <Image
                     src={item.imagen}
                     alt={item.nombre}
@@ -52,48 +49,32 @@ export default function CarritoPage() {
                     className="rounded-md object-cover"
                   />
 
-                  {/* Info */}
                   <div className="flex-1">
-                    <p className="font-medium text-base">
-                      {item.nombre}
-                    </p>
+                    <p className="font-medium text-base">{item.nombre}</p>
 
                     {item.talle && (
-                      <p className="text-xs text-gray-500">
-                        Talle: {item.talle}
-                      </p>
+                      <p className="text-xs text-gray-500">Talle: {item.talle}</p>
                     )}
 
                     <p className="text-sm text-gray-600 mt-1">
-                      ${item.precio.toLocaleString("es-AR")}
+                      ${Number(item.precio).toLocaleString("es-AR")}
                     </p>
 
-                    {/* Cantidad */}
                     <div className="flex items-center gap-3 mt-3">
                       <button
-                        onClick={() =>
-                          addItem({
-                            ...item,
-                            cantidad: -1,
-                          } as any)
-                        }
+                        type="button"
+                        onClick={() => decreaseQuantity(item.cartKey)}
                         className="w-8 h-8 rounded-full border flex items-center justify-center"
                         disabled={item.cantidad <= 1}
                       >
                         −
                       </button>
 
-                      <span className="min-w-[24px] text-center">
-                        {item.cantidad}
-                      </span>
+                      <span className="min-w-[24px] text-center">{item.cantidad}</span>
 
                       <button
-                        onClick={() =>
-                          addItem({
-                            ...item,
-                            cantidad: 1,
-                          } as any)
-                        }
+                        type="button"
+                        onClick={() => increaseQuantity(item.cartKey)}
                         className="w-8 h-8 rounded-full border flex items-center justify-center"
                       >
                         +
@@ -101,9 +82,9 @@ export default function CarritoPage() {
                     </div>
                   </div>
 
-                  {/* Subtotal + eliminar */}
                   <div className="flex flex-col items-end justify-between h-full">
                     <button
+                      type="button"
                       onClick={() => removeItem(key)}
                       className="text-xs text-gray-400 hover:text-red-600"
                     >
@@ -111,10 +92,7 @@ export default function CarritoPage() {
                     </button>
 
                     <p className="font-semibold">
-                      $
-                      {(item.precio * item.cantidad).toLocaleString(
-                        "es-AR"
-                      )}
+                      ${(Number(item.precio) * Number(item.cantidad)).toLocaleString("es-AR")}
                     </p>
                   </div>
                 </div>
@@ -135,9 +113,7 @@ export default function CarritoPage() {
               sticky top-28
             "
           >
-            <h2 className="text-xl font-semibold mb-4">
-              Resumen de compra
-            </h2>
+            <h2 className="text-xl font-semibold mb-4">Resumen de compra</h2>
 
             <div className="flex justify-between text-sm mb-2">
               <span>Productos</span>
@@ -146,9 +122,7 @@ export default function CarritoPage() {
 
             <div className="flex justify-between text-sm mb-4">
               <span>Envío</span>
-              <span className="text-gray-500">
-                A calcular
-              </span>
+              <span className="text-gray-500">A calcular</span>
             </div>
 
             <div className="h-px bg-gray-200 mb-4" />
@@ -156,7 +130,7 @@ export default function CarritoPage() {
             <div className="flex justify-between text-lg font-bold mb-6">
               <span>Total</span>
               <span>
-                ${total.toLocaleString("es-AR")}
+                {quoteLoading ? "Calculando..." : `$${Number(total).toLocaleString("es-AR")}`}
               </span>
             </div>
 
