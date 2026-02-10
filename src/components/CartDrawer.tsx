@@ -17,6 +17,19 @@ const quoteLoading = items.length > 0 && !quote
 const subtotal = quote?.subtotal ?? 0
 const total = quote?.computedTotal ?? 0
 
+
+const subtotalSinPromo = useMemo(() => {
+  return items.reduce(
+    (sum, i) => sum + Number(i.precio || 0) * Number(i.cantidad || 0),
+    0
+  )
+}, [items])
+
+const descuento = useMemo(() => {
+  if (quoteLoading) return 0
+  return Math.max(0, subtotalSinPromo - total)
+}, [quoteLoading, subtotalSinPromo, total])
+
   return (
     <div
       className={`fixed inset-0 z-[9999] transition ${
@@ -68,11 +81,12 @@ const total = quote?.computedTotal ?? 0
 
                   {/* Subtotal por producto */}
                   <p className="text-xs text-gray-500">
-                    <span className="font-bold">${item.precio}</span> × {item.cantidad} ={" "}
-                    <span className="font-semibold">
-                      ${item.precio * item.cantidad}
-                    </span>
-                  </p>
+  Precio de lista: <span className="font-semibold">${Number(item.precio).toLocaleString("es-AR")}</span>
+</p>
+<p className="text-xs text-green-700">
+  Promo 2x1 aplicada en el total ✅
+</p>
+
 
                   {/* Cantidad */}
                   <div className="flex items-center gap-2 mt-2">
@@ -114,14 +128,26 @@ const total = quote?.computedTotal ?? 0
         {items.length > 0 && (
           <div className="border-t p-4 space-y-4">
             {/* Subtotal */}
-            <div className="flex justify-between">
-              <span className="font-medium">Subtotal (sin envío):</span>
-             <span className="font-bold">
-  {quoteLoading ? "Calculando..." : `$${Number(subtotal).toLocaleString("es-AR")}`}
-</span>
+            {/* Subtotal sin promo */}
+<div className="flex justify-between text-sm">
+  <span className="text-gray-600">Subtotal (sin promo)</span>
+  <span className="text-gray-600">
+    ${subtotalSinPromo.toLocaleString("es-AR")}
+  </span>
+</div>
 
+{/* Descuento */}
+{!quoteLoading && descuento > 0 && (
+  <div className="flex justify-between text-sm">
+    <span className="text-green-700 font-medium">Descuento promo</span>
+    <span className="text-green-700 font-semibold">
+      -${descuento.toLocaleString("es-AR")}
+    </span>
+  </div>
+)}
 
-            </div>
+<div className="h-px bg-gray-200" />
+
 
             {/* CP */}
             <div className="flex items-center gap-2">

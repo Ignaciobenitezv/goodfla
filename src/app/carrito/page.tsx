@@ -3,13 +3,26 @@
 import { useCart } from "@/context/CartContext"
 import Image from "next/image"
 import { useRouter } from "next/navigation"
-
+import { useMemo } from "react"
+ 
 export default function CarritoPage() {
   const { items, removeItem, increaseQuantity, decreaseQuantity, quote } = useCart()
   const router = useRouter()
-
   const quoteLoading = items.length > 0 && !quote
-  const total = quote?.computedTotal ?? 0
+
+const subtotalSinPromo = useMemo(() => {
+  return items.reduce(
+    (sum, i) => sum + Number(i.precio || 0) * Number(i.cantidad || 0),
+    0
+  )
+}, [items])
+
+const totalConPromo = quote?.computedTotal ?? 0
+
+const descuento = useMemo(() => {
+  if (quoteLoading) return 0
+  return Math.max(0, subtotalSinPromo - totalConPromo)
+}, [quoteLoading, subtotalSinPromo, totalConPromo])
 
   return (
     <main className="max-w-5xl mx-auto px-4 py-10 mt-20">
@@ -127,12 +140,35 @@ export default function CarritoPage() {
 
             <div className="h-px bg-gray-200 mb-4" />
 
-            <div className="flex justify-between text-lg font-bold mb-6">
-              <span>Total</span>
-              <span>
-                {quoteLoading ? "Calculando..." : `$${Number(total).toLocaleString("es-AR")}`}
-              </span>
-            </div>
+{/* Subtotal sin promo (precio “de lista”) */}
+<div className="flex justify-between text-sm mb-2">
+  <span className="text-gray-600">Subtotal (sin promo)</span>
+  <span className="text-gray-600">
+    ${subtotalSinPromo.toLocaleString("es-AR")}
+  </span>
+</div>
+
+{/* Descuento */}
+{!quoteLoading && descuento > 0 && (
+  <div className="flex justify-between text-sm mb-3">
+    <span className="text-green-700 font-medium">Descuento promo</span>
+    <span className="text-green-700 font-semibold">
+      -${descuento.toLocaleString("es-AR")}
+    </span>
+  </div>
+)}
+
+<div className="h-px bg-gray-200 mb-4" />
+
+{/* Total final */}
+<div className="flex justify-between text-lg font-bold mb-6">
+  <span>Total</span>
+  <span>
+    {quoteLoading
+      ? "Calculando..."
+      : `$${totalConPromo.toLocaleString("es-AR")}`}
+  </span>
+</div>
 
             <button
               onClick={() => router.push("/checkout")}
