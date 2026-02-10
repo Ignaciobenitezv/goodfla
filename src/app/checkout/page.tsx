@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import { useCart } from "@/context/CartContext"
 import ValidatedInput from "@/components/ValidatedInput"
@@ -62,9 +62,11 @@ export default function CheckoutPage() {
       "",
       ...lines,
       "",
-      `Subtotal: $${totalProductos.toLocaleString("es-AR")}`,
+      `Subtotal (con promo): $${subtotalConPromo.toLocaleString("es-AR")}`,
+`Descuento promo: -$${descuentoPromo.toLocaleString("es-AR")}`,
+`Total: $${total.toLocaleString("es-AR")}`,
+
       `Costo de envío: ${envioCostoTxt}`,
-      `Total: $${total.toLocaleString("es-AR")}`,
       "",
       `Cliente: ${nombre} ${apellido}`.trim(),
       `Teléfono: ${telefono || "—"}`,
@@ -129,10 +131,21 @@ export default function CheckoutPage() {
   const handleChangeDestinatario = (field: string, value: string) =>
     setDestinatario((p) => ({ ...p, [field]: value }))
 
-  const totalProductos = items.reduce((s, i: any) => s + Number(i.precio || 0) * Number(i.cantidad || 1), 0)
-  const costoEnvio = quote?.price ?? 0
-  const total = totalProductos + costoEnvio
+  const subtotalSinPromo = useMemo(() => {
+  return (items || []).reduce(
+    (s, i: any) => s + Number(i.precio || 0) * Number(i.cantidad || 1),
+    0
+  )
+}, [items])
 
+const subtotalConPromo = summaryTotals?.subtotal ?? 0
+const envioServer = summaryTotals?.shippingPrice ?? 0
+const total = summaryTotals?.computedTotal ?? 0
+
+const descuentoPromo = useMemo(() => {
+  if (!summaryTotals) return 0
+  return Math.max(0, subtotalSinPromo - subtotalConPromo)
+}, [subtotalSinPromo, subtotalConPromo, summaryTotals])
 
   // ✅ ID efectivo del combo (prioriza contexto, fallback al item)
   const effectiveComboId =
@@ -280,6 +293,15 @@ export default function CheckoutPage() {
 
   const [quoteLoading, setQuoteLoading] = useState(false)
 
+  const [summaryTotals, setSummaryTotals] = useState<{
+  computedTotal: number
+  subtotal: number
+  shippingPrice: number
+} | null>(null)
+
+const [summaryLoading, setSummaryLoading] = useState(false)
+
+
   // ✅ orderId estable para idempotencia
   const orderIdRef = useRef<string>("")
 
@@ -348,6 +370,42 @@ export default function CheckoutPage() {
       setQuoteLoading(false)
     }
   }
+
+  const fetchSummaryTotals = async () => {
+  setSummaryLoading(true)
+  try {
+    const payload = {
+      quoteOnly: true,
+      orderId: `summary_${Date.now()}`,
+      comboId: effectiveComboId,
+      items: compactItems,
+      shipping: {
+        type: envio === "domicilio" ? "domicilio" : "sucursal",
+        cp: envio === "domicilio" ? cp : undefined,
+      },
+    }
+
+    const res = await fetch("/api/payments/card", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    })
+
+    const json = await res.json().catch(() => null)
+
+    if (!res.ok || !json?.ok) throw new Error(json?.message || "No se pudo calcular el total")
+
+    setSummaryTotals({
+      computedTotal: Number(json.computedTotal ?? 0),
+      subtotal: Number(json.subtotal ?? 0),
+      shippingPrice: Number(json.shippingPrice ?? 0),
+    })
+  } catch (e) {
+    setSummaryTotals(null)
+  } finally {
+    setSummaryLoading(false)
+  }
+}
 
   // ✅ Montar el Card Brick cuando elijan “Tarjeta (pagar acá mismo)”
   useEffect(() => {
@@ -559,6 +617,21 @@ if (!serverAmount) {
       cardBrickRef.current?.unmount?.()
     }
   }, [step, payMethod, serverTotals, items, envio, cp, router])
+useEffect(() => {
+  if (!items.length) {
+    setSummaryTotals(null)
+    return
+  }
+
+  // si es domicilio, solo calculamos cuando haya CP + quote de shipping (si querés)
+  if (envio === "domicilio" && !/^\d{4}$/.test(cp)) {
+    setSummaryTotals(null)
+    return
+  }
+
+  fetchSummaryTotals()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [items, envio, cp, effectiveComboId])
 
   return (
     <main className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-8 p-6 mt-20">
@@ -751,26 +824,67 @@ if (!serverAmount) {
               <div className="flex-1 text-sm">
                 <p>{item.nombre}</p>
                 {item.talle && <p className="text-xs text-gray-500">Talle: {item.talle}</p>}
-                <p className="font-bold">
-                  ${Number(item.precio).toLocaleString("es-AR")} × {Number(item.cantidad)}
-                </p>
+                <p className="text-xs text-gray-500">
+  Precio de lista: <span className="font-semibold">
+    ${Number(item.precio).toLocaleString("es-AR")}
+  </span>{" "}
+  × {Number(item.cantidad)}
+</p>
+<p className="text-xs text-green-700">
+  Promo 2x1 aplicada en el total ✅
+</p>
+
               </div>
             </div>
           )
         })}
 
-        <div className="flex justify-between font-medium">
-          <span>Subtotal</span>
-          <span>${totalProductos.toLocaleString("es-AR")}</span>
-        </div>
-        <div className="flex justify-between font-medium">
-          <span>Costo de envío</span>
-          <span>{quote ? (quote.price === 0 ? "Gratis" : `$${quote.price.toLocaleString("es-AR")}`) : "—"}</span>
-        </div>
-        <div className="flex justify-between text-lg font-bold border-t pt-2">
-          <span>Total</span>
-          <span>${total.toLocaleString("es-AR")}</span>
-        </div>
+{/* Subtotal sin promo (precio lista) */}
+<div className="flex justify-between text-sm">
+  <span className="text-gray-600">Subtotal (sin promo)</span>
+  <span className="text-gray-600">
+    ${subtotalSinPromo.toLocaleString("es-AR")}
+  </span>
+</div>
+
+{/* Descuento */}
+{!summaryLoading && descuentoPromo > 0 && (
+  <div className="flex justify-between text-sm">
+    <span className="text-green-700 font-medium">Descuento promo</span>
+    <span className="text-green-700 font-semibold">
+      -${descuentoPromo.toLocaleString("es-AR")}
+    </span>
+  </div>
+)}
+
+{/* Subtotal con promo (server) */}
+<div className="flex justify-between font-medium">
+  <span>Subtotal (con promo)</span>
+  <span>
+    {summaryLoading ? "Calculando..." : `$${subtotalConPromo.toLocaleString("es-AR")}`}
+  </span>
+</div>
+
+{/* Envío (server) */}
+<div className="flex justify-between font-medium">
+  <span>Costo de envío</span>
+  <span>
+    {summaryLoading
+      ? "Calculando..."
+      : envioServer === 0
+        ? "Gratis"
+        : `$${envioServer.toLocaleString("es-AR")}`}
+  </span>
+</div>
+
+{/* Total final */}
+<div className="flex justify-between text-lg font-bold border-t pt-2">
+  <span>Total</span>
+  <span>
+    {summaryLoading ? "Calculando..." : `$${total.toLocaleString("es-AR")}`}
+  </span>
+</div>
+
       </aside>
     </main>
   )
