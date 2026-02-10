@@ -137,6 +137,14 @@ export default function CheckoutPage() {
 
   const handleChangeDestinatario = (field: string, value: string) =>
     setDestinatario((p) => ({ ...p, [field]: value }))
+  const datosEnvioCompletos =
+  destinatario.calle.trim() !== "" &&
+  destinatario.numero.trim() !== "" &&
+  destinatario.ciudad.trim() !== ""
+
+const puedeContinuarEntrega =
+  envio === "sucursal" ||
+  (envio === "domicilio" && datosEnvioCompletos)
 
   
   const subtotalSinPromo = useMemo(() => {
@@ -671,40 +679,42 @@ useEffect(() => {
         {step === "entrega" && (
           <section>
             <h2 className="text-lg font-bold mb-4 uppercase">Entrega</h2>
+<label className="flex items-center gap-2 border p-4 rounded cursor-pointer mb-3">
+  <input
+    type="radio"
+    checked={envio === "domicilio"}
+    onChange={() => setEnvio("domicilio")}
+  />
+  <div>
+    <p className="font-semibold">Envío a domicilio</p>
+    <p className="text-xs text-gray-500">
+      El costo se calculará según tu código postal luego de la compra.
+      Te informaremos el valor exacto antes de despachar.
+    </p>
+  </div>
+  <span className="ml-auto text-sm font-medium text-gray-700">
+    Se cotiza luego
+  </span>
+</label>
 
-            <label className="flex items-center gap-2 border p-3 rounded cursor-pointer mb-3">
-              <input type="radio" checked={envio === "domicilio"} onChange={() => setEnvio("domicilio")} />
-              <div>
-                <p className="font-semibold">Envío a domicilio</p>
-                {quote && <p className="text-xs text-gray-500">Llega entre {quote.etaFrom} y {quote.etaTo}</p>}
-              </div>
-              <span className="ml-auto font-bold">
-                {quote ? (quote.price === 0 ? "Gratis" : `$${quote.price.toLocaleString("es-AR")}`) : "—"}
-              </span>
-            </label>
-
-            {envio === "domicilio" && (
-              <div className="ml-6">
-                <div className="flex items-center gap-2">
-                  <input
-                    type="text"
-                    value={cp}
-                    onChange={(e) => {
-                      setCp(e.target.value)
-                      setCpStatus("idle")
-                      setQuote(null)
-                      setCpError(null)
-                    }}
-                    placeholder="Código Postal"
-                    className="border px-3 py-2 rounded w-40"
-                  />
-                  <button onClick={calcularEnvio} className="px-4 py-2 border rounded bg-gray-100 text-sm">
-                    {cpStatus === "checking" ? "Calculando…" : quote ? `Cambiar CP ${quote.cp}` : "Calcular envío"}
-                  </button>
-                </div>
-                {cpStatus === "error" && cpError && <p className="text-sm text-red-600 mt-2">{cpError}</p>}
+{envio === "domicilio" && (
+              <div className="mb-6 space-y-3">
+                <h3 className="font-semibold">Datos de envío</h3>
+                <ValidatedInput placeholder="Calle" value={destinatario.calle} onChange={(v: string) => handleChangeDestinatario("calle", v)} />
+                <ValidatedInput placeholder="Número" value={destinatario.numero} onChange={(v: string) => handleChangeDestinatario("numero", v)} />
+                <ValidatedInput placeholder="Barrio (opcional)" value={destinatario.barrio} onChange={(v: string) => handleChangeDestinatario("barrio", v)} />
+                <ValidatedInput placeholder="Ciudad" value={destinatario.ciudad} onChange={(v: string) => handleChangeDestinatario("ciudad", v)} />
               </div>
             )}
+
+
+            {envio === "domicilio" && (
+  <p className="text-xs text-gray-500 ml-6 mt-2">
+    El costo del envío se calculará según tu código postal luego de la compra.
+    Nos contactaremos para informarte el valor exacto antes de despachar.
+  </p>
+)}
+
 
             <label className="flex items-center gap-2 border p-3 rounded cursor-pointer mb-3">
               <input type="radio" checked={envio === "sucursal"} onChange={() => setEnvio("sucursal")} />
@@ -715,20 +725,20 @@ useEffect(() => {
               <span className="ml-auto font-bold">Gratis</span>
             </label>
 
-            <button
-              disabled={envio === "" || (envio === "domicilio" && !quote)}
-              onClick={() => setStep("pago")}
-              className={`w-full py-3 rounded mt-6 text-white ${envio && (envio !== "domicilio" || !!quote) ? "bg-black" : "bg-gray-300 cursor-not-allowed"
-                }`}
-            >
-              Continuar
-            </button>
+           <button
+  disabled={!puedeContinuarEntrega}
+  onClick={() => setStep("pago")}
+  className={`w-full py-3 rounded mt-6 text-white ${
+    puedeContinuarEntrega
+      ? "bg-black"
+      : "bg-gray-300 cursor-not-allowed"
+  }`}
+>
+  Continuar
+</button>
 
-            {envio === "domicilio" && !quote && (
-              <p className="text-xs text-gray-500 mt-2">
-                Para envío a domicilio necesitás cotizar el CP antes de continuar.
-              </p>
-            )}
+
+            
           </section>
         )}
 
@@ -737,16 +747,7 @@ useEffect(() => {
           <section>
             <h2 className="text-lg font-bold mb-4 uppercase">Finalizar compra</h2>
 
-            {envio === "domicilio" && (
-              <div className="mb-6 space-y-3">
-                <h3 className="font-semibold">Datos de envío</h3>
-                <ValidatedInput placeholder="Calle" value={destinatario.calle} onChange={(v: string) => handleChangeDestinatario("calle", v)} />
-                <ValidatedInput placeholder="Número" value={destinatario.numero} onChange={(v: string) => handleChangeDestinatario("numero", v)} />
-                <ValidatedInput placeholder="Barrio (opcional)" value={destinatario.barrio} onChange={(v: string) => handleChangeDestinatario("barrio", v)} />
-                <ValidatedInput placeholder="Ciudad" value={destinatario.ciudad} onChange={(v: string) => handleChangeDestinatario("ciudad", v)} />
-              </div>
-            )}
-
+            
             <h3 className="font-semibold mb-3">Medios de pago</h3>
 
             <div className="space-y-3">
@@ -865,24 +866,27 @@ useEffect(() => {
   </span>
 </div>
 
-{/* Envío (server) */}
-<div className="flex justify-between font-medium">
-  <span>Costo de envío</span>
+{/* Envío */}
+<div className="flex justify-between text-sm text-gray-600 pt-1">
+  <span>Envío</span>
   <span>
-    {summaryLoading
-      ? "Calculando..."
-      : envioServer === 0
-        ? "Gratis"
-        : `$${envioServer.toLocaleString("es-AR")}`}
+    {envio === "sucursal"
+      ? "Gratis"
+      : envio === "domicilio"
+        ? "Se cotiza luego"
+        : "—"}
   </span>
 </div>
+
+
 
 {/* Total final */}
 <div className="flex justify-between text-lg font-bold border-t pt-2">
   <span>Total</span>
   <span>
-    {summaryLoading ? "Calculando..." : `$${total.toLocaleString("es-AR")}`}
-  </span>
+  ${subtotalConPromo.toLocaleString("es-AR")}
+</span>
+
 </div>
 
       </aside>

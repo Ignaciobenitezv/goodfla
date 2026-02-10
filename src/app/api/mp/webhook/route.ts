@@ -390,6 +390,23 @@ function buildShippingFromCustomer(customer: MetaCustomer | null | undefined): s
   return parts.length ? parts.join(" ") : "Envío a domicilio"
 }
 
+function buildShippingObjectFromCustomer(customer: MetaCustomer | null | undefined) {
+  const envio = customer?.envio
+
+  if (envio === "sucursal") {
+    return { type: "sucursal" as const }
+  }
+
+  // default: domicilio
+  return {
+    type: "domicilio" as const,
+    cp: customer?.cp ?? null,
+    direccion: customer?.direccion ?? null,
+  }
+}
+
+
+
 function buildBuyerNameFromCustomer(customer: MetaCustomer | null | undefined): string {
   const n = String(customer?.nombre || "").trim()
   const a = String(customer?.apellido || "").trim()
@@ -669,17 +686,26 @@ console.log("📧 attempting_owner_email_card_inline", {
   if (updated && updated.ownerNotified !== true) {
     try {
       const orderIdForEmail = String(meta?.orderId || paymentId)
-      await sendOwnerSaleEmail({
-        orderId: orderIdForEmail,
-        paymentId,
-        total: Number(payment?.transaction_amount ?? 0) || undefined,
-        currency: String(payment?.currency_id || "ARS"),
-        buyerName,
-        buyerEmail,
-        buyerPhone,
-        shippingAddress,
-        items,
-      })
+      const shipping = buildShippingObjectFromCustomer(customer)
+
+await sendOwnerSaleEmail({
+  orderId: orderIdForEmail,
+  paymentId,
+  total: Number(payment?.transaction_amount ?? 0) || undefined,
+  currency: String(payment?.currency_id || "ARS"),
+  buyerName,
+  buyerEmail,
+  buyerPhone,
+
+  // ✅ nuevo (para que el email muestre domicilio vs sucursal)
+  shipping,
+
+  // ✅ dejo esto para backwards-compat (por si tu email.ts todavía lo usa en algún lado)
+  shippingAddress,
+
+  items,
+})
+
 
       await sanity
         .patch(markerId)
@@ -881,17 +907,26 @@ if (updated && updated.ownerNotified !== true) {
       String(merchantOrder?.id || "").trim() ||
       String(paymentId)
 
-    await sendOwnerSaleEmail({
-      orderId: emailOrderId,
-      paymentId,
-      total: Number(payment?.transaction_amount ?? 0) || undefined,
-currency: String(payment?.currency_id || "ARS"),
-      buyerName,
-      buyerEmail,
-      buyerPhone,
-      shippingAddress,
-      items,
-    })
+    const shipping = buildShippingObjectFromCustomer(metaCustomer)
+
+await sendOwnerSaleEmail({
+  orderId: emailOrderId,
+  paymentId,
+  total: Number(payment?.transaction_amount ?? 0) || undefined,
+  currency: String(payment?.currency_id || "ARS"),
+  buyerName,
+  buyerEmail,
+  buyerPhone,
+
+  // ✅ nuevo
+  shipping,
+
+  // ✅ compat
+  shippingAddress,
+
+  items,
+})
+
 
     await sanity
       .patch(markerId)
