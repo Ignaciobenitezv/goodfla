@@ -6,7 +6,7 @@ interface Props {
   label?: string
 }
 
-export default function AnimatedButton2({ label = "TIENDA MAYORISTA" }: Props) {
+export default function AnimatedButton2({ label = "APROVECHAR AHORA" }: Props) {
   return (
     <motion.button
       initial={{ opacity: 0, y: 40 }}              // 👉 empieza abajo y oculto

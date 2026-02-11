@@ -81,8 +81,10 @@ export default function HeroSlider() {
   }
 
   return (
-    <section className="relative h-[90vh] overflow-hidden mt-10">
+    <section className="relative h-[90vh] overflow-hidden">
+
       {/* TRACK */}
+      
       <div
         className={`absolute inset-0 flex h-full ${
           withTransition ? "transition-transform duration-700 ease-out" : ""
@@ -127,16 +129,16 @@ export default function HeroSlider() {
       <div className="absolute inset-0 bg-black/40 flex flex-col items-center text-center px-4">
         <div className="mt-[25vh]">
           <h1 className="font-extrabold text-white drop-shadow-lg text-4xl sm:text-6xl md:text-7xl lg:text-8xl mb-3">
-            HASTA <span className="text-marca-amarillo">80% OFF</span>
+            PAGÁ 1 <span className="text-marca-amarillo">LLEVÁ 2</span>
           </h1>
 
           <p className="text-white text-lg sm:text-xl md:text-2xl drop-shadow mb-2 max-w-2xl mx-auto">
-            Últimas rebajas en jeans, remeras y combos. Pocas unidades disponibles.
+            En Abrigos y Zapatillas.
           </p>
         </div>
 
         <div className="mt-16">
-          <Link href="/mayorista">
+          <Link href="/productos/combos">
             <AnimatedButton2 />
           </Link>
         </div>

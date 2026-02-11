@@ -8,6 +8,7 @@ import { CartProvider } from "@/context/CartContext"
 import { UiProvider } from "@/context/UiContext"
 import CartDrawer from "@/components/CartDrawer"
 import WhatsAppButton from "@/components/WhatsAppButton"
+import PromoBar from "@/components/PromoBar"
 
 export const viewport = {
   width: "device-width",

@@ -7,7 +7,7 @@ import CategoriasGrid from '@/components/CategoriasGrid'
 import FooterSeccion from '@/components/FooterSeccion'
 import VideoHero from '@/components/VideoHero'
 import { getProductosDestacados } from '@/lib/getProductos'
-
+import PromoBar from '@/components/PromoBar'
 export const revalidate = 60
 
 export default async function Home() {
@@ -18,7 +18,12 @@ export default async function Home() {
 
   return (
     <>
+     <main className="pt-[78px]">
+      
+     <PromoBar />
+     
       <HeroSlider />
+      
       <LogoMarquee />
       <CategoriasDestacadas />
 
@@ -41,6 +46,7 @@ export default async function Home() {
 
 
       <FooterSeccion />
+      </main>
     </>
   )
 }

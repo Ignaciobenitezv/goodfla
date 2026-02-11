@@ -77,7 +77,7 @@ export default function Navbar() {
 
   return (
     <>
-      <nav
+     <nav
   className={`
     fixed top-0 left-0 right-0
     z-[1000]
@@ -88,6 +88,7 @@ export default function Navbar() {
     px-0 py-4
   `}
 >
+
 
 
         <div className="flex justify-between items-center w-full max-w-none mx-0 px-2 md:px-4">
