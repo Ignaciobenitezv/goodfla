@@ -127,21 +127,44 @@ export default function HeroSlider() {
 
       {/* OVERLAY + CONTENIDO */}
       <div className="absolute inset-0 bg-black/40 flex flex-col items-center text-center px-4">
-        <div className="mt-[25vh]">
-          <h1 className="font-extrabold text-white drop-shadow-lg text-4xl sm:text-6xl md:text-7xl lg:text-8xl mb-3">
-            PAGÁ 1 <span className="text-marca-amarillo">LLEVÁ 2</span>
-          </h1>
+       <div className="absolute inset-0 bg-black/35">
+  <div className="flex h-full items-center px-6 sm:px-10 md:px-16 lg:px-24">
+    <div className="max-w-[720px] text-left">
+      <p className="mb-3 text-white/80 text-[11px] sm:text-xs md:text-sm uppercase tracking-[0.35em] font-medium">
+        Promo exclusiva online
+      </p>
 
-          <p className="text-white text-lg sm:text-xl md:text-2xl drop-shadow mb-2 max-w-2xl mx-auto">
-            En Abrigos y Zapatillas.
-          </p>
-        </div>
+      <h1 className="font-extrabold leading-[0.9] drop-shadow-lg">
+        <span className="block text-white text-5xl sm:text-6xl md:text-7xl lg:text-[88px]">
+          LLEVÁ 2
+        </span>
+        <span className="block text-white text-4xl sm:text-5xl md:text-6xl lg:text-[74px]">
+          ZAPATILLAS
+        </span>
+        <span className="block text-marca-amarillo text-5xl sm:text-6xl md:text-7xl lg:text-[96px] mt-2">
+          $59.999
+        </span>
+      </h1>
 
-        <div className="mt-16">
-          <Link href="/productos/combos">
-            <AnimatedButton2 />
-          </Link>
+      <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:gap-6 text-white">
+        <div className="text-base sm:text-lg md:text-xl font-semibold">
+          3 cuotas sin interés
         </div>
+        <div className="text-base sm:text-lg md:text-xl font-semibold text-white/90">
+          Envío gratis
+        </div>
+      </div>
+
+      <div className="mt-8">
+        <Link href="/productos/zapatillas">
+          <AnimatedButton2 />
+        </Link>
+      </div>
+    </div>
+  </div>
+</div>
+
+  
       </div>
     </section>
   )

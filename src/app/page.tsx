@@ -18,8 +18,8 @@ export default async function Home() {
 
   return (
     <>
-     <main className="pt-[78px]">
-      
+    <main style={{ paddingTop: "var(--nav-h)" }}>
+
      <PromoBar />
      
       <HeroSlider />
@@ -41,7 +41,9 @@ export default async function Home() {
 >
   <div className="absolute inset-0 bg-black/40 flex items-center justify-center text-white text-center">
     <h2 className="text-4xl md:text-5xl font-bold">#GoodflaClub</h2>
+  
   </div>
+  
 </section>
 
 

@@ -510,8 +510,7 @@ useEffect(() => {
 
             <div className={gridClass}>
   {combosFiltrados.map((combo: any) => {
-    console.log("envioGratis raw:", combo._id, combo.envioGratis, typeof combo.envioGratis)
-
+   
     const precio = Number(combo.precio ?? combo.precioActual ?? 0)
     const precioViejo = Number(combo.precioAnterior ?? combo.precioAntes ?? 0)
     const cuota = Math.round(precio / 3)

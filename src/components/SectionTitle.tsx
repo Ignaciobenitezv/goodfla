@@ -11,21 +11,31 @@ interface SectionTitleProps {
 
 // Orden de navegación circular
 const SECTIONS = [
+  /*
   {
     label: "Mayorista",
     href: "/mayorista",
-    // Todas las rutas que deberían considerarse "Mayorista"
     paths: ["/mayorista", "/productos/mayorista"],
   },
+  */
+
+  /*
   {
     label: "Combos",
     href: "/productos/combos",
     paths: ["/productos/combos", "/combos"],
   },
+  */
+
   {
-    label: "Zapatillas 2 x 1",
+    label: "Zapatillas 2 x $59.999",
     href: "/productos/zapatillas",
     paths: ["/productos/zapatillas", "/zapatillas"],
+  },
+  {
+    label: "Zapatillas x $35.000",
+    href: "/productos/zapatillas-individuales",
+    paths: ["/productos/zapatillas-individuales"],
   },
 ]
 

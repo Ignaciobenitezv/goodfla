@@ -122,3 +122,49 @@ body {
   padding-bottom: env(safe-area-inset-bottom); /* safe-area inferior */
   overscroll-behavior: none;        /* evita “rebote” mostrando blanco */
 }
+
+
+:root {
+  --nav-h: 0px;
+}
+
+@keyframes promo-marquee {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+.promo-marquee {
+  overflow: hidden;
+  width: 100%;
+  background: #000;
+}
+
+.promo-track {
+  display: flex;
+  align-items: center;
+  width: max-content;
+  white-space: nowrap;
+  animation: promo-marquee 28s linear infinite;
+}
+
+.promo-item {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.promo-item span:first-child {
+  display: inline-block;
+  padding-left: 40px;
+  padding-right: 40px;
+  font-weight: 500;
+}
+
+.promo-separator {
+  opacity: 0.45;
+  padding-right: 40px;
+}

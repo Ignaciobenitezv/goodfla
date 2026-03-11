@@ -34,11 +34,14 @@ export default function Navbar() {
     { href: '/politica-de-cambios', label: 'Política de Cambios' },
   ]
 
-  const productosLinks = [
-    { label: 'Mayorista', href: '/mayorista' },
-    { label: 'Zapatillas 2x1', href: '/productos/zapatillas' },
-    { label: 'Combos', href: '/productos/combos' },
-  ]
+const productosLinks = [
+  // { label: 'Mayorista', href: '/mayorista' },
+
+  { label: 'Zapatillas 2x1', href: '/productos/zapatillas' },
+  { label: 'Zapatillas', href: '/productos/zapatillas' },
+
+  // { label: 'Combos', href: '/productos/combos' },
+]
 
   // Cerrar menús cuando cambia la ruta
   useEffect(() => {
@@ -46,6 +49,28 @@ export default function Navbar() {
     setAyudaOpen(false)
     setProductosOpen(false)
   }, [pathname])
+
+  useEffect(() => {
+  const nav = document.getElementById("site-navbar")
+  if (!nav) return
+
+  const setVar = () => {
+    const h = nav.getBoundingClientRect().height
+    document.documentElement.style.setProperty("--nav-h", `${Math.round(h)}px`)
+  }
+
+  setVar()
+  window.addEventListener("resize", setVar)
+
+  const ro = new ResizeObserver(setVar)
+  ro.observe(nav)
+
+  return () => {
+    window.removeEventListener("resize", setVar)
+    ro.disconnect()
+  }
+}, [])
+
 
   useEffect(() => {
     if (ayudaOpen && ayudaRef.current) {
@@ -77,7 +102,8 @@ export default function Navbar() {
 
   return (
     <>
-     <nav
+   <nav
+  id="site-navbar"
   className={`
     fixed top-0 left-0 right-0
     z-[1000]
@@ -88,6 +114,7 @@ export default function Navbar() {
     px-0 py-4
   `}
 >
+
 
 
 

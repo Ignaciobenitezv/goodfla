@@ -6,9 +6,12 @@ import Image from 'next/image'
 import AnimatedFadeDown from './AnimatedFadeDown'
 
 const categorias = [
-  { titulo: 'MAYORISTA', imagen: '/mayo.jpg', link: '/mayorista' },
-  { titulo: 'COMBOS', imagen: '/fd.jpg', link: '/productos/combos' },
-  { titulo: 'ZAPATILLAS 2X1', imagen: '/zapas.jpg', link: '/productos/zapatillas' },
+  { titulo: 'ZAPATILLAS 2 X $59.999', imagen: '/sani2.webp', link: '/productos/zapatillas' },
+  { titulo: 'ZAPATILLAS x $35.000', imagen: '/sani.webp', link: '/productos/zapatillas-individuales' },
+
+  // { titulo: 'COMBOS', imagen: '/fd.jpg', link: '/productos/combos' },
+
+  
 ]
 
 // 🎯 Posiciones DESKTOP
@@ -40,12 +43,12 @@ export default function CategoriasDestacadas() {
 
   return (
     <section
-      className="
-        grid grid-cols-1
-        md:grid-cols-3
-        w-full max-w-none
-      "
-    >
+  className="
+    grid grid-cols-1
+    md:grid-cols-2
+    w-full max-w-none
+  "
+>
       {categorias.map((cat, i) => (
         <div
           key={i}

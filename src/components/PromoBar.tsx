@@ -1,14 +1,25 @@
 export default function PromoBar() {
+  const items = [
+    "15% OFF por transferencia",
+    "3 cuotas sin interés",
+    "6 cuotas desde $150.000",
+    "Envío gratis desde $120.000",
+  ]
+
+  // Repetimos varias veces para evitar huecos visibles
+  const loopItems = [...items, ...items, ...items, ...items]
+
   return (
-    <div className="w-full bg-[#000] text-white text-sm">
-      <div className="max-w-7xl mx-auto px-4 py-2 flex justify-center gap-8 text-center flex-wrap">
-        <span className="font-medium">15% OFF en pagos con transferencia</span>
-        <span className="hidden md:inline">|</span>
-        <span>3 cuotas sin interés</span>
-        <span className="hidden md:inline">|</span>
-        <span>6 cuotas desde $150.000</span>
-        <span className="hidden md:inline">|</span>
-        <span>Envío gratis en compras mayores a $120.000</span>
+    <div className="w-full overflow-hidden bg-black text-white text-sm">
+      <div className="promo-marquee py-2">
+        <div className="promo-track">
+          {loopItems.map((item, index) => (
+            <div key={index} className="promo-item">
+              <span>{item}</span>
+              <span className="promo-separator">|</span>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   )
