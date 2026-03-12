@@ -6,14 +6,10 @@ import Link from "next/link"
 import Modal from "@/components/Modal"
 import ServiciosDiferencia from "@/components/ServiciosDiferencia"
 import AccordionInfo from "@/components/AccordionInfo"
-import ZoomImage from "./ZoomImage"
 import { useCart } from "@/context/CartContext"
 import { useUi } from "@/context/UiContext"
+import ProductMediaGallery from "@/components/ProductMediaGallery"
 
-interface PDPComboDetalleProps {
-  combo: any
-  productosPorCategoria: Record<string, any[]>
-}
 
 interface PDPComboDetalleProps {
   combo: any
@@ -21,20 +17,10 @@ interface PDPComboDetalleProps {
 }
 
 // 🔹 helper para detectar videos
-const isVideoUrl = (url: string) => /\.(mp4|webm|mov)$/i.test(url)
 
 type DraftSelections = Record<string, { talle?: string; color?: string }>
 
 export default function PDPComboDetalle({ combo, productosPorCategoria }: PDPComboDetalleProps) {
-  // ================= GALERÍA (igual que mayorista) =================
-  const galeria =
-    combo.galeria && combo.galeria.length > 0 ? combo.galeria : ["/placeholder.jpg"]
-
-  const [activeIndex, setActiveIndex] = useState(0)
-const mediaActiva = galeria[activeIndex]
-const esVideoActivo = isVideoUrl(mediaActiva)
-const [zoomOpen, setZoomOpen] = useState(false)
-
 
   // ================= ESTADOS COMBO =================
   const [selected, setSelected] = useState<{ [key: string]: any[] }>({})
@@ -162,98 +148,12 @@ const hasStockForCombo = () => {
     <>
       {/* CONTENEDOR CENTRAL IGUAL QUE MAYORISTA */}
       <main className="max-w-[1300px] mx-auto px-6 py-12 grid grid-cols-1 md:grid-cols-2 gap-12 items-start text-base leading-relaxed mt-20">
-        {/* ===== GALERÍA IZQUIERDA (MISMOS ESTILOS QUE MAYORISTA) ===== */}
-        <div className="flex flex-col h-full">
-          <div className="sticky top-24">
-            <div className="flex gap-6">
-              {/* Miniaturas */}
-              <div className="flex flex-col gap-3 w-24">
-                {galeria.map((img: string, i: number) => {
-                  const isActive = activeIndex === i
-                  return (
-                    <button
-                      type="button"
-                      key={`${combo._id || combo.nombre}-img-${i}`}
-                      onClick={() => setActiveIndex(i)}
-                      className={`
-                        group relative overflow-hidden rounded-md border-2 
-                        transition-all duration-200
-                        ${
-                          isActive
-                            ? "border-black shadow-[0_0_0_1px_rgba(0,0,0,0.4)]"
-                            : "border-gray-200 hover:border-gray-400"
-                        }
-                      `}
-                      aria-pressed={isActive}
-                    >
-                      {isVideoUrl(img) ? (
-  <div className="relative w-[90px] h-[120px]">
-    <video
-      src={img}
-      muted
-      playsInline
-      preload="metadata"
-      className="w-[90px] h-[120px] object-cover"
-    />
-    {/* Icono play para indicar que es video */}
-    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-      <div className="bg-black/50 text-white text-xs px-2 py-1 rounded">
-        VIDEO
-      </div>
-    </div>
-  </div>
-) : (
-  <Image
-    src={img}
-    alt={`${combo.nombre} ${i + 1}`}
-    width={90}
-    height={120}
-    className="object-cover"
-  />
-)}
-
-
-                    </button>
-                  )
-                })}
-              </div>
-
-              {/* Imagen principal */}
-              <div className="flex-1 flex items-start justify-center">
-                <div
-  className={`overflow-hidden rounded-md ${esVideoActivo ? "" : "cursor-zoom-in"}`}
-  onClick={() => {
-    if (!esVideoActivo) setZoomOpen(true)
-  }}
->
-  {esVideoActivo ? (
-  <video
-    key={mediaActiva}
-    src={mediaActiva}
-    autoPlay
-    loop
-    muted
-    playsInline
-    preload="auto"
-    controls={false}
-    className="w-full h-auto object-cover"
-  />
-) : (
-
-    <Image
-      key={mediaActiva}
-      src={mediaActiva}
-      alt={combo.nombre}
-      width={600}
-      height={800}
-      className="object-cover transition-transform duration-500 ease-in-out hover:scale-110"
-    />
-  )}
-</div>
-
-              </div>
-            </div>
-          </div>
+                <div className="flex flex-col h-full">
+          <ProductMediaGallery
+            galeria={combo.galeria}
+            imagen={combo.imagen}
+            nombre={combo.nombre}
+          />
         </div>
 
         {/* ===== DETALLE DERECHA (SIN CAMBIAR LA LÓGICA) ===== */}
@@ -626,34 +526,7 @@ const hasStockForCombo = () => {
         <ServiciosDiferencia />
       </div>
 
-      {/* Modal zoom de la imagen principal */}
-      {zoomOpen && !esVideoActivo && (
-
-        <div
-          className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center"
-          onClick={() => setZoomOpen(false)}
-        >
-          <div
-            className="relative bg-white rounded-lg p-4"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <button
-              onClick={() => setZoomOpen(false)}
-              className="absolute top-2 right-2 text-black text-2xl"
-            >
-              ×
-            </button>
-            <ZoomImage
-              src={mediaActiva}
-              alt={combo.nombre}
-              width={500}
-              height={700}
-              zoom={2.5}
-              lens={200}
-            />
-          </div>
-        </div>
-      )}
+      
     </>
   )
 }

@@ -361,7 +361,7 @@ export const Q_ZAPATILLAS_INDIVIDUALES_LIST = groq`
 }
 `
 
-export const Q_ZAPATILLA_INDIVIDUAL_BY_SLUG = `
+export const Q_ZAPATILLA_INDIVIDUAL_BY_SLUG = groq`
 *[
   _type == "producto" &&
   categoria->slug.current == "zapatillas" &&
@@ -375,20 +375,21 @@ export const Q_ZAPATILLA_INDIVIDUAL_BY_SLUG = `
   precioAntes,
   "slug": slug.current,
 
+  "badge": coalesce(badge, "NONE"),
+  "rating": coalesce(rating, 0),
+  "ratingCount": coalesce(ratingCount, 0),
+  "envioGratis": coalesce(envioGratis, false),
+
   "imagen": coalesce(
     imagen.asset->url,
-    portada.asset->url,
-    galeria[0].asset->url
+    galeria[0].imagen.asset->url
   ),
 
-  "galeria": array::compact(
-    galeria[]{
-      "imagenUrl": coalesce(
-        asset->url,
-        imagen.asset->url
-      )
-    }[].imagenUrl
-  ),
+  galeria[]{
+    tipo,
+    "imagenUrl": imagen.asset->url,
+    "videoUrl": video.asset->url
+  },
 
   talles[]{
     label,

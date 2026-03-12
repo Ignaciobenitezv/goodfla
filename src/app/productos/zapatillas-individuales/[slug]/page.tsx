@@ -18,10 +18,14 @@ export default async function ZapatillaIndividualPage({
 
   if (!producto) return notFound()
 
-  const galeriaNormalizada =
-    Array.isArray(producto.galeria) && producto.galeria.length > 0
-      ? producto.galeria.filter(Boolean)
-      : [producto.imagen || "/placeholder.jpg"]
+  // ✅ Normalizamos galería para soportar mediaItem igual que en 2x1
+  const galeriaUrls = (producto.galeria || [])
+    .map((m: any) => {
+      if (m && typeof m === "object") return m.videoUrl || m.imagenUrl
+      if (typeof m === "string") return m
+      return null
+    })
+    .filter(Boolean) as string[]
 
   const productoNormalizado = {
     _id: producto._id,
@@ -37,8 +41,8 @@ export default async function ZapatillaIndividualPage({
     precioAntes:
       typeof producto.precioAntes === "number" ? producto.precioAntes : null,
     slug: producto.slug,
-    imagen: producto.imagen || galeriaNormalizada[0] || "/placeholder.jpg",
-    galeria: galeriaNormalizada,
+    imagen: producto.imagen || galeriaUrls[0] || "/placeholder.jpg",
+    galeria: galeriaUrls,
     talles: Array.isArray(producto.talles) ? producto.talles : [],
     colores: Array.isArray(producto.colores) ? producto.colores : [],
   }

@@ -1,13 +1,12 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import ZoomImage from "@/components/ZoomImage";
 import ServiciosDiferencia from "@/components/ServiciosDiferencia";
 import AccordionInfo from "@/components/AccordionInfo";
 import { useCart } from "@/context/CartContext";
 import { useUi } from "@/context/UiContext";
+import ProductMediaGallery from "@/components/ProductMediaGallery";
 
 type Talle = {
   label: string;
@@ -33,16 +32,7 @@ export default function PDPZapatillaIndividualDetalle({
 }: {
   producto: ProductoZapatilla;
 }) {
-  const galeria =
-    producto.galeria && producto.galeria.length > 0
-      ? producto.galeria
-      : [producto.imagen || "/placeholder.jpg"];
-
-  const [activeIndex, setActiveIndex] = useState(0);
-  const imagenActiva = galeria[activeIndex];
-
   const [cantidad, setCantidad] = useState(1);
-  const [zoomOpen, setZoomOpen] = useState(false);
   const [talleSeleccionado, setTalleSeleccionado] = useState("");
   const [colorSeleccionado, setColorSeleccionado] = useState("");
 
@@ -122,7 +112,7 @@ export default function PDPZapatillaIndividualDetalle({
       }`,
       precio: precioFinal,
       cantidad,
-      imagen: imagenActiva || producto.galeria?.[0] || producto.imagen,
+      imagen: producto.galeria?.[0] || producto.imagen,
       slug: producto.slug,
       talle: talleSeleccionado || undefined,
       color: colorSeleccionado || undefined,
@@ -131,7 +121,7 @@ export default function PDPZapatillaIndividualDetalle({
 
     showAddedDialog({
       title: producto.nombre,
-      image: imagenActiva || producto.galeria?.[0] || producto.imagen,
+      image: producto.galeria?.[0] || producto.imagen,
     });
   };
 
@@ -139,52 +129,11 @@ export default function PDPZapatillaIndividualDetalle({
     <>
       <main className="max-w-[1300px] mx-auto px-6 py-12 grid grid-cols-1 md:grid-cols-2 gap-12 items-start text-base leading-relaxed mt-20">
         <div className="flex flex-col h-full">
-          <div className="sticky top-24">
-            <div className="flex gap-6">
-              <div className="flex flex-col gap-3 w-24">
-                {galeria.map((img, i) => {
-                  const isActive = activeIndex === i;
-                  return (
-                    <button
-                      type="button"
-                      key={`${producto._id || producto.nombre}-img-${i}`}
-                      onClick={() => setActiveIndex(i)}
-                      className={`group relative overflow-hidden rounded-md border-2 transition-all duration-200 ${
-                        isActive
-                          ? "border-black shadow-[0_0_0_1px_rgba(0,0,0,0.4)]"
-                          : "border-gray-200 hover:border-gray-400"
-                      }`}
-                      aria-pressed={isActive}
-                    >
-                      <Image
-                        src={img}
-                        alt={`${producto.nombre} ${i + 1}`}
-                        width={90}
-                        height={120}
-                        className="object-cover"
-                      />
-                    </button>
-                  );
-                })}
-              </div>
-
-              <div className="flex-1 flex items-start justify-center">
-                <div
-                  className="overflow-hidden rounded-md cursor-zoom-in"
-                  onClick={() => setZoomOpen(true)}
-                >
-                  <Image
-                    key={imagenActiva}
-                    src={imagenActiva}
-                    alt={producto.nombre}
-                    width={600}
-                    height={800}
-                    className="object-cover transition-transform duration-500 ease-in-out hover:scale-110"
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
+          <ProductMediaGallery
+            galeria={producto.galeria}
+            imagen={producto.imagen}
+            nombre={producto.nombre}
+          />
         </div>
 
         <div className="flex flex-col h-full space-y-8">
@@ -353,33 +302,6 @@ export default function PDPZapatillaIndividualDetalle({
       </main>
 
       <ServiciosDiferencia />
-
-      {zoomOpen && (
-        <div
-          className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center"
-          onClick={() => setZoomOpen(false)}
-        >
-          <div
-            className="relative bg-white rounded-lg p-4"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <button
-              onClick={() => setZoomOpen(false)}
-              className="absolute top-2 right-2 text-black text-2xl"
-            >
-              ×
-            </button>
-            <ZoomImage
-              src={imagenActiva}
-              alt={producto.nombre}
-              width={500}
-              height={700}
-              zoom={2.5}
-              lens={200}
-            />
-          </div>
-        </div>
-      )}
     </>
   );
 }
