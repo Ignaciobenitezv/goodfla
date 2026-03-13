@@ -498,53 +498,89 @@ if (!serverAmount) {
   throw new Error("missing_server_total")
 }
 
-                // ✅ PASO B: payload hacia tu backend
-                const payload = {
-                  token: String(data.token),
-                  issuer_id: data.issuer_id != null ? String(data.issuer_id) : undefined,
-                  payment_method_id: String(data.paymentMethodId || data.payment_method_id),
-                  installments: Number(data.installments ?? 1),
-                  identification: data.payer?.identification
-                    ? {
-                      type: String(data.payer.identification.type),
-                      number: String(data.payer.identification.number),
-                    }
-                    : undefined,
+                console.log("[BRICK] onSubmit data =>", data)
 
-                  // ✅ lo importante
-                  items: compactItems,
-                  amount: serverAmount,
-                  orderId,
-                  comboId: effectiveComboId,
+const identificationData =
+  data?.payer?.identification
+    ? {
+        type: String(data.payer.identification.type || ""),
+        number: String(data.payer.identification.number || ""),
+      }
+    : data?.formData?.payer?.identification
+    ? {
+        type: String(data.formData.payer.identification.type || ""),
+        number: String(data.formData.payer.identification.number || ""),
+      }
+    : undefined
 
+const payload = {
+  token: data?.token ? String(data.token) : undefined,
 
+  issuer_id:
+    data?.issuerId != null
+      ? String(data.issuerId)
+      : data?.issuer_id != null
+      ? String(data.issuer_id)
+      : undefined,
 
-                  // ✅ NUEVO: datos del cliente / entrega
-                  customer: {
-                    nombre: nombre.trim(),
-                    apellido: apellido.trim(),
-                    telefono: telefono.trim(),
-                    email: email.trim(),
-                    envio: envio, // "domicilio" | "sucursal"
-                    cp: cp || null,
-                    direccion:
-                      envio === "domicilio"
-                        ? {
-                          calle: destinatario.calle || "",
-                          numero: destinatario.numero || "",
-                          barrio: destinatario.barrio || "",
-                          ciudad: destinatario.ciudad || "",
-                        }
-                        : null,
-                  },
+  payment_method_id:
+    data?.paymentMethodId
+      ? String(data.paymentMethodId)
+      : data?.payment_method_id
+      ? String(data.payment_method_id)
+      : undefined,
 
+  installments: Number(data?.installments ?? 1),
 
-                  shipping: {
-                    type: envio === "domicilio" ? "domicilio" : "sucursal",
-                    cp: envio === "domicilio" ? cp : undefined,
-                  },
-                }
+  identification: identificationData,
 
+  payer: {
+    email: email.trim(),
+    identification: identificationData,
+  },
+
+  items: compactItems,
+  amount: serverAmount,
+  orderId,
+  comboId: effectiveComboId,
+
+  customer: {
+    nombre: nombre.trim(),
+    apellido: apellido.trim(),
+    telefono: telefono.trim(),
+    email: email.trim(),
+    envio: envio,
+    cp: cp || null,
+    direccion:
+      envio === "domicilio"
+        ? {
+            calle: destinatario.calle || "",
+            numero: destinatario.numero || "",
+            barrio: destinatario.barrio || "",
+            ciudad: destinatario.ciudad || "",
+          }
+        : null,
+  },
+
+  shipping: {
+    type: envio === "domicilio" ? "domicilio" : "sucursal",
+    cp: envio === "domicilio" ? cp : undefined,
+  },
+}
+
+console.log("[BRICK] payload a backend =>", payload)
+
+if (!payload.token) {
+  setCardMsg("No se generó el token de la tarjeta.")
+  setCardLoading(false)
+  throw new Error("missing_token")
+}
+
+if (!payload.payment_method_id) {
+  setCardMsg("No se detectó el medio de pago.")
+  setCardLoading(false)
+  throw new Error("missing_payment_method")
+}
 
                 const res = await fetch("/api/payments/card", {
                   method: "POST",

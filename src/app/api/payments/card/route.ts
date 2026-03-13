@@ -824,7 +824,7 @@ if (comboLines.length) {
           number: identification.number,
         },
       },
-      capture: false,
+      capture: true,
       notification_url: `${origin}/api/mp/webhook`,
       metadata: {
         orderId,
@@ -1028,81 +1028,27 @@ if (status === "in_process" || status === "pending") {
     }
 
 
-    // C) Capturar
-    const cap = await mpCapture(paymentId, mpToken)
-
-    if (!cap.ok) {
-      console.error("❌ MP capture failed:", {
-        paymentId,
-        orderId,
-        mp: cap.data,
-      })
-
-      // 1) Guardar evento (si no existía)
-      await sanity.createIfNotExists({
-        _id: markerId,
-        _type: "mpWebhook",
-        paymentId,
-        orderId,
-        createdAt: new Date().toISOString(),
-        status: "capture_failed",
-        source: "card_inline",
-        detailsJson: JSON.stringify({ mp: cap.data }),
-      })
-
-      // 2) Intentar cancelar el pago autorizado (best-effort)
-      await mpCancel(paymentId, mpToken).catch(() => null)
-
-      // 3) 🔁 ROLLBACK DE STOCK (idempotente)
-      if (!skipStock) {
-        await rollbackStockAtomic(stockCart, markerId)
-      }
-
-      await sanity
-        .patch(markerId)
-        .set({ status: "capture_failed_rolled_back" })
-        .commit()
-        .catch(() => null)
-
-      return NextResponse.json(
-        {
-          ok: false,
-          error: "capture_failed",
-          message: "Falló la captura del pago. No se realizó el cobro y se revirtió el stock.",
-          id: paymentId,
-          orderId,
-          mp: cap.data,
-        },
-        { status: 502 }
-      )
-    }
-
     await sanity.createIfNotExists({
-      _id: markerId,
-      _type: "mpWebhook",
-      paymentId,
-      orderId,
-      createdAt: new Date().toISOString(),
-      status: "processed",
-      source: "card_inline",
-    })
+  _id: markerId,
+  _type: "mpWebhook",
+  paymentId,
+  orderId,
+  createdAt: new Date().toISOString(),
+  status: "processed",
+  source: "card_inline",
+})
 
-
-
-    const finalStatus = String(cap.data?.status || status).toLowerCase()
-    const finalDetail = String(cap.data?.status_detail || statusDetail || "")
-
-    return NextResponse.json({
-      ok: true,
-      id: paymentId,
-      status: finalStatus,
-      status_detail: finalDetail,
-      orderId,
-      computedTotal,
-      subtotal,
-      shippingPrice,
-      shippingType,
-    })
+return NextResponse.json({
+  ok: true,
+  id: paymentId,
+  status,
+  status_detail: statusDetail,
+  orderId,
+  computedTotal,
+  subtotal,
+  shippingPrice,
+  shippingType,
+})
   } catch (err: any) {
     console.error("❌ Error en /api/payments/card:", err)
     return NextResponse.json({ ok: false, error: "internal_error", message: "Error interno" }, { status: 500 })

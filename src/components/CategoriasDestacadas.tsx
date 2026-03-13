@@ -6,8 +6,8 @@ import Image from 'next/image'
 import AnimatedFadeDown from './AnimatedFadeDown'
 
 const categorias = [
-  //{ titulo: 'ZAPATILLAS 2 X $59.999', imagen: '/sani2.webp', link: '/productos/zapatillas' },
-  { titulo: 'ZAPATILLAS AL POR MAYOR', imagen: '/sani.webp', link: '/productos/zapatillas-individuales' },
+  { titulo: 'ZAPATILLAS 2 X $59.999', imagen: '/sani2.webp', link: '/productos/zapatillas' },
+  { titulo: 'ZAPATILLAS x $35.000', imagen: '/sani.webp', link: '/productos/zapatillas-individuales' },
 
   // { titulo: 'COMBOS', imagen: '/fd.jpg', link: '/productos/combos' },
 
@@ -45,6 +45,7 @@ export default function CategoriasDestacadas() {
     <section
   className="
     grid grid-cols-1
+    md:grid-cols-2
     w-full max-w-none
   "
 >
@@ -63,7 +64,7 @@ export default function CategoriasDestacadas() {
             alt={cat.titulo}
             fill
             priority={i === 0}
-            sizes="100vw"
+            sizes="(min-width:768px) 33vw, 100vw"
             className="object-cover transition-transform duration-300 group-hover:scale-105"
             style={{
               objectPosition: isMobile
