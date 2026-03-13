@@ -9,7 +9,7 @@ export default function LogoMarquee() {
         {Array.from({ length: 20 }).map((_, i) => (
           <Image
             key={i}
-            src="/arma.png"
+            src="/envio1.png"
             alt="Sale"
             width={120}       // tamaño intrínseco (ajustá si querés)
             height={24}

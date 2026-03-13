@@ -196,11 +196,7 @@ export default function PDPZapatillaIndividualDetalle({
                 })}
               </div>
 
-              {talleSeleccionado && (
-                <p className="mt-2 text-sm text-gray-600">
-                  Stock disponible: {Math.max(stockDisponible, 0)}
-                </p>
-              )}
+            
             </div>
           )}
 

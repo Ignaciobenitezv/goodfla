@@ -11,7 +11,7 @@ export function middleware(req: NextRequest) {
     pathname === "/productos/remeras"
   ) {
     const url = req.nextUrl.clone()
-    url.pathname = "/productos/combos" // o "/" si preferís mandar al home
+    url.pathname = "/productos/zapatillas" // o "/" si preferís mandar al home
     url.search = ""
     return NextResponse.redirect(url)
   }

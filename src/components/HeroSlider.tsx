@@ -16,11 +16,11 @@ const POSITIONS_DESKTOP: Record<string, string> = {
 }
 
 const POSITIONS_MOBILE: Record<string, string> = {
-  "/J1.jpg": "32% 0%",
-  "/J2.jpg": "38% 0%",
-  "/J3.jpg": "50% 0%",
-  "/J4.jpg": "45% 0%",
-  "/J5.jpg": "55% 0%",
+  "/J1.jpg": "68% 18%",
+  "/J2.jpg": "66% 18%",
+  "/J3.jpg": "64% 16%",
+  "/J4.jpg": "66% 18%",
+  "/J5.jpg": "68% 16%",
 }
 
 function isNear(activeIdx: number, i: number, radius = 1) {
@@ -81,8 +81,7 @@ export default function HeroSlider() {
   }
 
   return (
-    <section className="relative h-[90vh] overflow-hidden">
-
+    <section className="relative h-[78vh] md:h-[90vh] overflow-hidden">
       {/* TRACK */}
       
       <div

@@ -122,13 +122,13 @@ const productosLinks = [
           {/* Logo */}
           <Link href="/" className="flex items-center gap-3">
             <Image
-              src="/goodlogo.png"
-              alt="Logo Goodfla"
-              width={200}
-              height={48}
-              priority
-              className="h-14 md:h-12 w-auto shrink-0"
-            />
+  src="/goodlogo.png"
+  alt="Logo Goodfla"
+  width={200}
+  height={48}
+  priority
+  className="h-10 md:h-12 w-auto shrink-0"
+/>
           </Link>
 
           {/* Acciones derechas en MOBILE: carrito + hamburguesa */}
@@ -327,19 +327,15 @@ const productosLinks = [
 
 
 
-                  <li>
-                    <Link href="/mayorista" onClick={() => setMenuOpen(false)}>
-                      Mayorista
-                    </Link>
-                  </li>
+                  
                   <li>
                     <Link href="/productos/zapatillas" onClick={() => setMenuOpen(false)}>
-                      Zapatillas
+                      Zapatillas Promo
                     </Link>
                   </li>
                   <li>
-                    <Link href="/productos/combos" onClick={() => setMenuOpen(false)}>
-                      Combos
+                    <Link href="/productos/zapatillas-individuales" onClick={() => setMenuOpen(false)}>
+                      Zapatillas
                     </Link>
                   </li>
                 </ul>

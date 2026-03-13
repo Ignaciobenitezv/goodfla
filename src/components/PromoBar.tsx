@@ -1,12 +1,11 @@
 export default function PromoBar() {
   const items = [
-    "15% OFF por transferencia",
-    "3 cuotas sin interés",
-    "6 cuotas desde $150.000",
-    "Envío gratis desde $120.000",
+    "Zapatillas x $35.000",
+    "2 Zapatillas x $59.999 c/u",
+    "3 cuotas sin interes",
+    "Envío gratis",
   ]
 
-  // Repetimos varias veces para evitar huecos visibles
   const loopItems = [...items, ...items, ...items, ...items]
 
   return (
@@ -15,7 +14,7 @@ export default function PromoBar() {
         <div className="promo-track">
           {loopItems.map((item, index) => (
             <div key={index} className="promo-item">
-              <span>{item}</span>
+              <span className="promo-text">{item}</span>
               <span className="promo-separator">|</span>
             </div>
           ))}

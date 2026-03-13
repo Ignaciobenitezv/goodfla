@@ -10,8 +10,6 @@ import { useMemo, useState } from "react"
 export default function CartDrawer() {
   const { isCartOpen, closeCart } = useUi()
   const { items, removeItem, clearCart, increaseQuantity, decreaseQuantity, quote } = useCart()
-  const [cp, setCp] = useState("3500") // ejemplo
-  const [envio, setEnvio] = useState("domicilio")
 
 const quoteLoading = items.length > 0 && !quote
 const subtotal = quote?.subtotal ?? 0
@@ -149,43 +147,7 @@ const descuento = useMemo(() => {
 <div className="h-px bg-gray-200" />
 
 
-            {/* CP */}
-            <div className="flex items-center gap-2">
-              <input
-                value={cp}
-                onChange={(e) => setCp(e.target.value)}
-                className="border px-2 py-1 rounded w-32"
-              />
-              <button className="px-3 py-1 border rounded bg-gray-100" type="button">
-                Cambiar CP
-              </button>
-            </div>
-
-            {/* Mensaje */}
-            <p className="text-sm text-amber-700 font-medium">
-              ¡GRACIAS POR ELEGIRNOS! Vas a recibir el código de seguimiento en
-              unos pocos minutos. ¡Estate atento!
-            </p>
-
-            {/* Envío */}
-            <div className="space-y-2">
-              <label className="flex items-center gap-2">
-                <input
-                  type="radio"
-                  checked={envio === "domicilio"}
-                  onChange={() => setEnvio("domicilio")}
-                />
-                Envío a domicilio — <span className="font-bold">Gratis</span>
-              </label>
-              <label className="flex items-center gap-2">
-                <input
-                  type="radio"
-                  checked={envio === "sucursal"}
-                  onChange={() => setEnvio("sucursal")}
-                />
-                Retiro en sucursal — <span className="font-bold">Gratis</span>
-              </label>
-            </div>
+            
 
             {/* Total */}
             <div className="flex justify-between items-center border-t pt-4">

@@ -150,21 +150,23 @@ body {
   white-space: nowrap;
   animation: promo-marquee 28s linear infinite;
 }
-
 .promo-item {
   display: flex;
   align-items: center;
   flex-shrink: 0;
 }
 
-.promo-item span:first-child {
+.promo-text {
   display: inline-block;
-  padding-left: 40px;
-  padding-right: 40px;
+  padding: 0 40px;
   font-weight: 500;
 }
 
 .promo-separator {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
   opacity: 0.45;
-  padding-right: 40px;
+  flex-shrink: 0;
 }
