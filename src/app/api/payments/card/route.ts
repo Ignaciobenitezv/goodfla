@@ -452,6 +452,25 @@ export async function POST(req: Request) {
     const installmentsRaw = Number(body.installments ?? 1)
     const installments = Number.isFinite(installmentsRaw) && installmentsRaw >= 1 ? installmentsRaw : 1
 
+
+    console.log("PAYMENT_CARD_FIELDS", {
+  hasToken: !!body.token,
+  tokenPreview: body.token ? String(body.token).slice(0, 12) : null,
+  payment_method_id,
+  issuer_id,
+  installments,
+  email:
+    body.email ||
+    body.payer?.email ||
+    body.customer?.email ||
+    null,
+  identification:
+    body.identification ||
+    body.payer?.identification ||
+    null,
+})
+
+
     if (!isQuoteOnly && (!token || !payment_method_id)) {
   return NextResponse.json(
     { ok: false, error: "missing_payment_data", message: "Faltan datos de la tarjeta (token o método de pago)." },
@@ -864,6 +883,18 @@ if (comboLines.length) {
       return NextResponse.json({ ok: false, error: "missing_mp_token", message: "Falta MP_ACCESS_TOKEN" }, { status: 500 })
     }
 
+
+    console.log("MP_PAYLOAD_DEBUG", {
+  tokenPreview: mpPayload?.token ? String(mpPayload.token).slice(0, 12) : null,
+  transaction_amount: mpPayload?.transaction_amount,
+  payment_method_id: mpPayload?.payment_method_id,
+  issuer_id: mpPayload?.issuer_id,
+  installments: mpPayload?.installments,
+  payer: mpPayload?.payer,
+  capture: mpPayload?.capture,
+})
+
+
   // 7) Crear pago
 const res = await fetch("https://api.mercadopago.com/v1/payments", {
   method: "POST",
@@ -878,6 +909,8 @@ const res = await fetch("https://api.mercadopago.com/v1/payments", {
 const data = await res.json().catch(() => null)
 
 if (!res.ok) {
+  console.error("MP_ERROR_FULL", JSON.stringify(data, null, 2))
+
   return NextResponse.json(
     {
       ok: false,
