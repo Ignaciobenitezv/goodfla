@@ -528,34 +528,48 @@ const installmentsValue =
   1
 
 const identificationData =
-  payerData?.identification
+  data?.payer?.identification
     ? {
-        type: String(payerData.identification.type || ""),
-        number: String(payerData.identification.number || ""),
+        type: String(data.payer.identification.type || ""),
+        number: String(data.payer.identification.number || ""),
+      }
+    : data?.formData?.payer?.identification
+    ? {
+        type: String(data.formData.payer.identification.type || ""),
+        number: String(data.formData.payer.identification.number || ""),
       }
     : undefined
 
+const payerEmail =
+  data?.payer?.email ||
+  data?.formData?.payer?.email ||
+  email.trim()
+
 const payload = {
-  token: tokenValue ? String(tokenValue) : undefined,
+  token: data?.token ? String(data.token) : undefined,
 
   issuer_id:
-    issuerValue != null
-      ? String(issuerValue)
+    data?.issuer_id != null
+      ? String(data.issuer_id)
+      : data?.issuerId != null
+      ? String(data.issuerId)
       : undefined,
 
   payment_method_id:
-    paymentMethodValue
-      ? String(paymentMethodValue)
+    data?.payment_method_id
+      ? String(data.payment_method_id)
+      : data?.paymentMethodId
+      ? String(data.paymentMethodId)
       : undefined,
 
-  installments: Number(installmentsValue ?? 1),
-
-  identification: identificationData,
+  installments: Number(data?.installments ?? 1),
 
   payer: {
-    email: email.trim(),
+    email: String(payerEmail || "").trim(),
     identification: identificationData,
   },
+
+  identification: identificationData,
 
   items: compactItems,
   amount: serverAmount,
