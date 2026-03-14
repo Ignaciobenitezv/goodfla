@@ -498,39 +498,57 @@ if (!serverAmount) {
   throw new Error("missing_server_total")
 }
 
-                console.log("[BRICK] onSubmit data =>", data)
+console.log("[BRICK] onSubmit data =>", data)
+
+const formData = data?.formData ?? {}
+const payerData = data?.payer ?? formData?.payer ?? {}
+
+const tokenValue =
+  data?.token ??
+  formData?.token ??
+  undefined
+
+const issuerValue =
+  data?.issuerId ??
+  data?.issuer_id ??
+  formData?.issuerId ??
+  formData?.issuer_id ??
+  undefined
+
+const paymentMethodValue =
+  data?.paymentMethodId ??
+  data?.payment_method_id ??
+  formData?.paymentMethodId ??
+  formData?.payment_method_id ??
+  undefined
+
+const installmentsValue =
+  data?.installments ??
+  formData?.installments ??
+  1
 
 const identificationData =
-  data?.payer?.identification
+  payerData?.identification
     ? {
-        type: String(data.payer.identification.type || ""),
-        number: String(data.payer.identification.number || ""),
-      }
-    : data?.formData?.payer?.identification
-    ? {
-        type: String(data.formData.payer.identification.type || ""),
-        number: String(data.formData.payer.identification.number || ""),
+        type: String(payerData.identification.type || ""),
+        number: String(payerData.identification.number || ""),
       }
     : undefined
 
 const payload = {
-  token: data?.token ? String(data.token) : undefined,
+  token: tokenValue ? String(tokenValue) : undefined,
 
   issuer_id:
-    data?.issuerId != null
-      ? String(data.issuerId)
-      : data?.issuer_id != null
-      ? String(data.issuer_id)
+    issuerValue != null
+      ? String(issuerValue)
       : undefined,
 
   payment_method_id:
-    data?.paymentMethodId
-      ? String(data.paymentMethodId)
-      : data?.payment_method_id
-      ? String(data.payment_method_id)
+    paymentMethodValue
+      ? String(paymentMethodValue)
       : undefined,
 
-  installments: Number(data?.installments ?? 1),
+  installments: Number(installmentsValue ?? 1),
 
   identification: identificationData,
 
@@ -567,7 +585,6 @@ const payload = {
     cp: envio === "domicilio" ? cp : undefined,
   },
 }
-
 console.log("[BRICK] payload a backend =>", payload)
 
 if (!payload.token) {
