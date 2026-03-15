@@ -177,74 +177,10 @@ type CartItem = {
   packMayoristaId?: string | null
 }
 
-// ==========================
-// Helpers para email / resumen
-// ==========================
-async function getProductTitles(cart: CartItem[]) {
-  const ids = [...new Set(cart.map((x) => x.productId))]
-
-  const docs = await sanity.fetch(
-    `*[_id in $ids]{ _id, _type, "nombre": coalesce(nombre, title) }`,
-    { ids }
-  )
-
-  const byId = new Map<string, any>((docs || []).map((p: any) => [String(p._id), p]))
-
-  return (cart || []).map((it) => {
-    const doc = byId.get(it.productId)
-    return {
-      title: String(doc?.nombre || it.productId),
-      talle: it.talle ?? null,
-      qty: it.cantidad,
-    }
-  })
-}
 
 
-function buildShippingTextFromCustomer(body: BrickPayload) {
-  const envio = body.customer?.envio || body.shipping?.type
-
-  if (envio === "sucursal") return "Retiro por sucursal"
-
-  const d = body.customer?.direccion
-  const parts = [
-    d?.calle,
-    d?.numero,
-    d?.barrio,
-    d?.ciudad,
-    body.customer?.cp,
-  ].filter(Boolean)
-
-  return parts.length ? parts.join(" ") : "Envío a domicilio"
-}
 
 
-async function mpCapture(paymentId: string, mpToken: string) {
-  const res = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
-    method: "PUT",
-    headers: {
-      Authorization: `Bearer ${mpToken}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ capture: true }),
-  })
-  const data = await res.json().catch(() => null)
-  return { ok: res.ok, status: res.status, data }
-}
-
-
-async function mpCancel(paymentId: string, mpToken: string) {
-  const res = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
-    method: "PUT",
-    headers: {
-      Authorization: `Bearer ${mpToken}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ status: "cancelled" }),
-  })
-  const data = await res.json().catch(() => null)
-  return { ok: res.ok, status: res.status, data }
-}
 
 function normalizeIdentification(body: BrickPayload) {
   const type =
@@ -270,157 +206,9 @@ function normalizeIdentification(body: BrickPayload) {
   }
 }
 
-async function rollbackStockAtomic(cart: CartItem[], lockId: string) {
-  // Si ya hicimos rollback antes, no tocar stock otra vez
-  const existing = await sanity.getDocument(lockId)
-  if ((existing as any)?.rollbackDone) return { ok: true, already: true }
-
-  const MAX_RETRIES = 8
-
-  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
-    const ids = cart.map((x) => x.productId)
-
-    const prods = await sanity.fetch(
-      `*[_type=="producto" && _id in $ids]{
-        _id,_rev,stock,talles[]{_key,label,stock}
-      }`,
-      { ids }
-    )
-    const byId = new Map<string, any>((prods || []).map((p: any) => [String(p._id), p]))
-
-    try {
-      for (const it of cart) {
-        const prod = byId.get(it.productId)
-        if (!prod) continue
-
-        if (Array.isArray(prod.talles) && it.talle) {
-          const newTalles = (prod.talles || []).map((t: any) =>
-            t?.label === it.talle
-              ? { ...t, stock: Number(t.stock || 0) + it.cantidad }
-              : t
-          )
-          await sanity
-            .patch(prod._id)
-            .ifRevisionId(prod._rev)
-            .set({ talles: newTalles })
-            .commit()
-        } else {
-          await sanity
-            .patch(prod._id)
-            .ifRevisionId(prod._rev)
-            .inc({ stock: it.cantidad })
-            .commit()
-        }
-      }
-
-      // marcar rollback para idempotencia
-      await sanity.createIfNotExists({
-        _id: lockId,
-        _type: "mpWebhook",
-        createdAt: new Date().toISOString(),
-        status: "init",
-      })
-
-      await sanity
-        .patch(lockId)
-        .set({ rollbackDone: true, rollbackAt: new Date().toISOString() })
-        .commit({ autoGenerateArrayKeys: true })
 
 
-      return { ok: true }
-    } catch (e: any) {
-      const msg = String(e?.message || "").toLowerCase()
-      if (msg.includes("revision") || msg.includes("_rev") || msg.includes("conflict")) continue
-      throw e
-    }
-  }
 
-  return { ok: false, reason: "conflict" }
-}
-
-async function reserveStockAtomic(cart: CartItem[], lockId: string) {
-  const existing = await sanity.getDocument(lockId)
-  if ((existing as any)?.status === "processed") return { ok: true, already: true }
-
-  // 1) Agrupar por productId::talle
-  const need = new Map<string, { productId: string; talle: string | null; qty: number }>()
-  for (const it of cart) {
-    const key = `${it.productId}::${it.talle ?? ""}`
-    const prev = need.get(key)
-    need.set(key, {
-      productId: it.productId,
-      talle: it.talle ?? null,
-      qty: (prev?.qty ?? 0) + Number(it.cantidad || 0),
-    })
-  }
-
-  const grouped = [...need.values()]
-  const ids = [...new Set(grouped.map((g) => g.productId))]
-
-  const MAX_RETRIES = 8
-  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
-    const prods = await sanity.fetch(
-      `*[_type=="producto" && _id in $ids]{ _id,_rev,stock,talles[]{_key,label,stock} }`,
-      { ids }
-    )
-    const byId = new Map<string, any>((prods || []).map((p: any) => [String(p._id), p]))
-
-    // 2) Validar stock con cantidades agrupadas
-    const errors: any[] = []
-    for (const g of grouped) {
-      const prod = byId.get(g.productId)
-      if (!prod) {
-        errors.push({ productId: g.productId, talle: g.talle, requested: g.qty, available: 0, ok: false })
-        continue
-      }
-      const available =
-        Array.isArray(prod.talles) && g.talle
-          ? Number(prod.talles.find((t: any) => t?.label === g.talle)?.stock ?? 0)
-          : Number(prod.stock ?? 0)
-
-      if (available < g.qty) {
-        errors.push({ productId: g.productId, talle: g.talle, requested: g.qty, available, ok: false })
-      }
-    }
-    if (errors.length) return { ok: false, reason: "out_of_stock", details: errors }
-
-    // 3) Descontar con transaction (evita pisadas)
-    try {
-      let tx = sanity.transaction()
-
-      for (const prodId of ids) {
-        const prod = byId.get(prodId)
-        if (!prod) continue
-
-        // todas las necesidades de este producto (por talle o global)
-        const wants = grouped.filter((g) => g.productId === prodId)
-
-        if (Array.isArray(prod.talles) && wants.some((w) => !!w.talle)) {
-          const talles = prod.talles || []
-          const nextTalles = talles.map((t: any) => {
-            const w = wants.find((x) => x.talle && x.talle === t?.label)
-            if (!w) return t
-            return { ...t, stock: Math.max(0, Number(t.stock || 0) - w.qty) }
-          })
-
-          tx = tx.patch(prodId, (p: any) => p.ifRevisionId(prod._rev).set({ talles: nextTalles }))
-        } else {
-          const total = wants.reduce((a, w) => a + Number(w.qty || 0), 0)
-          tx = tx.patch(prodId, (p: any) => p.ifRevisionId(prod._rev).dec({ stock: total }))
-        }
-      }
-
-      await tx.commit()
-      return { ok: true }
-    } catch (e: any) {
-      const msg = String(e?.message || "").toLowerCase()
-      if (msg.includes("revision") || msg.includes("_rev") || msg.includes("conflict")) continue
-      throw e
-    }
-  }
-
-  return { ok: false, reason: "conflict" }
-}
 
 
 export async function POST(req: Request) {
@@ -532,10 +320,7 @@ export async function POST(req: Request) {
     // ==========================
     // 3) Clasificar líneas (como Preference): mayorista vs producto, combo vs normal
     // ==========================
-    const uniqueIds = [...new Set(cart.map((x) => x.productId))]
-    const snaps = await Promise.all(uniqueIds.map((id) => getPackSnapshot(id)))
-    const validSnaps = snaps.filter(Boolean) as PackSnapshot[]
-
+  
    const mayoristaLines = cart.filter((x) => !!x.packMayoristaId)
 const productLines = cart.filter((x) => !x.packMayoristaId)
 
@@ -1105,70 +890,7 @@ if (status === "in_process" || status === "pending") {
   })
 }
 
-// 👇 OJO: vos ya tenías markerId más abajo.
-//     Como ahora lo definimos acá, BORRÁ el que tenías después para no redeclarar.
 
-
-    // A) Reservar stock SOLO si NO es mayorista
-    if (!skipStock) {
-      const r = await reserveStockAtomic(stockCart, markerId)
-      if ((r as any)?.already) {
-        return NextResponse.json({
-          ok: true,
-          id: paymentId,
-          status,
-          status_detail: statusDetail,
-          orderId,
-          computedTotal,
-          subtotal,
-          shippingPrice,
-          shippingType,
-          already: true,
-        })
-      }
-
-      if (!r.ok) {
-  await mpCancel(paymentId, mpToken)
-
-  await sanity
-    .patch(markerId)
-    .set({
-      status: "stock_insufficient",
-      source: "card_inline",
-      detailsJson: JSON.stringify((r as any).details ?? []),
-      failedAt: new Date().toISOString(),
-    })
-    .commit({ autoGenerateArrayKeys: true })
-
-  return NextResponse.json(
-    {
-      ok: false,
-      error: "out_of_stock_after_auth",
-      message: "Se quedó sin stock mientras pagabas. No se realizó el cobro.",
-      details: (r as any).details ?? null,
-      id: paymentId,
-      status,
-      status_detail: statusDetail,
-      orderId,
-      computedTotal,
-      subtotal,
-      shippingPrice,
-      shippingType,
-    },
-    { status: 409 }
-  )
-}
-    }
-
-
-    await sanity
-  .patch(markerId)
-  .set({
-    status: "processed",
-    source: "card_inline",
-    processedAt: new Date().toISOString(),
-  })
-  .commit({ autoGenerateArrayKeys: true })
 
 return NextResponse.json({
   ok: true,
