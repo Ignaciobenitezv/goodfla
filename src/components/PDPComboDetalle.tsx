@@ -188,65 +188,60 @@ const hasStockForCombo = () => {
           </div>
 
           {/* Cajas de selección */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 max-w-[900px] mb-12">
-            {combo.categoriasIncluidas.flatMap((cat: any) =>
-              Array.from({ length: cat.cantidad }).map((_, i) => {
-                const seleccionado = selected[cat.categoria.slug]?.[i]
-                return (
-                  <div
-                    key={`${String(cat?.categoria?.slug ?? "sin-cat")}__box__${i}`}
-                    className="border-2 border-dashed border-gray-400 rounded-lg flex flex-col items-center justify-center aspect-square cursor-pointer hover:border-black transition"
-                    onClick={() => setActiveModal({ cat: cat.categoria.slug, index: i })}
-                  >
-                    {seleccionado ? (
-                      <div className="relative w-full h-full flex flex-col">
-                        {/* Botón X */}
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            const nuevos = [...(selected[cat.categoria.slug] || [])]
-                            nuevos[i] = null
-                            setSelected({ ...selected, [cat.categoria.slug]: nuevos })
-                          }}
-                          className="absolute top-2 right-2 z-10 bg-black text-white rounded-full w-6 h-6 flex items-center justify-center text-xs hover:bg-red-600"
-                        >
-                          ✕
-                        </button>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-5 md:gap-6 max-w-[980px] mb-12">
+  {combo.categoriasIncluidas.flatMap((cat: any) =>
+    Array.from({ length: cat.cantidad }).map((_, i) => {
+      const seleccionado = selected[cat.categoria.slug]?.[i]
 
-                        {/* Imagen */}
-                        <div className="relative flex-1 aspect-square bg-white rounded-lg">
-                          <Image
-                            src={seleccionado.imagen || "/placeholder.png"}
-                            alt={seleccionado.nombre || "producto"}
-                            fill
-                            className="object-cover"
-                          />
-                        </div>
+      return seleccionado ? (
+        <div
+          key={`${String(cat?.categoria?.slug ?? "sin-cat")}__box__${i}`}
+          className="border-2 border-dashed border-gray-400 rounded-lg p-2 bg-white cursor-pointer hover:border-black transition h-[220px] md:h-[235px] flex flex-col"
+          onClick={() => setActiveModal({ cat: cat.categoria.slug, index: i })}
+        >
+          <div className="relative w-full h-[150px] md:h-[160px] bg-white rounded-lg overflow-hidden">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation()
+                const nuevos = [...(selected[cat.categoria.slug] || [])]
+                nuevos[i] = null
+                setSelected({ ...selected, [cat.categoria.slug]: nuevos })
+              }}
+              className="absolute top-2 right-2 z-10 bg-black text-white rounded-full w-6 h-6 flex items-center justify-center text-xs hover:bg-red-600"
+            >
+              ✕
+            </button>
 
-                        {/* Footer */}
-                        <div className="w-full bg-gray-100 text-center py-1 mt-1 rounded">
-                          <span className="text-sm md:text-base font-bold">
-                            {seleccionado.talle || "—"}
-                          </span>
-                        </div>
-                      </div>
-                    ) : (
-                      <>
-                        <span className="text-2xl md:text-3xl font-bold text-gray-500">
-                          +
-                        </span>
-                        <span className="text-xs text-gray-500 text-center">
-                          Agregar {cat.categoria.titulo} {i + 1}
-                        </span>
-                      </>
-                    )}
-                  </div>
-                )
-              })
-            )}
+            <Image
+              src={seleccionado.imagen || "/placeholder.png"}
+              alt={seleccionado.nombre || "producto"}
+              fill
+              className="object-cover"
+            />
           </div>
 
+          <div className="w-full bg-gray-100 text-center py-2 mt-2 rounded">
+            <span className="text-sm md:text-base font-bold">
+              {seleccionado.talle || "—"}
+            </span>
+          </div>
+        </div>
+      ) : (
+        <div
+          key={`${String(cat?.categoria?.slug ?? "sin-cat")}__box__${i}`}
+          className="border-2 border-dashed border-gray-400 rounded-lg bg-white cursor-pointer hover:border-black transition h-[220px] md:h-[235px] flex flex-col items-center justify-center text-center px-3"
+          onClick={() => setActiveModal({ cat: cat.categoria.slug, index: i })}
+        >
+          <span className="text-2xl md:text-3xl font-bold text-gray-500 leading-none">+</span>
+          <span className="text-xs text-gray-500 leading-snug mt-2">
+            Agregar {cat.categoria.titulo} {i + 1}
+          </span>
+        </div>
+      )
+    })
+  )}
+</div>
           {/* Botón pagar */}
           <button
             type="button"
