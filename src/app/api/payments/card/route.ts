@@ -1082,16 +1082,15 @@ if (status === "rejected" || status === "cancelled") {
 }
 
 if (status === "in_process" || status === "pending") {
-  await sanity.createIfNotExists({
-    _id: markerId,
-    _type: "mpWebhook",
-    paymentId,
-    orderId,
-    createdAt: new Date().toISOString(),
-    status: "pending",
-    statusDetail,
-    source: "card_inline",
-  })
+  await sanity
+    .patch(markerId)
+    .set({
+      status: "pending",
+      statusDetail,
+      source: "card_inline",
+      pendingAt: new Date().toISOString(),
+    })
+    .commit({ autoGenerateArrayKeys: true })
 
   return NextResponse.json({
     ok: true,
@@ -1129,49 +1128,47 @@ if (status === "in_process" || status === "pending") {
       }
 
       if (!r.ok) {
-        await mpCancel(paymentId, mpToken)
+  await mpCancel(paymentId, mpToken)
 
-        await sanity.createIfNotExists({
-          _id: markerId,
-          _type: "mpWebhook",
-          paymentId,
-          orderId,
-          createdAt: new Date().toISOString(),
-          status: "stock_insufficient",
-          source: "card_inline",
-          detailsJson: JSON.stringify((r as any).details ?? []),
-        })
+  await sanity
+    .patch(markerId)
+    .set({
+      status: "stock_insufficient",
+      source: "card_inline",
+      detailsJson: JSON.stringify((r as any).details ?? []),
+      failedAt: new Date().toISOString(),
+    })
+    .commit({ autoGenerateArrayKeys: true })
 
-        return NextResponse.json(
-          {
-            ok: false,
-            error: "out_of_stock_after_auth",
-            message: "Se quedó sin stock mientras pagabas. No se realizó el cobro.",
-            details: (r as any).details ?? null,
-            id: paymentId,
-            status,
-            status_detail: statusDetail,
-            orderId,
-            computedTotal,
-            subtotal,
-            shippingPrice,
-            shippingType,
-          },
-          { status: 409 }
-        )
-      }
+  return NextResponse.json(
+    {
+      ok: false,
+      error: "out_of_stock_after_auth",
+      message: "Se quedó sin stock mientras pagabas. No se realizó el cobro.",
+      details: (r as any).details ?? null,
+      id: paymentId,
+      status,
+      status_detail: statusDetail,
+      orderId,
+      computedTotal,
+      subtotal,
+      shippingPrice,
+      shippingType,
+    },
+    { status: 409 }
+  )
+}
     }
 
 
-    await sanity.createIfNotExists({
-  _id: markerId,
-  _type: "mpWebhook",
-  paymentId,
-  orderId,
-  createdAt: new Date().toISOString(),
-  status: "processed",
-  source: "card_inline",
-})
+    await sanity
+  .patch(markerId)
+  .set({
+    status: "processed",
+    source: "card_inline",
+    processedAt: new Date().toISOString(),
+  })
+  .commit({ autoGenerateArrayKeys: true })
 
 return NextResponse.json({
   ok: true,

@@ -557,24 +557,32 @@ async function handle(req: Request) {
         console.log("🧩 payment_metadata_keys", Object.keys(meta || {}))
 
         // candado idempotente
-        await sanity.createIfNotExists({
-          _id: markerId,
-          _type: "mpWebhook",
-          paymentId,
-          orderId: meta?.orderId || null,
-          createdAt: new Date().toISOString(),
-          status: "processing",
-        })
+       await sanity.createIfNotExists({
+  _id: markerId,
+  _type: "mpWebhook",
+  paymentId,
+  orderId: meta?.orderId || null,
+  createdAt: new Date().toISOString(),
+  source: "card_inline",
+})
 
-        // 🔥 en vez de confiar en "marker", traemos el doc real
-        const existing = await sanity.getDocument(markerId)
+const existing = await sanity.getDocument(markerId)
 
-        if ((existing as any)?.status === "processed" && (existing as any)?.ownerNotified === true) {
-          return respond200(
-            { msg: "already_processed_card_inline", markerId, paymentId },
-            startedAt
-          )
-        }
+if ((existing as any)?.status === "processed") {
+  return respond200(
+    { msg: "already_processed_card_inline", markerId, paymentId },
+    startedAt
+  )
+}
+
+await sanity
+  .patch(markerId)
+  .set({
+    status: "processing",
+    processingAt: new Date().toISOString(),
+  })
+  .commit()
+  .catch(() => {})
 
         // si está processed pero ownerNotified NO, dejamos seguir para reintentar mail
 
@@ -633,30 +641,65 @@ async function handle(req: Request) {
         }
 
         // packIds = ids de documentos packMayorista (para excluir de stock)
-        const packIds = Array.isArray(meta?.packIds) ? meta.packIds.map(String) : []
-        const packIdSet = new Set(packIds)
+        // packIds = ids de documentos packMayorista (para excluir de stock)
+const packIds = Array.isArray(meta?.packIds) ? meta.packIds.map(String) : []
+const packIdSet = new Set(packIds)
 
-        // ✅ items SIEMPRE desde el cart (incluye packMayorista y productos)
-        let items = await buildEmailItems(cart, meta)
-        if (!items.length && cart.length) {
-          items = cart.map((it) => ({
-            title: String(it.productId),
-            talle: it.talle ?? null,
-            qty: Number(it.cantidad || 1),
-          }))
-        }
+// ✅ SOLO descontar stock de líneas que NO sean packMayorista
+const cartForStock = cart.filter((x) => !packIdSet.has(String(x.productId)))
 
-        // ✅ si en algún futuro querés “no stock” para packMayorista:
-        // filtrás SOLO para stock
+if (cartForStock.length) {
+  const r = await reserveStockAtomic(cartForStock, markerId)
 
+  if (!r.ok) {
+    const reason = (r as any).reason
 
-        // idempotencia de email
-        const updated = await sanity
-          .patch(markerId)
-          .setIfMissing({ ownerNotified: false, customerNotified: false })
-          .set({ status: "processed", processedAt: new Date().toISOString() })
-          .commit({ returnDocuments: true })
-          .catch(() => null)
+    if (reason === "conflict") {
+      await sanity
+        .patch(markerId)
+        .set({ status: "retry_conflict", retryAt: new Date().toISOString() })
+        .commit()
+        .catch(() => {})
+
+      return respond200({ msg: "retry_conflict_card_inline", markerId, paymentId }, startedAt)
+    }
+
+    await sanity
+      .patch(markerId)
+      .set({
+        status: "failed_stock",
+        detailsJson: JSON.stringify((r as any).details ?? []),
+        failedAt: new Date().toISOString(),
+      })
+      .commit()
+      .catch(() => {})
+
+    return respond200({ ignored: true, reason: "failed_stock_card_inline", markerId, paymentId }, startedAt)
+  }
+} else {
+  console.log("📦 only packMayorista lines in card_inline webhook: skipping stock reserve", {
+    markerId,
+    paymentId,
+  })
+}
+
+// ✅ items SIEMPRE desde el cart (incluye packMayorista y productos)
+let items = await buildEmailItems(cart, meta)
+if (!items.length && cart.length) {
+  items = cart.map((it) => ({
+    title: String(it.productId),
+    talle: it.talle ?? null,
+    qty: Number(it.cantidad || 1),
+  }))
+}
+
+// idempotencia de email
+const updated = await sanity
+  .patch(markerId)
+  .setIfMissing({ ownerNotified: false, customerNotified: false })
+  .set({ status: "processed", processedAt: new Date().toISOString() })
+  .commit({ returnDocuments: true })
+  .catch(() => null)
         console.log("📧 attempting_owner_email_card_inline", {
 
           markerId,
@@ -763,22 +806,32 @@ async function handle(req: Request) {
     // =========================
     // 2) Candado idempotente
     // =========================
-    const marker = await sanity.createIfNotExists({
-      _id: markerId,
-      _type: "mpWebhook",
-      paymentId,
-      orderId: merchantOrder?.id,
-      preferenceId: merchantOrder?.preference_id || merchantOrder?.preference_id || null,
-      createdAt: new Date().toISOString(),
-      status: "processing",
-    })
+    await sanity.createIfNotExists({
+  _id: markerId,
+  _type: "mpWebhook",
+  paymentId,
+  orderId: merchantOrder?.id,
+  preferenceId: merchantOrder?.preference_id || null,
+  createdAt: new Date().toISOString(),
+})
 
-    if ((marker as any)?.status && (marker as any).status !== "processing") {
-      return respond200(
-        { msg: "already_processed", markerId, paymentId, status: (marker as any).status },
-        startedAt
-      )
-    }
+const existing = await sanity.getDocument(markerId)
+
+if ((existing as any)?.status === "processed") {
+  return respond200(
+    { msg: "already_processed", markerId, paymentId, status: "processed" },
+    startedAt
+  )
+}
+
+await sanity
+  .patch(markerId)
+  .set({
+    status: "processing",
+    processingAt: new Date().toISOString(),
+  })
+  .commit()
+  .catch(() => {})
 
     // =========================
     // 3) Traer preferencia + cart
