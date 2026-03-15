@@ -13,9 +13,22 @@ const sanity = createClient({
   useCdn: false,
 })
 
-type CompactProductItem = { productId: string; talle?: string | null; cantidad: number; comboId?: string | null }
+type CompactProductItem = {
+  productId: string
+  talle?: string | null
+  cantidad: number
+  comboId?: string | null
+  packMayoristaId?: string | null
+}
 
-type ParsedLine = { productId: string; talle?: string | null; cantidad: number; comboId?: string | null }
+type ParsedLine = {
+  productId: string
+  talle?: string | null
+  cantidad: number
+  comboId?: string | null
+  packMayoristaId?: string | null
+}
+
 function toMoney(n: any) {
   const v = Number(n || 0)
   return Math.round(v * 100) / 100
@@ -107,25 +120,25 @@ export async function POST(req: Request) {
     const rawItems = Array.isArray(body?.items) ? body.items : []
 
     const parsed: ParsedLine[] = rawItems
-      .map((i: any) => ({
-        productId: String(i._id ?? i.productId ?? "").trim(),
-        talle: i.talle ?? null,
-        cantidad: Number(i.cantidad ?? 1),
-        comboId: i.comboId ? String(i.comboId).trim() : null,
-      }))
+  .map((i: any) => ({
+    productId: String(i._id ?? i.productId ?? "").trim(),
+    talle: i.talle ?? null,
+    cantidad: Number(i.cantidad ?? 1),
+    comboId: i.comboId ? String(i.comboId).trim() : null,
+    packMayoristaId: i.packMayoristaId ? String(i.packMayoristaId).trim() : null,
+  }))
       .filter((x: ParsedLine) => x.productId && x.cantidad > 0)
 
 
-    const compactCart: CompactProductItem[] = parsed.map((x) => ({
-      productId: x.productId,
-      talle: x.talle,
-      cantidad: x.cantidad,
-      comboId: x.comboId ?? null,
-    }))
-
-
-      .filter((x: any) => x.productId && x.cantidad > 0)
-
+   const compactCart: CompactProductItem[] = parsed
+  .map((x) => ({
+    productId: x.productId,
+    talle: x.talle,
+    cantidad: x.cantidad,
+    comboId: x.comboId ?? null,
+    packMayoristaId: x.packMayoristaId ?? null,
+  }))
+  .filter((x: any) => x.productId && x.cantidad > 0)
     if (!compactCart.length) {
       return NextResponse.json({ ok: false, error: "empty_cart" }, { status: 400 })
     }
@@ -142,10 +155,10 @@ export async function POST(req: Request) {
     const packById = new Map<string, PackSnapshot>(validSnaps.map((p) => [String(p._id), p]))
 
 
-    const mayoristaLines = parsed.filter((x: any) => typeById.get(x.productId) === "packMayorista")
-    const productLines = parsed.filter((x: any) => typeById.get(x.productId) !== "packMayorista")
-    const comboLines = productLines.filter((x) => !!x.comboId)
-    const normalProductLines = productLines.filter((x) => !x.comboId)
+  const mayoristaLines = parsed.filter((x: any) => !!x.packMayoristaId)
+const productLines = parsed.filter((x: any) => !x.packMayoristaId)
+const comboLines = productLines.filter((x) => !!x.comboId)
+const normalProductLines = productLines.filter((x) => !x.comboId)
 
     console.log("🔎 CLASSIFY", {
       mayorista: mayoristaLines.map((x: any) => x.productId),
@@ -202,19 +215,85 @@ export async function POST(req: Request) {
     let mpItems: any[] = []
 
     // A) mayorista
-    for (const line of mayoristaLines) {
-      const pack = packById.get(line.productId) || null
-      const unit = toMoney(Number(pack?.price ?? 0))
+    // A) mayorista
+if (mayoristaLines.length) {
+  const group = new Map<string, ParsedLine[]>()
 
-      if (!pack?._id || pack._type !== "packMayorista" || !unit || unit <= 0) {
-        return NextResponse.json(
-          { ok: false, error: "invalid_pack", message: "Pack mayorista inválido.", productId: line.productId, pack },
-          { status: 400 }
-        )
+  for (const line of mayoristaLines) {
+    const pid = String(line.packMayoristaId || "").trim()
+    if (!pid) continue
+    const arr = group.get(pid) || []
+    arr.push(line)
+    group.set(pid, arr)
+  }
+
+  const mayoristaIds = [...group.keys()]
+  const mayoristaSnaps = await Promise.all(mayoristaIds.map((id) => getPackSnapshot(id)))
+  const mayoristaById = new Map<string, PackSnapshot>(
+    (mayoristaSnaps.filter(Boolean) as PackSnapshot[]).map((p) => [String(p._id), p])
+  )
+
+  for (const pid of mayoristaIds) {
+    const pack = mayoristaById.get(pid) || null
+    const unit = toMoney(Number(pack?.price ?? 0))
+
+    if (!pack?._id || pack._type !== "packMayorista" || !unit || unit <= 0) {
+      return NextResponse.json(
+        { ok: false, error: "invalid_pack", message: "Pack mayorista inválido.", packId: pid, pack },
+        { status: 400 }
+      )
+    }
+
+    const lines = group.get(pid) || []
+    const totalUnits = lines.reduce((acc, l) => acc + Number(l.cantidad || 0), 0)
+
+    // 1 pack cada 10 unidades
+    const packsQty = Math.floor(totalUnits / 10)
+    const remainder = totalUnits % 10
+
+    if (packsQty > 0) {
+      mpItems.push({
+        title: pack.title,
+        quantity: packsQty,
+        unit_price: unit,
+        currency_id: "ARS",
+      })
+    }
+
+    if (remainder > 0) {
+      // seguridad comercial: cobrar sueltas al precio unitario normal
+      const ids = [...new Set(lines.map((l) => l.productId))]
+      const prods = await getProductsSnapshot(ids)
+      const byId = new Map<string, any>((prods || []).map((p: any) => [String(p._id), p]))
+
+      const expanded: { unit_price: number; title: string }[] = []
+
+      for (const l of lines) {
+        const prod = byId.get(l.productId)
+        const unit_price = getUnitPriceProduct(prod)
+        const title = `${prod?.nombre || "Producto"}${l.talle ? ` - Talle ${l.talle}` : ""}`
+
+        for (let k = 0; k < Number(l.cantidad || 0); k++) {
+          expanded.push({ unit_price, title })
+        }
       }
 
-      mpItems.push({ title: pack.title, quantity: line.cantidad, unit_price: unit, currency_id: "ARS" })
+      expanded.sort((a, b) => (b.unit_price || 0) - (a.unit_price || 0))
+
+      for (let i = 0; i < remainder; i++) {
+        const single = expanded[i]
+        if (!single || !single.unit_price || single.unit_price <= 0) continue
+
+        mpItems.push({
+          title: single.title,
+          quantity: 1,
+          unit_price: single.unit_price,
+          currency_id: "ARS",
+        })
+      }
     }
+  }
+}
 // B) combos (ej zapatillas2x1 / combo)
 if (comboLines.length) {
   // 1) Agrupar por comboId
@@ -360,7 +439,7 @@ if (comboLines.length) {
         metadata: {
           source: "preference_redirect",
           orderId,
-          packIds: [...new Set(mayoristaLines.map((x) => x.productId))],
+          packIds: [...new Set(mayoristaLines.map((x) => x.packMayoristaId).filter(Boolean))],
           packType: mayoristaLines.length ? "packMayorista" : null,
           packTitle: null,
 

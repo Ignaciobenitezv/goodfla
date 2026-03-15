@@ -42,7 +42,6 @@ export default function AnimatedButton2({ label = "APROVECHAR AHORA" }: Props) {
         whileHover={{ x: 6 }}
         transition={{ duration: 0.2 }}
       >
-        →
       </motion.span>
     </motion.button>
   )

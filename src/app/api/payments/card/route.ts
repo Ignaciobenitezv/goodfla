@@ -1,7 +1,6 @@
 // app/api/payments/card/route.ts
 export const runtime = "nodejs"
 
-import { sendOwnerSaleEmail } from "@/lib/email"
 import { NextResponse } from "next/server"
 import crypto from "crypto"
 import { createClient } from "@sanity/client"
@@ -11,7 +10,8 @@ type CompactItem = {
   productId?: string
   talle?: string | null
   cantidad: number
-  comboId?: string | null // ✅ NUEVO
+  comboId?: string | null
+  packMayoristaId?: string | null
 }
 
 
@@ -174,6 +174,7 @@ type CartItem = {
   talle?: string | null
   cantidad: number
   comboId?: string | null
+  packMayoristaId?: string | null
 }
 
 // ==========================
@@ -513,11 +514,12 @@ export async function POST(req: Request) {
 
   const cart: CartItem[] = rawItems
   .map((i: any) => ({
-    cartKey: String(i.cartKey || `${i._id ?? i.productId}__${i.talle ?? "default"}`), // ✅ clave
+    cartKey: String(i.cartKey || `${i._id ?? i.productId}__${i.talle ?? "default"}`),
     productId: String(i._id ?? i.productId ?? "").trim(),
     talle: i.talle ?? null,
     cantidad: Number(i.cantidad ?? 1),
     comboId: i.comboId ? String(i.comboId).trim() : null,
+    packMayoristaId: i.packMayoristaId ? String(i.packMayoristaId).trim() : null,
   }))
   .filter((x) => x.productId && x.cantidad > 0)
 
@@ -534,15 +536,11 @@ export async function POST(req: Request) {
     const snaps = await Promise.all(uniqueIds.map((id) => getPackSnapshot(id)))
     const validSnaps = snaps.filter(Boolean) as PackSnapshot[]
 
-    const typeByProductId = new Map<string, string>(validSnaps.map((p) => [String(p._id), String(p._type)]))
-    const packByProductId = new Map<string, PackSnapshot>(validSnaps.map((p) => [String(p._id), p]))
+   const mayoristaLines = cart.filter((x) => !!x.packMayoristaId)
+const productLines = cart.filter((x) => !x.packMayoristaId)
 
-    const mayoristaLines = cart.filter((x) => typeByProductId.get(x.productId) === "packMayorista")
-    const productLines = cart.filter((x) => typeByProductId.get(x.productId) !== "packMayorista")
-
-    const comboLines = productLines.filter((x) => !!x.comboId)          // ✅ items de productos que pertenecen a un combo/2x1
-    const normalProductLines = productLines.filter((x) => !x.comboId)   // ✅ productos normales
-
+const comboLines = productLines.filter((x) => !!x.comboId)
+const normalProductLines = productLines.filter((x) => !x.comboId)
     // Stock SOLO para productos (combo + normal). NUNCA para packMayorista.
     const stockCart = [...comboLines, ...normalProductLines]
     const skipStock = stockCart.length === 0
@@ -590,19 +588,70 @@ export async function POST(req: Request) {
     // ==========================
     let subtotalCalc = 0
 
-    // A) Pack mayorista (por línea)
-    for (const line of mayoristaLines) {
-      const pack = packByProductId.get(line.productId) || null
-      const unit = toMoney(Number(pack?.price ?? 0))
-      if (!pack?._id || pack._type !== "packMayorista" || !unit || unit <= 0) {
-        return NextResponse.json(
-          { ok: false, error: "invalid_pack_price", message: "Pack mayorista sin precio válido.", productId: line.productId, pack },
-          { status: 400 }
-        )
-      }
-      subtotalCalc += toMoney(unit * Number(line.cantidad || 1))
+    // A) Pack mayorista (agrupado por packMayoristaId)
+if (mayoristaLines.length) {
+  const group = new Map<string, CartItem[]>()
+
+  for (const line of mayoristaLines) {
+    const pid = String(line.packMayoristaId || "").trim()
+    if (!pid) continue
+    group.set(pid, [...(group.get(pid) || []), line])
+  }
+
+  const mayoristaIds = [...group.keys()]
+  const mayoristaSnaps = await Promise.all(mayoristaIds.map((id) => getPackSnapshot(id)))
+  const mayoristaById = new Map<string, PackSnapshot>(
+    (mayoristaSnaps.filter(Boolean) as PackSnapshot[]).map((p) => [String(p._id), p])
+  )
+
+  for (const pid of mayoristaIds) {
+    const pack = mayoristaById.get(pid) || null
+    const unit = toMoney(Number(pack?.price ?? 0))
+
+    if (!pack?._id || pack._type !== "packMayorista" || !unit || unit <= 0) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "invalid_pack_price",
+          message: "Pack mayorista sin precio válido.",
+          packId: pid,
+          pack,
+        },
+        { status: 400 }
+      )
     }
 
+    const lines = group.get(pid) || []
+    const totalUnits = lines.reduce((acc, l) => acc + Number(l.cantidad || 0), 0)
+
+    const packsQty = Math.floor(totalUnits / 10)
+    const remainder = totalUnits % 10
+
+    if (packsQty > 0) {
+      subtotalCalc += toMoney(unit * packsQty)
+    }
+
+    if (remainder > 0) {
+      const ids = [...new Set(lines.map((l) => l.productId))]
+      const prods = await getProductsSnapshot(ids)
+      const byIdMayorista = new Map<string, any>((prods || []).map((p: any) => [String(p._id), p]))
+
+      const unitPrices: number[] = []
+
+      for (const l of lines) {
+        const prod = byIdMayorista.get(l.productId)
+        const realUnit = getUnitPrice(prod)
+        for (let k = 0; k < Number(l.cantidad || 0); k++) {
+          unitPrices.push(realUnit)
+        }
+      }
+
+      unitPrices.sort((a, b) => b - a)
+      const remainderSum = unitPrices.slice(0, remainder).reduce((acc, v) => acc + v, 0)
+      subtotalCalc += toMoney(remainderSum)
+    }
+  }
+}
     // B) Combos / 2x1 (agrupado por comboId)
     if (comboLines.length) {
       // 1) agrupar por comboId
@@ -704,15 +753,69 @@ for (const it of normalProductLines) {
 }
 
 // B) Pack mayorista: unit = pack.price
-for (const it of mayoristaLines) {
-  const pack = packByProductId.get(it.productId) || null
-  const unit = toMoney(Number(pack?.price ?? 0))
-  lines.push({
-    cartKey: it.cartKey,
-    unitPrice: unit,
-    lineTotal: toMoney(unit * Number(it.cantidad || 1)),
-  })
+if (mayoristaLines.length) {
+  const group = new Map<string, CartItem[]>()
+
+  for (const line of mayoristaLines) {
+    const pid = String(line.packMayoristaId || "").trim()
+    if (!pid) continue
+    group.set(pid, [...(group.get(pid) || []), line])
+  }
+
+  const mayoristaIds = [...group.keys()]
+  const mayoristaSnaps = await Promise.all(mayoristaIds.map((id) => getPackSnapshot(id)))
+  const mayoristaById = new Map<string, PackSnapshot>(
+    (mayoristaSnaps.filter(Boolean) as PackSnapshot[]).map((p) => [String(p._id), p])
+  )
+
+  for (const pid of mayoristaIds) {
+    const pack = mayoristaById.get(pid) || null
+    const unit = toMoney(Number(pack?.price ?? 0))
+    const these = group.get(pid) || []
+
+const mayoristaProductIds = [...new Set(these.map((l) => l.productId))]
+const mayoristaProducts = await getProductsSnapshot(mayoristaProductIds)
+const byIdMayorista = new Map<string, any>(
+  (mayoristaProducts || []).map((p: any) => [String(p._id), p])
+)
+
+const expanded: Array<{ cartKey: string; unit: number }> = []
+for (const l of these) {
+  const prod = byIdMayorista.get(l.productId)
+  const realUnit = getUnitPrice(prod)
+  for (let k = 0; k < Number(l.cantidad || 0); k++) {
+    expanded.push({ cartKey: l.cartKey, unit: realUnit })
+  }
 }
+
+    expanded.sort((a, b) => b.unit - a.unit)
+
+    const totalUnits = expanded.length
+    const remainder = totalUnits % 10
+
+    const looseQtyByKey = new Map<string, number>()
+    for (let i = 0; i < remainder; i++) {
+      const u = expanded[i]
+      looseQtyByKey.set(u.cartKey, (looseQtyByKey.get(u.cartKey) || 0) + 1)
+    }
+
+    const promoUnitPerItem = toMoney(unit / 10)
+
+    for (const l of these) {
+  const prod = byIdMayorista.get(l.productId)
+  const realUnit = getUnitPrice(prod)
+
+  const looseQty = looseQtyByKey.get(l.cartKey) || 0
+  const promoQty = Math.max(0, Number(l.cantidad || 0) - looseQty)
+
+  const lineTotal = toMoney(looseQty * realUnit + promoQty * promoUnitPerItem)
+  const unitPriceForDisplay = toMoney(lineTotal / Number(l.cantidad || 1))
+
+  const idx = lines.findIndex((x) => x.cartKey === l.cartKey)
+  if (idx >= 0) lines[idx] = { cartKey: l.cartKey, unitPrice: unitPriceForDisplay, lineTotal }
+  else lines.push({ cartKey: l.cartKey, unitPrice: unitPriceForDisplay, lineTotal })
+}} // cierre for (const pid of mayoristaIds)
+} // cierre if (mayoristaLines.length)
 
 // C) Combos / 2x1: agrupar por comboId y decidir sobrantes (las más caras quedan sueltas)
 if (comboLines.length) {
@@ -829,54 +932,54 @@ if (comboLines.length) {
         .digest("hex")
 
     // 6) MP payload
+    const packIds = [...new Set(
+  mayoristaLines
+    .map((x) => String(x.packMayoristaId || "").trim())
+    .filter(Boolean)
+)]
+
     const mpPayload: any = {
-      token,
-      transaction_amount: computedTotal,
-      description: "Compra en la tienda",
-      installments,
-      payment_method_id,
-      issuer_id,
-      payer: {
-        email,
-        identification: {
-          type: identification.type,
-          number: identification.number,
-        },
-      },
-      capture: true,
-      notification_url: `${origin}/api/mp/webhook`,
-      metadata: {
-        orderId,
-        source: "card_inline",
+  token,
+  transaction_amount: computedTotal,
+  description: "Compra en la tienda",
+  installments,
+  payment_method_id,
+  issuer_id,
+  payer: {
+    email,
+    identification: {
+      type: identification.type,
+      number: identification.number,
+    },
+  },
+  capture: true,
+  notification_url: `${origin}/api/mp/webhook`,
+  metadata: {
+    orderId,
+    source: "card_inline",
+    comboId: body.comboId ? String(body.comboId).trim() : null,
+    packIds,
+    packType: packIds.length ? "packMayorista" : null,
+    packTitle: null,
 
-        comboId: body.comboId ? String(body.comboId).trim() : null,
-        packType: null,
-        packTitle: null,
+    customer: {
+      nombre: body.customer?.nombre || null,
+      apellido: body.customer?.apellido || null,
+      telefono: body.customer?.telefono || null,
+      email: email || null,
+      envio: body.customer?.envio || shippingType,
+      cp: body.customer?.cp || body.shipping?.cp || null,
+      direccion: body.customer?.direccion || null,
+    },
 
+    shippingType,
+    shippingPrice,
+    subtotal,
 
-        // ✅ datos humanos (vienen del front)
-        customer: {
-          nombre: body.customer?.nombre || null,
-          apellido: body.customer?.apellido || null,
-          telefono: body.customer?.telefono || null,
-          email: email || null,
-          envio: body.customer?.envio || shippingType,
-          cp: body.customer?.cp || body.shipping?.cp || null,
-          direccion: body.customer?.direccion || null,
-        },
-
-
-        shippingType,
-        shippingPrice,
-        subtotal,
-
-        // ✅ mantenemos tu formato actual (string / null)
-        cart, // ✅ array real
-        cartJson: JSON.stringify(cart), // ✅ compat por si tu webhook todavía parsea string
-
-      },
-
-    }
+    cart,
+    cartJson: JSON.stringify(cart),
+  },
+}
 
     const mpToken = process.env.MP_ACCESS_TOKEN
     if (!mpToken) {
@@ -958,7 +1061,6 @@ await sanity
     orderId,
     cartJson: JSON.stringify(cart || []),
    customerJson: JSON.stringify(mpPayload?.metadata?.customer || null),
-
     persistedAt: new Date().toISOString(),
   })
   .commit({ autoGenerateArrayKeys: true })

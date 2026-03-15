@@ -1,32 +1,54 @@
 // src/app/mayorista/[slug]/page.tsx
-import { notFound } from "next/navigation";
-import { sanityClient } from "@/lib/sanity.client";
-import { Q_MAYORISTA_BY_SLUG } from "@/lib/sanityQueries";
-import PDPMayoristaDetalle from "@/components/PDPMayoristaDetalle";
+import { sanityClient } from "@/lib/sanity.client"
+import { Q_MAYORISTA_BY_SLUG, Q_PRODUCTOS_BY_CATEGORIA } from "@/lib/sanityQueries"
+import PDPComboDetalle from "@/components/PDPComboDetalle"
+import { notFound } from "next/navigation"
 
-export const revalidate = 60;
+export const revalidate = 60
 
-type Params = { slug: string };
+type Params = { slug: string }
 
 export default async function Page({ params }: { params: Promise<Params> }) {
-  const { slug } = await params;
+  const { slug } = await params
 
-  const pack = await sanityClient.fetch(Q_MAYORISTA_BY_SLUG, { slug });
-  if (!pack) return notFound();
+  const pack = await sanityClient.fetch(Q_MAYORISTA_BY_SLUG, { slug })
+  if (!pack) return notFound()
 
-  // Mapear Sanity -> props que espera el PDP
-  const producto = {
+  const galeriaUrls = (pack.galeria || [])
+    .map((m: any) => {
+      if (m && typeof m === "object") return m.videoUrl || m.imagenUrl
+      if (typeof m === "string") return m
+      return null
+    })
+    .filter(Boolean) as string[]
+
+  const productosPorCategoria: Record<string, any[]> = {}
+
+  for (const cat of pack.categoriasIncluidas || []) {
+    const slugCat = cat?.categoria?.slug
+    if (!slugCat) continue
+
+    const productos = await sanityClient.fetch(Q_PRODUCTOS_BY_CATEGORIA, { slug: slugCat })
+    productosPorCategoria[slugCat] = productos || []
+  }
+
+  const comboNormalizado = {
     _id: pack._id,
     nombre: pack.title,
-    precioActual: pack.precioActual,
-    precioAntes: pack.precioAntes ?? null,
-    descripcion: pack.descripcion ?? "",
+    descripcion: pack.descripcion,
+    precioAnterior: pack.precioAntes ?? null,
+    precio: pack.precioActual,
     slug: pack.slug,
-    galeria: [
-      pack?.portada?.url,
-      ...(Array.isArray(pack?.galeria) ? pack.galeria.map((g: any) => g?.url) : []),
-    ].filter(Boolean) as string[],
-  };
+    imagen: pack.portada?.url || galeriaUrls[0] || "",
+    galeria: galeriaUrls,
+    categoriasIncluidas: pack.categoriasIncluidas || [],
+  }
 
-  return <PDPMayoristaDetalle producto={producto} />;
+  return (
+  <PDPComboDetalle
+    combo={comboNormalizado}
+    productosPorCategoria={productosPorCategoria}
+    mode="mayorista"
+  />
+)
 }

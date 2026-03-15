@@ -109,7 +109,7 @@ export default function SuccessClient() {
             localStorage.removeItem("lastOrder")
 
             setUi("cleared")
-            setMsg("Pago aprobado. Tu compra fue confirmada ✅")
+            setMsg("Pago aprobado. Tu compra fue confirmada")
             setTimeout(() => setProgress(100), 350)
             return
           }

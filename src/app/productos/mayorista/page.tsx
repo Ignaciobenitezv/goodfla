@@ -1,11 +1,10 @@
-// src/app/mayorista/page.tsx
 import { sanityClient } from "@/lib/sanity.client"
 import { Q_MAYORISTA_LIST } from "@/lib/sanityQueries"
 import CombosClient from "@/app/productos/combos/CombosClient"
 
 export const revalidate = 60
 
-export default async function Page() {
+export default async function MayoristaListPage() {
   const packs = await sanityClient.fetch(Q_MAYORISTA_LIST)
 
   const combosAdaptados = (Array.isArray(packs) ? packs : []).map((p: any, i: number) => ({

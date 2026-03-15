@@ -10,16 +10,17 @@ type Quote = {
 
 
 type CartItem = {
-  productId: string 
-  comboId?: string    // 🔹 _id real de Sanity (producto)
-  cartKey: string       // 🔹 id único en el carrito (productId + talle)
+  productId: string
+  comboId?: string
+  packMayoristaId?: string
+  cartKey: string
   nombre: string
   precio: number
   cantidad: number
   imagen: string
   slug?: string
   talle?: string
-  stock?: number        // 🔹 stock global desde Sanity
+  stock?: number
 }
 
 type CartContextType = {
@@ -93,11 +94,12 @@ const [quote, setQuote] = useState<Quote | null>(null)
         quoteOnly: true,
         shipping: { type: "sucursal" as const }, // para carrito "a calcular"
         items: items.map((i) => ({
-          _id: i.productId,
-          talle: i.talle ?? null,
-          cantidad: i.cantidad,
-          comboId: i.comboId ?? null, // 🔥 CLAVE
-        })),
+  _id: i.productId,
+  talle: i.talle ?? null,
+  cantidad: i.cantidad,
+  comboId: i.comboId ?? null,
+  packMayoristaId: i.packMayoristaId ?? null,
+})),
       }
 
       const res = await fetch("/api/payments/card", {

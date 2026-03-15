@@ -171,14 +171,19 @@ const descuentoPromo = useMemo(() => {
     ""
 
   const compactItems = (items || []).map((i: any) => ({
-  cartKey: i.cartKey, // ✅ AGREGAR
+  cartKey: i.cartKey,
   _id: i._id ?? i.productId,
   productId: i.productId ?? i._id,
   talle: i.talle ?? null,
   cantidad: Number(i.cantidad ?? 1),
+
   comboId: i.comboId
     ? String(i.comboId).trim()
     : (effectiveComboId ? String(effectiveComboId).trim() : null),
+
+  packMayoristaId: i.packMayoristaId
+    ? String(i.packMayoristaId).trim()
+    : null,
 }))
 
 
@@ -571,7 +576,7 @@ const payload = {
 
   identification: identificationData,
 
-  items: compactItems,
+  items: compactItems, // <- acá ya va corregido
   amount: serverAmount,
   orderId,
   comboId: effectiveComboId,

@@ -14,14 +14,18 @@ import ProductMediaGallery from "@/components/ProductMediaGallery"
 interface PDPComboDetalleProps {
   combo: any
   productosPorCategoria: Record<string, any[]>
+  mode?: "combo" | "mayorista"
 }
 
 // 🔹 helper para detectar videos
 
 type DraftSelections = Record<string, { talle?: string; color?: string }>
 
-export default function PDPComboDetalle({ combo, productosPorCategoria }: PDPComboDetalleProps) {
-
+export default function PDPComboDetalle({
+  combo,
+  productosPorCategoria,
+  mode = "combo",
+}: PDPComboDetalleProps) {
   // ================= ESTADOS COMBO =================
   const [selected, setSelected] = useState<{ [key: string]: any[] }>({})
   const [activeModal, setActiveModal] = useState<{ cat: string; index: number } | null>(null)
@@ -184,7 +188,7 @@ const hasStockForCombo = () => {
           </div>
 
           {/* Cajas de selección */}
-          <div className="grid grid-cols-3 gap-6 max-w-[800px] mx-auto mb-12">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 max-w-[900px] mb-12">
             {combo.categoriasIncluidas.flatMap((cat: any) =>
               Array.from({ length: cat.cantidad }).map((_, i) => {
                 const seleccionado = selected[cat.categoria.slug]?.[i]
@@ -266,16 +270,17 @@ const hasStockForCombo = () => {
   }
 
   addItem({
-    productId: prod._id,
-    nombre: `${prod.nombre}${prod.talle ? ` (Talle ${prod.talle})` : ""}`,
-    precio: unitPrice, // ✅ precio unitario real
-    cantidad: 1,
-    imagen: prod.imagen || "/placeholder.png",
-    slug: prod.slug ?? undefined,
-    talle: prod.talle ?? undefined,
-    stock: stockTalle,
-    comboId: combo._id,
-  })
+  productId: prod._id,
+  nombre: `${prod.nombre}${prod.talle ? ` (Talle ${prod.talle})` : ""}`,
+  precio: unitPrice,
+  cantidad: 1,
+  imagen: prod.imagen || "/placeholder.png",
+  slug: prod.slug ?? undefined,
+  talle: prod.talle ?? undefined,
+  stock: stockTalle,
+  comboId: mode === "combo" ? combo._id : undefined,
+  packMayoristaId: mode === "mayorista" ? combo._id : undefined,
+})
 })
 
               showAddedDialog({

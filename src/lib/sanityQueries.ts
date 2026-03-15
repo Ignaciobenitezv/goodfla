@@ -204,7 +204,7 @@ export const Q_ZAPA2X1_LIST = groq`
 
 
 export const Q_MAYORISTA_LIST = groq`
-*[_type == "packMayorista" && activo == true] | order(title asc){
+*[_type == "packMayorista" && activo == true && defined(slug.current)] | order(_createdAt desc){
   _id,
   _createdAt,
   title,
@@ -213,7 +213,6 @@ export const Q_MAYORISTA_LIST = groq`
   precioAntes,
   precioActual,
 
-  // ✅ meta dinámico
   badge,
   rating,
   ratingCount,
@@ -227,8 +226,12 @@ export const Q_MAYORISTA_LIST = groq`
     "videoUrl": video.asset->url
   },
 
-  _createdAt
-}`
+  categoriasIncluidas[]{
+    cantidad,
+    categoria->{ _id, titulo, "slug": slug.current }
+  }
+}
+`
 
 
 
@@ -240,14 +243,21 @@ export const Q_MAYORISTA_BY_SLUG = groq`
   descripcion,
   precioAntes,
   precioActual,
+
   "portada": portada.asset->{ url, _id, metadata{ lqip, dimensions } },
 
   galeria[]{
     tipo,
     "imagenUrl": imagen.asset->url,
     "videoUrl": video.asset->url
+  },
+
+  categoriasIncluidas[]{
+    cantidad,
+    categoria->{ _id, titulo, "slug": slug.current }
   }
-}`
+}
+`
 
 
 

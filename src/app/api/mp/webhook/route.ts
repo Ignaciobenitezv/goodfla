@@ -15,8 +15,13 @@ const sanity = createClient({
   useCdn: false,
 })
 
-type CartItem = { productId: string; talle?: string | null; cantidad: number; comboId?: string | null }
-
+type CartItem = {
+  productId: string
+  talle?: string | null
+  cantidad: number
+  comboId?: string | null
+  packMayoristaId?: string | null
+}
 
 function respond200(payload: Record<string, any>, startedAt: number) {
   console.log("✅ webhook_responding_200", { ms: Date.now() - startedAt, ...payload })
@@ -241,32 +246,7 @@ async function reserveStockAtomic(cart: CartItem[], lockId: string) {
   return { ok: false, reason: "conflict" }
 }
 
-async function persistCardInlineOrder(markerId: string, payload: any) {
-  await sanity.createIfNotExists({
-    _id: markerId,
-    _type: "mpWebhook",
-    createdAt: new Date().toISOString(),
-    status: "processing",
-  })
 
-  await sanity
-    .patch(markerId)
-    .set({
-      source: "card_inline",
-      orderId: payload.orderId,
-      paymentId: payload.paymentId,
-      total: payload.total,
-      currency: payload.currency,
-      shippingAddress: payload.shippingAddress,
-      buyerName: payload.buyerName,
-      buyerEmail: payload.buyerEmail,
-      buyerPhone: payload.buyerPhone,
-      cartJson: JSON.stringify(payload.cart || []),
-      customerJson: JSON.stringify(payload.customer || null),
-      persistedAt: new Date().toISOString(),
-    })
-    .commit({ autoGenerateArrayKeys: true })
-}
 
 function parseCartFromPref(pref: any): CartItem[] {
   let cart: any[] = []
@@ -285,13 +265,14 @@ function parseCartFromPref(pref: any): CartItem[] {
 
   // ✅ normalizar SIEMPRE (vennga array o string)
   return (cart || [])
-    .map((x: any) => ({
-      productId: String(x?.productId ?? x?._id ?? "").trim(),
-      talle: x?.talle ?? null,
-      cantidad: Number(x?.cantidad ?? 1),
-      comboId: x?.comboId ? String(x.comboId).trim() : null,
-    }))
-    .filter((x: any) => x.productId && x.cantidad > 0)
+  .map((x: any) => ({
+    productId: String(x?.productId ?? x?._id ?? "").trim(),
+    talle: x?.talle ?? null,
+    cantidad: Number(x?.cantidad ?? 1),
+    comboId: x?.comboId ? String(x.comboId).trim() : null,
+    packMayoristaId: x?.packMayoristaId ? String(x.packMayoristaId).trim() : null,
+  }))
+  .filter((x: any) => x.productId && x.cantidad > 0)
 }
 
 
@@ -329,11 +310,11 @@ function mergeCartItems(items: CartItem[]): CartItem[] {
       map.set(key, { ...it, cantidad: Number(it.cantidad || 0) })
     } else {
       map.set(key, {
-        ...prev,
-        // ✅ preserva comboId si alguno lo tiene
-        comboId: prev.comboId || it.comboId || null,
-        cantidad: Number(prev.cantidad || 0) + Number(it.cantidad || 0),
-      })
+  ...prev,
+  comboId: prev.comboId || it.comboId || null,
+  packMayoristaId: prev.packMayoristaId || it.packMayoristaId || null,
+  cantidad: Number(prev.cantidad || 0) + Number(it.cantidad || 0),
+})
     }
   }
 
@@ -372,14 +353,14 @@ function parseCartFromMetadata(meta: any): CartItem[] {
   }
 
   return (arr || [])
-    .map((x: any) => ({
-      productId: String(x?.productId ?? x?._id ?? "").trim(),
-      talle: x?.talle ?? null,
-      cantidad: Number(x?.cantidad ?? 1),
-      comboId: x?.comboId ? String(x.comboId).trim() : null,
-    }))
-    .filter((x: any) => x.productId && x.cantidad > 0)
-
+  .map((x: any) => ({
+    productId: String(x?.productId ?? x?._id ?? "").trim(),
+    talle: x?.talle ?? null,
+    cantidad: Number(x?.cantidad ?? 1),
+    comboId: x?.comboId ? String(x.comboId).trim() : null,
+    packMayoristaId: x?.packMayoristaId ? String(x.packMayoristaId).trim() : null,
+  }))
+  .filter((x: any) => x.productId && x.cantidad > 0)
 }
 
 function buildShippingFromCustomer(customer: MetaCustomer | null | undefined): string {
