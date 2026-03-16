@@ -509,14 +509,25 @@ useEffect(() => {
             )}
 
             <div className={gridClass}>
-  {combosFiltrados.map((combo: any) => {
-   
-    const precio = Number(combo.precio ?? combo.precioActual ?? 0)
-    const precioViejo = Number(combo.precioAnterior ?? combo.precioAntes ?? 0)
-    const cuota = Math.round(precio / 3)
+ {combosFiltrados.map((combo: any) => {
+ 
+  const precio = Number(combo.precio ?? combo.precioActual ?? 0)
+  const precioViejo = Number(combo.precioAnterior ?? combo.precioAntes ?? 0)
+  const cuota = Math.round(precio / 3)
 
-    const rating = Math.max(0, Math.min(5, Number(combo.rating ?? 0)))
-    const votes = Math.max(0, Number(combo.ratingCount ?? 0))
+  const packQty =
+    Array.isArray(combo.categoriasIncluidas) && combo.categoriasIncluidas.length > 0
+      ? combo.categoriasIncluidas.reduce(
+          (acc: number, item: any) => acc + (Number(item?.cantidad) || 0),
+          0
+        )
+      : 1
+
+  const showPackPrice = packQty > 1
+  const precioPorUnidad = showPackPrice ? Math.round(precio / packQty) : null
+
+  const rating = Math.max(0, Math.min(5, Number(combo.rating ?? 0)))   
+   const votes = Math.max(0, Number(combo.ratingCount ?? 0))
     const envioGratis = combo.envioGratis === true
 
     const badgeCode = String(combo.badge ?? "NONE").trim()
@@ -596,28 +607,65 @@ const badgeText = BADGE_MAP[badgeCode] ?? ""
           ) : null}
 
           {/* Precio */}
-          <div className="mt-1.5 min-h-[74px]">
-            <div className="flex items-baseline gap-1.5 flex-wrap">
-              <span className="text-[16px] sm:text-[18px] font-extrabold">
-                $ {precio.toLocaleString("es-AR")}
-              </span>
-              <span className={isDark ? "text-[13px] text-white/70" : "text-[13px] text-zinc-500"}>
-                por
-              </span>
-            </div>
+<div className="mt-1.5 min-h-[100px]">
+  {showPackPrice ? (
+    <>
+      <div className="text-[14px] sm:text-[15px] font-bold text-red-600">
+        {packQty} pares por
+      </div>
 
-            <div className="text-[14px] sm:text-[16px] font-semibold mt-0.5">
-              Transferencia
-            </div>
+      <div className="flex items-baseline gap-1.5 flex-wrap">
+        <span className="text-[16px] sm:text-[18px] font-extrabold">
+          $ {precio.toLocaleString("es-AR")}
+        </span>
+        <span className={isDark ? "text-[13px] text-white/70" : "text-[13px] text-zinc-500"}>
+          por
+        </span>
+      </div>
 
-            {precioViejo > 0 ? (
-              <div className={["mt-1 text-[12px] line-through", isDark ? "text-white/50" : "text-zinc-400"].join(" ")}>
-                $ {precioViejo.toLocaleString("es-AR")}
-              </div>
-            ) : (
-              <div className="mt-1 text-[12px] min-h-[16px]" />
-            )}
-          </div>
+      <div className="text-[14px] sm:text-[16px] font-semibold mt-0.5">
+        Transferencia
+      </div>
+
+      {precioPorUnidad ? (
+        <div className="mt-1 text-[14px] sm:text-[15px] font-bold text-red-600">
+          $ {precioPorUnidad.toLocaleString("es-AR")} c/u
+        </div>
+      ) : (
+        <div className="mt-1 text-[12px] min-h-[16px]" />
+      )}
+
+      {precioViejo > 0 ? (
+        <div className={["mt-1 text-[12px] line-through", isDark ? "text-white/50" : "text-zinc-400"].join(" ")}>
+          $ {precioViejo.toLocaleString("es-AR")}
+        </div>
+      ) : null}
+    </>
+  ) : (
+    <>
+      <div className="flex items-baseline gap-1.5 flex-wrap">
+        <span className="text-[16px] sm:text-[18px] font-extrabold">
+          $ {precio.toLocaleString("es-AR")}
+        </span>
+        <span className={isDark ? "text-[13px] text-white/70" : "text-[13px] text-zinc-500"}>
+          por
+        </span>
+      </div>
+
+      <div className="text-[14px] sm:text-[16px] font-semibold mt-0.5">
+        Transferencia
+      </div>
+
+      {precioViejo > 0 ? (
+        <div className={["mt-1 text-[12px] line-through", isDark ? "text-white/50" : "text-zinc-400"].join(" ")}>
+          $ {precioViejo.toLocaleString("es-AR")}
+        </div>
+      ) : (
+        <div className="mt-1 text-[12px] min-h-[16px]" />
+      )}
+    </>
+  )}
+</div>
 
           {/* Cuotas */}
           <div className="mt-1.5 text-[12px] sm:text-[13px] min-h-[18px]">

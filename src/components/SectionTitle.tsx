@@ -16,13 +16,11 @@ const SECTIONS = [
     href: "/productos/mayorista",
     paths: ["/productos/mayorista"],
   },
-
   {
     label: "Zapatillas 2 x $59.999",
     href: "/productos/zapatillas",
     paths: ["/productos/zapatillas"],
   },
-
   {
     label: "Zapatillas x $35.000",
     href: "/productos/zapatillas-individuales",

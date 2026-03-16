@@ -15,9 +15,9 @@ const categorias = [
 
 // 🎯 Posiciones DESKTOP
 const POSITIONS_DESKTOP: Record<string, string> = {
-  '/blanca.webp': 'center 45%',
+  '/blanca.webp': 'center 47%',
   '/sani2.webp': '30% 40%',
-  '/sty.webp': 'center',
+  '/sty.webp': 'center 43%',
 }
 
 // 📱 Posiciones MOBILE
