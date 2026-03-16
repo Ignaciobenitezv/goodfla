@@ -1,7 +1,8 @@
 export default function PromoBar() {
   const items = [
-    "Zapatillas x $35.000",
-    "2 Zapatillas x $59.999 c/u",
+    "Zapatillas x $35.000 c/u",
+    "2   -   Zapatillas x $59.999 c/u",
+    "10   -   Zapatillas x $250.000 c/u",
     "3 cuotas sin interes",
     "Envío gratis",
   ]

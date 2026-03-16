@@ -6,30 +6,28 @@ import Image from 'next/image'
 import AnimatedFadeDown from './AnimatedFadeDown'
 
 const categorias = [
+  { titulo: 'ZAPATILLAS 10 X $250.000', imagen: '/blanca.webp', link: '/productos/mayorista' },
   { titulo: 'ZAPATILLAS 2 X $59.999', imagen: '/sani2.webp', link: '/productos/zapatillas' },
-  { titulo: 'ZAPATILLAS x $35.000', imagen: '/sani.webp', link: '/productos/zapatillas-individuales' },
+  { titulo: 'ZAPATILLAS x $35.000', imagen: '/sty.webp', link: '/productos/zapatillas-individuales' },
 
   // { titulo: 'COMBOS', imagen: '/fd.jpg', link: '/productos/combos' },
-
-  
 ]
 
 // 🎯 Posiciones DESKTOP
 const POSITIONS_DESKTOP: Record<string, string> = {
-  '/mayo.jpg': 'center 45%',
-  '/fd.jpg': 'center 35%',
-  '/zapas.jpg': 'center 50%',
+  '/blanca.webp': 'center 45%',
+  '/sani2.webp': '30% 40%',
+  '/sty.webp': 'center',
 }
 
 // 📱 Posiciones MOBILE
 const POSITIONS_MOBILE: Record<string, string> = {
-  '/mayo.jpg': '50% 15%',
-  '/fd.jpg': '60% 40%',
-  '/zapas.jpg': '50% 85%',
+  '/blanca.webp': 'center 44%',
+  '/sani2.webp': '30% 40%',
+  '/sty.webp': 'center 43%',
 }
 
 export default function CategoriasDestacadas() {
-  // Detectar mobile correctamente
   const [isMobile, setIsMobile] = useState(false)
 
   useEffect(() => {
@@ -43,12 +41,12 @@ export default function CategoriasDestacadas() {
 
   return (
     <section
-  className="
-    grid grid-cols-1
-    md:grid-cols-2
-    w-full max-w-none
-  "
->
+      className="
+        grid grid-cols-1
+        md:grid-cols-3
+        w-full max-w-none
+      "
+    >
       {categorias.map((cat, i) => (
         <div
           key={i}
@@ -58,7 +56,6 @@ export default function CategoriasDestacadas() {
             overflow-hidden
           "
         >
-          {/* Imagen */}
           <Image
             src={cat.imagen}
             alt={cat.titulo}
@@ -74,10 +71,8 @@ export default function CategoriasDestacadas() {
             draggable={false}
           />
 
-          {/* Overlay */}
           <div className="absolute inset-0 bg-black/30 group-hover:bg-black/40 transition" />
 
-          {/* Texto + botón */}
           <div className="absolute inset-0 flex flex-col items-center justify-center text-center text-white px-4 z-10">
             <AnimatedFadeDown>
               <h3 className="text-lg sm:text-xl md:text-4xl font-black tracking-widest mb-2 md:mb-3 drop-shadow-[0_2px_6px_rgba(0,0,0,0.6)]">

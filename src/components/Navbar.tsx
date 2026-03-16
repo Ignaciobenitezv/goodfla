@@ -35,10 +35,10 @@ export default function Navbar() {
   ]
 
 const productosLinks = [
-  // { label: 'Mayorista', href: '/mayorista' },
+  { label: 'Mayorista', href: '/productos/mayorista' },
 
-  { label: 'Zapatillas 2x1', href: '/productos/zapatillas' },
-  { label: 'Zapatillas', href: '/productos/zapatillas' },
+  { label: 'Zapatillas Promo x 2', href: '/productos/zapatillas' },
+  { label: 'Zapatillas ', href: '/productos/zapatillas' },
 
   // { label: 'Combos', href: '/productos/combos' },
 ]
@@ -324,9 +324,11 @@ const productosLinks = [
               </button>
               {productosOpen && (
   <ul className="ml-4 mt-1 space-y-1 text-white bg-transparent p-2">
-
-
-
+                <li>
+                    <Link href="/productos/mayorista" onClick={() => setMenuOpen(false)}>
+                      Mayorista
+                    </Link>
+                  </li>
                   
                   <li>
                     <Link href="/productos/zapatillas" onClick={() => setMenuOpen(false)}>
