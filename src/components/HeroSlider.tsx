@@ -7,21 +7,21 @@ import AnimatedButton2 from "@/components/AnimatedButton2"
 
 const SLIDES = [
   {
-    img: "/puma3.jpg",
+    img: "/puma3.JPG",
     line1: "LLEVÁ 1",
     line2: "ZAPATILLA",
     price: "$35.000",
     href: "/productos/zapatillas-individuales",
   },
   {
-    img: "/dcc.jpg",
+    img: "/dcc.JPG",
     line1: "LLEVÁ 2",
     line2: "ZAPATILLAS",
     price: "$59.999",
     href: "/productos/zapatillas",
   },
   {
-    img: "/rayo.jpg",
+    img: "/rayo.JPG",
     line1: "LLEVÁ 10",
     line2: "ZAPATILLAS",
     price: "$250.000",
@@ -30,15 +30,15 @@ const SLIDES = [
 ]
 
 const POSITIONS_DESKTOP: Record<string, string> = {
-  "/puma3.jpg": "10% 60%",
-  "/dcc.jpg": "center",
-  "/rayo.jpg": "50% 50%",
+  "/puma3.JPG": "10% 60%",
+  "/dcc.JPG": "center",
+  "/rayo.JPG": "50% 50%",
 }
 
 const POSITIONS_MOBILE: Record<string, string> = {
-  "/puma3.jpg": "20% 70%",
-  "/dcc.jpg": "center",
-  "/rayo.jpg": "50% 40%",
+  "/puma3.JPG": "20% 70%",
+  "/dcc.JPG": "center",
+  "/rayo.JPG": "50% 40%",
 }
 
 function isNear(activeIdx: number, i: number, radius = 1) {
