@@ -46,7 +46,7 @@ export default async function Zapatillas2x1ListPage() {
     rating: typeof c.rating === "number" ? c.rating : 0,
     ratingCount: typeof c.ratingCount === "number" ? c.ratingCount : 0,
     envioGratis: typeof c.envioGratis === "boolean" ? c.envioGratis : true,
-    categoriasIncluidas: Array.isArray(c.categoriasIncluidas) ? c.categoriasIncluidas : [],
+   categoriasIncluidas: Array.isArray(p.categoriasIncluidas) ? p.categoriasIncluidas : [],
   }))
 
   // IMPORTANTE: que el listado linkee al PDP de zapatillas2x1
