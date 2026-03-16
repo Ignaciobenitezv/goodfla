@@ -425,60 +425,61 @@ export default function PDPZapatillas({
           {productosZapatillas.length === 0 ? (
             <p className="p-4 text-center text-gray-600">No hay zapatillas para seleccionar.</p>
           ) : (
-           <div className="max-h-[78vh] overflow-y-auto pr-1 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 p-2">
-              {productosZapatillas.map((prod) => {
-                const sizeOptions = normalizeSizes(prod.talles)
-                const d = draft[prod._id] || {}
-                return (
-                  <div
-  key={prod._id}
-  className="rounded-xl border p-3 bg-white flex flex-row sm:flex-col gap-3 sm:gap-0"
->
-  <div className="relative w-[110px] h-[110px] sm:w-full sm:h-auto sm:aspect-square shrink-0 bg-gray-50 rounded-md overflow-hidden mb-0 sm:mb-3">
-    <Image
-      src={prod.imagen || "/placeholder.png"}
-      alt={prod.nombre}
-      fill
-      className="object-contain"
-      sizes="(max-width: 640px) 110px, 200px"
-    />
-  </div>
+           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 p-1 sm:p-2">
+  {productosZapatillas.map((prod) => {
+    const sizeOptions = normalizeSizes(prod.talles)
+    const d = draft[prod._id] || {}
 
-  <div className="flex-1 flex flex-col min-w-0">
-    <p className="font-semibold text-sm mb-2 leading-tight text-left sm:text-center sm:min-h-[40px]">
-      {prod.nombre}
-    </p>
-
-    {sizeOptions.length > 0 && (
-      <select
-        className="border rounded px-2 py-2 text-sm mb-3 w-full bg-white"
-        value={d.talle || ""}
-        onChange={(e) => setDraftValue(prod._id, "talle", e.target.value)}
+    return (
+      <div
+        key={prod._id}
+        className="rounded-xl border p-3 bg-white flex flex-row sm:flex-col gap-3 sm:gap-0"
       >
-        <option value="">Seleccionar talle</option>
-        {sizeOptions.map((t) => (
-          <option
-            key={t.label}
-            value={t.label}
-            disabled={getStockRestante(prod, t.label) <= 0}
-          >
-            {t.label} {getStockRestante(prod, t.label) <= 0 ? "(Sin stock)" : ""}
-          </option>
-        ))}
-      </select>
-    )}
+        <div className="relative w-[110px] h-[110px] sm:w-full sm:h-auto sm:aspect-[4/5] shrink-0 bg-gray-50 rounded-md overflow-hidden mb-0 sm:mb-3">
+          <Image
+            src={prod.imagen || "/placeholder.png"}
+            alt={prod.nombre}
+            fill
+            className="object-contain"
+            sizes="(max-width: 640px) 110px, 200px"
+          />
+        </div>
 
-    <button
-      className="mt-auto bg-black text-white px-3 py-2.5 rounded w-full text-sm font-medium"
-      onClick={() => handleAddToSlot(activeSlot, prod)}
-    >
-      Agregar al combo
-    </button>
-  </div>
+        <div className="flex-1 flex flex-col min-w-0">
+          <p className="font-semibold text-sm mb-2 leading-tight text-left sm:text-center sm:min-h-[40px]">
+            {prod.nombre}
+          </p>
+
+          {sizeOptions.length > 0 && (
+            <select
+              className="border rounded px-2 py-2 text-sm mb-3 w-full bg-white"
+              value={d.talle || ""}
+              onChange={(e) => setDraftValue(prod._id, "talle", e.target.value)}
+            >
+              <option value="">Seleccionar talle</option>
+              {sizeOptions.map((t) => (
+                <option
+                  key={t.label}
+                  value={t.label}
+                  disabled={getStockRestante(prod, t.label) <= 0}
+                >
+                  {t.label} {getStockRestante(prod, t.label) <= 0 ? "(Sin stock)" : ""}
+                </option>
+              ))}
+            </select>
+          )}
+
+          <button
+            className="mt-auto bg-black text-white px-3 py-2.5 rounded w-full text-sm font-medium"
+            onClick={() => handleAddToSlot(activeSlot, prod)}
+          >
+            Agregar al combo
+          </button>
+        </div>
+      </div>
+    )
+  })}
 </div>
-                )
-              })}
-            </div>
           )}
         </Modal>
       )}

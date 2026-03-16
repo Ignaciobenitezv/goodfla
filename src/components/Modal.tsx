@@ -10,25 +10,26 @@ interface ModalProps {
 export default function Modal({ children, onClose }: ModalProps) {
   return (
     <div
-      className="fixed inset-0 z-[200] bg-black/60 flex items-start justify-center p-4 sm:p-6 overflow-y-auto"
-      onClick={onClose} // clic fuera cierra
+      className="fixed inset-0 z-[200] bg-black/60 flex items-end sm:items-start justify-center pt-[88px] sm:pt-[96px] px-3 sm:px-6 pb-3 sm:pb-6 overflow-hidden"
+      onClick={onClose}
       aria-modal="true"
       role="dialog"
     >
-      {/* separa el panel del navbar */}
-      <div className="w-full max-w-6xl mt-10" onClick={(e) => e.stopPropagation()}>
-        <div className="relative bg-white rounded-2xl shadow-lg">
-          {/* Botón cerrar siempre visible */}
+      <div
+        className="w-full max-w-[540px] sm:max-w-6xl h-[calc(100vh-88px)] sm:h-[calc(100vh-120px)]"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="relative bg-white rounded-2xl shadow-xl h-full flex flex-col overflow-hidden">
           <button
             onClick={onClose}
-            className="absolute top-3 right-3 inline-flex h-9 w-9 items-center justify-center rounded-full border border-gray-200 bg-white text-xl leading-none hover:bg-gray-50"
+            className="absolute top-3 right-3 z-10 inline-flex h-9 w-9 items-center justify-center rounded-full border border-gray-200 bg-white text-xl leading-none hover:bg-gray-50"
             aria-label="Cerrar"
+            type="button"
           >
             ×
           </button>
 
-          {/* Contenido scrolleable */}
-          <div className="max-h-[calc(100vh-8rem)] overflow-y-auto p-4 sm:p-6">
+          <div className="flex-1 overflow-y-auto p-3 sm:p-6">
             {children}
           </div>
         </div>

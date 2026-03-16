@@ -428,7 +428,8 @@ const hasStockForCombo = () => {
         {/* Modal productos (sin cambios) */}
         {activeModal && (
           <Modal onClose={() => setActiveModal(null)}>
-            <div className="flex justify-center gap-2 sm:gap-4 mb-6 flex-wrap">
+           <div className="mb-4 -mx-1 px-1 overflow-x-auto">
+  <div className="flex gap-2 min-w-max sm:flex-wrap sm:min-w-0 sm:justify-center">
               {combo.categoriasIncluidas.flatMap((cat: any) =>
                 Array.from({ length: cat.cantidad }).map((_, i) => (
                   <button
@@ -444,9 +445,10 @@ const hasStockForCombo = () => {
                   </button>
                 ))
               )}
-            </div>
+              </div>
+</div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+<div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
               {productosPorCategoria[activeModal.cat]?.map((prod: any, i: number) => {
                 const sizeOptions = normalizeSizes(prod.talles)
                 const hasColors = Array.isArray(prod.colores) && prod.colores.length > 0
@@ -455,9 +457,9 @@ const hasStockForCombo = () => {
                 return (
                   <div
                     key={`${String(prod._id ?? prod.slug ?? prod.nombre)}__${activeModal.cat}__${i}`}
-                    className="flex flex-col rounded-xl border p-3 bg-white min-h-[360px]"
+                   className="rounded-xl border p-3 bg-white flex flex-row sm:flex-col gap-3 sm:gap-0"
                   >
-                    <div className="relative w-full aspect-square bg-gray-50 rounded-md overflow-hidden mb-3">
+                    <div className="relative w-[110px] h-[110px] sm:w-full sm:h-auto sm:aspect-square shrink-0 bg-gray-50 rounded-md overflow-hidden mb-0 sm:mb-3">
                       <Image
                         src={prod.imagen || "/placeholder.png"}
                         alt={prod.nombre}
@@ -467,52 +469,53 @@ const hasStockForCombo = () => {
                       />
                     </div>
 
-                    <p className="font-semibold text-sm mb-2 min-h-[20px] text-center">
-                      {prod.nombre}
-                    </p>
+                   <div className="flex-1 flex flex-col min-w-0">
+  <p className="font-semibold text-sm mb-2 leading-tight text-left sm:text-center sm:min-h-[40px]">
+    {prod.nombre}
+  </p>
 
-                    {hasColors && (
-                      <select
-                        className="border rounded p-1 text-sm mb-2 w-full"
-                        value={d.color || ""}
-                        onChange={(e) => setDraftValue(prod._id, "color", e.target.value)}
-                      >
-                        <option value="">Seleccionar color</option>
-                        {prod.colores.map((c: string) => (
-                          <option key={c} value={c}>
-                            {c}
-                          </option>
-                        ))}
-                      </select>
-                    )}
+  {hasColors && (
+    <select
+      className="border rounded px-2 py-2 text-sm mb-2 w-full bg-white"
+      value={d.color || ""}
+      onChange={(e) => setDraftValue(prod._id, "color", e.target.value)}
+    >
+      <option value="">Seleccionar color</option>
+      {prod.colores.map((c: string) => (
+        <option key={c} value={c}>
+          {c}
+        </option>
+      ))}
+    </select>
+  )}
 
-                    {sizeOptions.length > 0 && (
-                      <select
-                        className="border rounded p-1 text-sm mb-3 w-full"
-                        value={d.talle || ""}
-                        onChange={(e) => setDraftValue(prod._id, "talle", e.target.value)}
-                      >
-                        <option value="">Seleccionar talle</option>
-                        {sizeOptions.map((t) => (
-                          <option
-                            key={t.label}
-                            value={t.label}
-                            disabled={getStockRestante(prod, t.label) <= 0}
-                          >
-                            {t.label}{" "}
-                            {getStockRestante(prod, t.label) <= 0 ? "(Sin stock)" : ""}
-                          </option>
-                        ))}
-                      </select>
-                    )}
+  {sizeOptions.length > 0 && (
+    <select
+      className="border rounded px-2 py-2 text-sm mb-3 w-full bg-white"
+      value={d.talle || ""}
+      onChange={(e) => setDraftValue(prod._id, "talle", e.target.value)}
+    >
+      <option value="">Seleccionar talle</option>
+      {sizeOptions.map((t) => (
+        <option
+          key={t.label}
+          value={t.label}
+          disabled={getStockRestante(prod, t.label) <= 0}
+        >
+          {t.label} {getStockRestante(prod, t.label) <= 0 ? "(Sin stock)" : ""}
+        </option>
+      ))}
+    </select>
+  )}
 
-                    <button
-                      type="button"
-                      className="mt-auto bg-black text-white px-3 py-2 rounded w-full"
-                      onClick={() => handleAddToCombo(activeModal.cat, activeModal.index, prod)}
-                    >
-                      Agregar al combo
-                    </button>
+  <button
+    type="button"
+    className="mt-auto bg-black text-white px-3 py-2.5 rounded w-full text-sm font-medium"
+    onClick={() => handleAddToCombo(activeModal.cat, activeModal.index, prod)}
+  >
+    Agregar al combo
+  </button>
+</div>
                   </div>
                 )
               })}
