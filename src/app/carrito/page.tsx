@@ -18,7 +18,9 @@ const subtotalSinPromo = useMemo(() => {
 }, [items])
 
 const totalConPromo = quote?.computedTotal ?? 0
-
+const totalPares = useMemo(() => {
+  return items.reduce((acc, item) => acc + Number(item.cantidad || 0), 0)
+}, [items])
 const descuento = useMemo(() => {
   if (quoteLoading) return 0
   return Math.max(0, subtotalSinPromo - totalConPromo)
@@ -30,7 +32,7 @@ const descuento = useMemo(() => {
 
       {items.length === 0 ? (
         <div className="text-center py-20 text-gray-500">
-          <p className="text-lg">Tu carrito está vacío 🛒</p>
+          <p className="text-lg">Tu carrito está vacío </p>
         </div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-10">
@@ -129,9 +131,9 @@ const descuento = useMemo(() => {
             <h2 className="text-xl font-semibold mb-4">Resumen de compra</h2>
 
             <div className="flex justify-between text-sm mb-2">
-              <span>Productos</span>
-              <span>{items.length}</span>
-            </div>
+  <span>Pares</span>
+  <span>{totalPares}</span>
+</div>
 
             <div className="flex justify-between text-sm mb-4">
               <span>Envío</span>

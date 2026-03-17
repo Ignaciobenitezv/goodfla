@@ -23,6 +23,10 @@ const subtotalSinPromo = useMemo(() => {
   )
 }, [items])
 
+const totalPares = useMemo(() => {
+  return items.reduce((acc, item) => acc + Number(item.cantidad || 0), 0)
+}, [items])
+
 const descuento = useMemo(() => {
   if (quoteLoading) return 0
   return Math.max(0, subtotalSinPromo - total)
@@ -57,7 +61,7 @@ const descuento = useMemo(() => {
         {/* Productos */}
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
           {items.length === 0 ? (
-            <p className="text-center text-gray-500">Tu carrito está vacío 🛒</p>
+            <p className="text-center text-gray-500">Tu carrito está vacío </p>
           ) : (
             items.map((item) => (
               <div
@@ -82,7 +86,7 @@ const descuento = useMemo(() => {
   Precio de lista: <span className="font-semibold">${Number(item.precio).toLocaleString("es-AR")}</span>
 </p>
 <p className="text-xs text-green-700">
-  Promociones aplicadas en el total ✅
+  Promociones aplicadas en el total 
 </p>
 
 
@@ -123,16 +127,20 @@ const descuento = useMemo(() => {
         </div>
 
         {/* Footer */}
-        {items.length > 0 && (
-          <div className="border-t p-4 space-y-4">
-            {/* Subtotal */}
-            {/* Subtotal sin promo */}
-<div className="flex justify-between text-sm">
-  <span className="text-gray-600">Subtotal</span>
-  <span className="text-gray-600">
-    ${subtotalSinPromo.toLocaleString("es-AR")}
-  </span>
-</div>
+{items.length > 0 && (
+  <div className="border-t p-4 space-y-4">
+    <div className="flex justify-between text-sm">
+      <span className="text-gray-600">Pares</span>
+      <span className="text-gray-600 font-medium">{totalPares}</span>
+    </div>
+
+    {/* Subtotal sin promo */}
+    <div className="flex justify-between text-sm">
+      <span className="text-gray-600">Subtotal</span>
+      <span className="text-gray-600">
+        ${subtotalSinPromo.toLocaleString("es-AR")}
+      </span>
+    </div>
 
 {/* Descuento */}
 {!quoteLoading && descuento > 0 && (

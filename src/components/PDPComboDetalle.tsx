@@ -110,8 +110,14 @@ const hasStockForCombo = () => {
   return true
 }
 
+  const comboSlots = combo.categoriasIncluidas.flatMap((cat: any) =>
+    Array.from({ length: cat.cantidad }).map((_, i) => ({
+      cat: cat.categoria.slug,
+      index: i,
+    }))
+  )
 
-  const handleAddToCombo = (categoriaSlug: string, index: number, prod: any) => {
+   const handleAddToCombo = (categoriaSlug: string, index: number, prod: any) => {
     const d = draft[prod._id] || {}
     const sizeOptions = normalizeSizes(prod.talles)
 
@@ -119,20 +125,47 @@ const hasStockForCombo = () => {
       alert("Seleccioná un talle antes de agregar.")
       return
     }
+
     if (Array.isArray(prod.colores) && prod.colores.length && !d.color) {
       alert("Seleccioná un color antes de agregar.")
       return
     }
 
     if (d.talle && getStockRestante(prod, d.talle) <= 0) {
-  alert("❌ No hay stock disponible para este talle.")
-  return
-}
-
+      alert("❌ No hay stock disponible para este talle.")
+      return
+    }
 
     const nuevos = [...(selected[categoriaSlug] || [])]
-    nuevos[index] = { ...prod, talle: d.talle || null, color: d.color || null }
-    setSelected({ ...selected, [categoriaSlug]: nuevos })
+    nuevos[index] = {
+      ...prod,
+      talle: d.talle || null,
+      color: d.color || null,
+    }
+
+    const nextSelected = {
+      ...selected,
+      [categoriaSlug]: nuevos,
+    }
+
+    setSelected(nextSelected)
+
+    const currentPos = comboSlots.findIndex(
+      (slot: any) => slot.cat === categoriaSlug && slot.index === index
+    )
+
+    if (currentPos !== -1) {
+      for (let i = currentPos + 1; i < comboSlots.length; i++) {
+        const slot = comboSlots[i]
+        const yaSeleccionado = nextSelected[slot.cat]?.[slot.index]
+
+        if (!yaSeleccionado) {
+          setActiveModal({ cat: slot.cat, index: slot.index })
+          return
+        }
+      }
+    }
+
     setActiveModal(null)
   }
 
@@ -425,30 +458,50 @@ const hasStockForCombo = () => {
           </div>
         </div>
 
-        {/* Modal productos (sin cambios) */}
+        
+                {/* Modal productos (sin cambios) */}
         {activeModal && (
           <Modal onClose={() => setActiveModal(null)}>
-           <div className="mb-4 -mx-1 px-1 overflow-x-auto">
-  <div className="flex gap-2 min-w-max sm:flex-wrap sm:min-w-0 sm:justify-center">
-              {combo.categoriasIncluidas.flatMap((cat: any) =>
-                Array.from({ length: cat.cantidad }).map((_, i) => (
-                  <button
-                    key={`${String(cat?.categoria?.slug ?? "sin-cat")}__tab__${i}`}
-                    className={`px-3 py-2 text-sm rounded-full border ${
-                      activeModal.cat === cat.categoria.slug && activeModal.index === i
-                        ? "bg-black text-white"
-                        : "bg-white text-black"
-                    }`}
-                    onClick={() => setActiveModal({ cat: cat.categoria.slug, index: i })}
-                  >
-                    {cat.categoria.titulo} {i + 1}
-                  </button>
-                ))
-              )}
+           <div className="sticky top-0 z-20 bg-white pb-2 mb-3 border-b">
+              <div className="pt-1 text-center">
+                <p className="text-[11px] sm:text-xs text-gray-500 mb-0.5">
+                  Estás seleccionando
+                </p>
+                <p className="text-sm sm:text-base font-bold">
+                  {
+                    combo.categoriasIncluidas.find(
+                      (cat: any) => cat.categoria.slug === activeModal.cat
+                    )?.categoria.titulo
+                  }{" "}
+                  {activeModal.index + 1}
+                </p>
               </div>
-</div>
 
-<div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+           <div className="mt-2 -mx-1 px-1 overflow-x-auto">   
+                <div className="flex gap-2 min-w-max sm:flex-wrap sm:min-w-0 sm:justify-center">
+                  {combo.categoriasIncluidas.flatMap((cat: any) =>
+                    Array.from({ length: cat.cantidad }).map((_, i) => (
+                      <button
+                        key={`${String(cat?.categoria?.slug ?? "sin-cat")}__tab__${i}`}
+                        className={`px-2.5 py-1.5 text-xs rounded-full border transition ${
+                          activeModal.cat === cat.categoria.slug && activeModal.index === i
+                            ? "bg-black text-white border-black"
+                            : selected[cat.categoria.slug]?.[i]
+                            ? "bg-green-100 text-green-700 border-green-300"
+                            : "bg-white text-black border-gray-300"
+                        }`}
+                        onClick={() => setActiveModal({ cat: cat.categoria.slug, index: i })}
+                      >
+                        {selected[cat.categoria.slug]?.[i] ? "✓ " : ""}
+                        {cat.categoria.titulo} {i + 1}
+                      </button>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
               {productosPorCategoria[activeModal.cat]?.map((prod: any, i: number) => {
                 const sizeOptions = normalizeSizes(prod.talles)
                 const hasColors = Array.isArray(prod.colores) && prod.colores.length > 0
