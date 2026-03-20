@@ -143,6 +143,20 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: "empty_cart" }, { status: 400 })
     }
 
+    const hasMayorista = compactCart.some((item) => !!item.packMayoristaId)
+
+if (hasMayorista) {
+  return NextResponse.json(
+    {
+      ok: false,
+      error: "mayorista_only_transfer",
+      message:
+        "Tu carrito contiene productos mayoristas. Por eso, esta compra solo puede abonarse por transferencia bancaria.",
+    },
+    { status: 400 }
+  )
+}
+
     // ==========================
     // ✅ Clasificar líneas por tipo real en Sanity
     // (esto habilita carrito mixto: mayorista + productos)

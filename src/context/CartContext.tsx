@@ -27,7 +27,7 @@ type CartContextType = {
   items: CartItem[]
   comboId: string | null
   quote: Quote | null
-
+  hasMayorista: boolean
   // ✅ setear/limpiar combo activo (para cobrar precio de combo)
   setActiveCombo: (id: string | null) => void
 
@@ -46,7 +46,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<CartItem[]>([])
   const [comboId, setComboId] = useState<string | null>(null)
 const [quote, setQuote] = useState<Quote | null>(null)
-
+const hasMayorista = items.some((item) => !!item.packMayoristaId)
   // cargar desde localStorage
   useEffect(() => {
     try {
@@ -247,6 +247,10 @@ const [quote, setQuote] = useState<Quote | null>(null)
   // checkout
   const checkout = async () => {
     try {
+       if (hasMayorista) {
+      alert("Tu carrito contiene productos mayoristas. Por eso, esta compra solo puede abonarse por transferencia bancaria.")
+      return
+    }
       // payload stock (tuyo)
       const lastOrderPayload = items.map((i) => ({
         productId: i.productId,
@@ -288,6 +292,7 @@ const [quote, setQuote] = useState<Quote | null>(null)
         items,
         comboId,
         quote,
+        hasMayorista,
         setActiveCombo,
         addItem,
         removeItem,

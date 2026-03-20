@@ -34,6 +34,7 @@ export default async function ZapatillasIndividualesPage() {
     <CombosClient
       combos={productosAdaptados}
       basePath="/productos/zapatillas-individuales"
+      mode="individual"
     />
   )
 }

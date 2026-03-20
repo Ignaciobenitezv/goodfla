@@ -23,5 +23,5 @@ export default async function MayoristaListPage() {
     categoriasIncluidas: Array.isArray(p.categoriasIncluidas) ? p.categoriasIncluidas : [],
   }))
 
-  return <CombosClient combos={combosAdaptados} basePath="/mayorista" />
+  return <CombosClient combos={combosAdaptados} basePath="/mayorista" mode="mayorista" />
 }

@@ -38,7 +38,7 @@ const productosLinks = [
   { label: 'Mayorista', href: '/productos/mayorista' },
 
   { label: 'Zapatillas Promo x 2', href: '/productos/zapatillas' },
-  { label: 'Zapatillas ', href: '/productos/zapatillas' },
+  { label: 'Zapatillas ', href: '/productos/zapatillas-individuales' },
 
   // { label: 'Combos', href: '/productos/combos' },
 ]

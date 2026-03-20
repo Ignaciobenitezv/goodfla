@@ -40,6 +40,19 @@ export default function PDPZapatillaIndividualDetalle({
   const { showAddedDialog } = useUi();
 
   const precioFinal = Number(producto.precioActual ?? producto.precio ?? 0);
+    const precioHabitual = Number(producto.precioAntes ?? 0);
+  const precioTransferencia = Math.round(precioFinal * 0.8);
+
+  const cuotaTexto = (precioFinal / 3).toLocaleString("es-AR", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+
+  const precioFinalTexto = precioFinal.toLocaleString("es-AR");
+  const precioHabitualTexto = precioHabitual.toLocaleString("es-AR");
+  const precioTransferenciaTexto = precioTransferencia.toLocaleString("es-AR");
+  const ahorroTransferencia = Math.max(0, precioFinal - precioTransferencia);
+  const ahorroTransferenciaTexto = ahorroTransferencia.toLocaleString("es-AR");
   const talles = useMemo(() => normalizeSizes(producto.talles), [producto.talles]);
   const tieneColores = Array.isArray(producto.colores) && producto.colores.length > 0;
 
@@ -140,16 +153,37 @@ export default function PDPZapatillaIndividualDetalle({
           <div>
             <h1 className="text-4xl font-semibold">{producto.nombre}</h1>
 
-            <div className="mt-2 flex items-baseline gap-3">
-              {typeof producto.precioAntes === "number" && (
-                <span className="text-2xl text-gray-500 line-through">
-                  ${producto.precioAntes.toLocaleString("es-AR")}
-                </span>
-              )}
-              <p className="text-3xl font-bold">
-                ${precioFinal.toLocaleString("es-AR")}
-              </p>
-            </div>
+            <div className="mt-4 mb-2 space-y-3">
+  {precioHabitual > 0 && (
+    <p className="text-sm text-gray-400 line-through">
+      Antes ${precioHabitualTexto}
+    </p>
+  )}
+
+  <div className="flex items-center gap-3">
+    <p className="text-3xl md:text-4xl font-extrabold text-black">
+      ${precioFinalTexto}
+    </p>
+
+    <span className="bg-red-600 text-white text-xs md:text-sm px-2 py-1 rounded font-semibold">
+      OFERTA
+    </span>
+  </div>
+
+  <p className="text-sm text-gray-700">
+    o 3x de <span className="font-semibold">${cuotaTexto}</span> sin interés
+  </p>
+
+  <div className="bg-green-50 border border-green-200 rounded-lg px-4 py-3">
+    <p className="text-green-800 font-bold text-base md:text-lg">
+      ${precioTransferenciaTexto} CON TRANSFERENCIA + ENVÍO GRATIS
+    </p>
+
+    <p className="text-xs text-green-700 mt-1">
+      Ahorrás ${ahorroTransferenciaTexto} pagando en efectivo / transferencia
+    </p>
+  </div>
+</div>
 
             <div className="mt-3">
               <Link

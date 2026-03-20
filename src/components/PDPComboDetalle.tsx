@@ -179,7 +179,25 @@ const hasStockForCombo = () => {
   // Todos con stock
   const allWithStock = allSelected ? hasStockForCombo() : false
 
+    const precioOferta = Number(combo?.precio ?? 0)
+  const precioHabitual = Number(combo?.precioAnterior ?? 0)
 
+  const esMayorista = mode === "mayorista"
+  const aplicaTransferenciaPromo = mode === "combo"
+
+  const precioTransferencia = aplicaTransferenciaPromo
+    ? Math.round(precioOferta * 0.8)
+    : precioOferta
+
+  const cuotaExacta = precioOferta / 3
+  const cuotaTexto = cuotaExacta.toLocaleString("es-AR", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })
+
+  const precioOfertaTexto = precioOferta.toLocaleString("es-AR")
+  const precioHabitualTexto = precioHabitual.toLocaleString("es-AR")
+  const precioTransferenciaTexto = precioTransferencia.toLocaleString("es-AR")
   // ================= RENDER =================
   return (
     <>
@@ -197,17 +215,48 @@ const hasStockForCombo = () => {
         <div>
           <h1 className="text-2xl md:text-3xl font-bold mb-2">{combo.nombre}</h1>
 
-          <div className="flex items-center gap-3 mb-4">
-            {combo.precioAnterior && (
-              <p className="text-gray-400 line-through">${combo.precioAnterior}</p>
-            )}
-            <p className="text-2xl text-red-600 font-bold">${combo.precio}</p>
-            {combo.precioAnterior && (
-              <span className="bg-red-600 text-white text-sm px-2 py-1 rounded">
-                AHORRÁS ${combo.precioAnterior - combo.precio}
-              </span>
-            )}
-          </div>
+          <div className="mb-6 space-y-3">
+
+  {/* Precio habitual */}
+  {precioHabitual > 0 && (
+    <p className="text-sm text-gray-400 line-through">
+      Antes ${precioHabitualTexto}
+    </p>
+  )}
+
+  {/* Precio oferta (protagonista) */}
+  <div className="flex items-center gap-3">
+    <p className="text-3xl md:text-4xl font-extrabold text-black">
+      ${precioOfertaTexto}
+    </p>
+
+    <span className="bg-red-600 text-white text-xs md:text-sm px-2 py-1 rounded font-semibold">
+      OFERTA
+    </span>
+  </div>
+
+  {/* Cuotas */}
+  {!esMayorista && (
+    <p className="text-sm text-gray-700">
+      o 3x de <span className="font-semibold">${cuotaTexto}</span> sin interés
+    </p>
+  )}
+
+  {/* Transferencia (HERO SECONDARY) */}
+  <div className="bg-green-50 border border-green-200 rounded-lg px-4 py-3">
+    <p className="text-green-800 font-bold text-base md:text-lg">
+      ${precioTransferenciaTexto}{" "}
+      {esMayorista ? "SOLO TRANSFERENCIA" : "CON TRANSFERENCIA + ENVIO GRATIS"}
+    </p>
+
+    {!esMayorista && (
+      <p className="text-xs text-green-700 mt-1">
+         Ahorrás pagando en efectivo / transferencia
+      </p>
+    )}
+  </div>
+
+</div>
 
           {/* 👉 Guía de talles como Link */}
           <div className="mb-6">

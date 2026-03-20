@@ -50,5 +50,5 @@ export default async function Zapatillas2x1ListPage() {
   }))
 
   // IMPORTANTE: que el listado linkee al PDP de zapatillas2x1
-  return <CombosClient combos={combosAdaptados} basePath="/zapatillas2x1" />
+  return <CombosClient combos={combosAdaptados} basePath="/zapatillas2x1" mode="combo" />
 }

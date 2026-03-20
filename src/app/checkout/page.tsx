@@ -24,7 +24,7 @@ type Quote = {
 }
 
 export default function CheckoutPage() {
-  const { items, comboId } = useCart()
+  const { items, comboId, hasMayorista } = useCart()
   const router = useRouter()
   const mpRedirectLock = useRef(false)
 
@@ -69,9 +69,9 @@ export default function CheckoutPage() {
       "",
       ...lines,
       "",
-      `Subtotal (con promo): $${subtotalConPromo.toLocaleString("es-AR")}`,
-`Descuento promo: -$${descuentoPromo.toLocaleString("es-AR")}`,
-`Total: $${total.toLocaleString("es-AR")}`,
+      `Subtotal (precio lista): $${subtotalSinPromo.toLocaleString("es-AR")}`,
+`Descuento aplicado: -$${descuentoPromo.toLocaleString("es-AR")}`,
+`Total final: $${total.toLocaleString("es-AR")}`,
 
       `Costo de envío: ${envioCostoTxt}`,
       "",
@@ -222,6 +222,10 @@ const descuentoPromo = useMemo(() => {
   // 🔹 MercadoPago redirect (preferencia)
   // 🔹 MercadoPago redirect (preferencia)
   const handleMercadoPago = async () => {
+    if (hasMayorista) {
+  alert("Tu carrito contiene productos mayoristas. Por eso, esta compra solo puede abonarse por transferencia bancaria.")
+  return
+}
     if (mpRedirectLock.current) return
     mpRedirectLock.current = true
     try {
@@ -283,10 +287,13 @@ const descuentoPromo = useMemo(() => {
       }
 
       if (!res.ok) {
-        alert("No se pudo generar el link de pago. Intentá de nuevo.")
-        mpRedirectLock.current = false
-        return
-      }
+  alert(
+    data?.message ||
+    "No se pudo generar el link de pago. Intentá de nuevo."
+  )
+  mpRedirectLock.current = false
+  return
+}
 
       if (data?.init_point) {
         window.location.href = data.init_point
@@ -718,6 +725,14 @@ useEffect(() => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
 }, [items, envio, cp, effectiveComboId])
 
+  useEffect(() => {
+  if (hasMayorista && (payMethod === "card_inline" || payMethod === "mp_redirect")) {
+    setPayMethod(null)
+    setServerTotals(null)
+    setCardMsg("")
+  }
+}, [hasMayorista, payMethod])
+
   return (
     <main className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-8 p-6 mt-20">
       {/* --------- FORM PRINCIPAL --------- */}
@@ -829,76 +844,104 @@ useEffect(() => {
         )}
 
         {/* Paso 3 */}
-        {step === "pago" && (
-          <section>
-            <h2 className="text-lg font-bold mb-4 uppercase">Finalizar compra</h2>
+{step === "pago" && (
+  <section>
+    <h2 className="text-lg font-bold mb-4 uppercase">Finalizar compra</h2>
 
-            
-            <h3 className="font-semibold mb-3">Medios de pago</h3>
+    <h3 className="font-semibold mb-3">Medios de pago</h3>
 
-            <div className="space-y-3">
-              {/* Tarjeta inline */}
-              {/* Transferencia / Efectivo -> WhatsApp */}
-              <label
-                onClick={() => {
-                  setPayMethod("transfer") // o "cash" si querés distinguir
-                  orderIdRef.current = "" // opcional
-                  handleTransferOrCashWhatsApp()
-                }}
-                className={`flex items-center justify-between border rounded p-4 cursor-pointer transition ${payMethod === "transfer"
-                  ? "border-amber-600 bg-amber-50"
-                  : "hover:border-black"
-                  }`}
-              >
-                <div>
-                  <p className="font-medium">Efectivo / Transferencia</p>
-                  <p className="text-sm text-gray-500">
-                    Coordinamos por WhatsApp y te pasamos los datos
-                  </p>
-                </div>
-                <span className="text-lg">💸</span>
-              </label>
+    {hasMayorista && (
+      <div className="mb-4 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+        Tu carrito contiene productos mayoristas. Por eso, esta compra solo puede abonarse por transferencia bancaria.
+      </div>
+    )}
 
-              <label
-                onClick={() => {
-                  setPayMethod("card_inline")
-                  orderIdRef.current = ""
-                  setServerTotals(null)
-                  fetchServerTotals() // ✅ solo acá
-                }}
+    <div className="space-y-3">
+      <label
+        onClick={() => {
+          setPayMethod("transfer")
+          orderIdRef.current = ""
+          handleTransferOrCashWhatsApp()
+        }}
+        className={`flex items-center justify-between border rounded p-4 cursor-pointer transition ${
+          payMethod === "transfer"
+            ? "border-amber-600 bg-amber-50"
+            : "hover:border-black"
+        }`}
+      >
+        <div>
+  <p className="font-medium">Efectivo / Transferencia</p>
 
-                className={`flex items-center justify-between border rounded p-4 cursor-pointer transition ${payMethod === "card_inline" ? "border-blue-600 bg-blue-50" : "hover:border-black"
-                  }`}
-              >
-                <div>
-                  <p className="font-medium">Tarjeta (pagar acá mismo)</p>
-                  <p className="text-sm text-gray-500">Visa / Mastercard / débito (si aplica)</p>
-                </div>
-                <span className="text-lg">💳</span>
-              </label>
+  {!hasMayorista ? (
+    <p className="mt-1 inline-flex rounded-full bg-green-100 px-3 py-1 text-sm font-extrabold text-green-800 border border-green-200">
+      💸 Aprovechá el 20% OFF pagando por este medio
+    </p>
+  ) : (
+    <p className="mt-1 inline-flex rounded-full bg-amber-100 px-3 py-1 text-sm font-bold text-amber-800 border border-amber-200">
+      Medio de pago habilitado para esta compra
+    </p>
+  )}
 
-              {payMethod === "card_inline" && (
-                <div className="border rounded-2xl p-4 mt-2">
-                  <div id="card-payment-brick" />
-                  {cardLoading && <p className="text-sm text-gray-500 mt-2">Procesando…</p>}
-                  {!!cardMsg && <p className="text-sm mt-2 text-red-600">{cardMsg}</p>}
-                </div>
-              )}
+  <p className="text-xs text-gray-500 mt-2">
+    Coordinamos por WhatsApp y te pasamos los datos
+  </p>
+</div>
+        <span className="text-lg">💸</span>
+      </label>
 
-              {/* MP redirect */}
-              <label
-                onClick={handleMercadoPago}
-                className="flex items-center justify-between border rounded p-4 cursor-pointer hover:border-black transition bg-blue-600 text-white hover:bg-blue-700"
-              >
-                <div>
-                  <p className="font-medium">MercadoPago</p>
-                  <p className="text-sm">Hasta 3 cuotas sin interés</p>
-                </div>
-                <span className="text-lg">💳</span>
-              </label>
+      {!hasMayorista && (
+        <>
+          <label
+            onClick={() => {
+              setPayMethod("card_inline")
+              orderIdRef.current = ""
+              setServerTotals(null)
+              fetchServerTotals()
+            }}
+            className={`flex items-center justify-between border rounded p-4 cursor-pointer transition ${
+              payMethod === "card_inline"
+                ? "border-blue-600 bg-blue-50"
+                : "hover:border-black"
+            }`}
+          >
+            <div>
+              <p className="font-medium">Tarjeta</p>
+              <p className="text-sm text-gray-500">
+                Visa / Mastercard / débito 
+              </p>
             </div>
-          </section>
-        )}
+            <span className="text-lg">💳</span>
+          </label>
+
+          {payMethod === "card_inline" && (
+            <div className="border rounded-2xl p-4 mt-2">
+              <div id="card-payment-brick" />
+              {cardLoading && (
+                <p className="text-sm text-gray-500 mt-2">Procesando…</p>
+              )}
+              {!!cardMsg && (
+                <p className="text-sm mt-2 text-red-600">{cardMsg}</p>
+              )}
+            </div>
+          )}
+        </>
+      )}
+
+      {!hasMayorista && (
+        <label
+          onClick={handleMercadoPago}
+          className="flex items-center justify-between border rounded p-4 cursor-pointer hover:border-black transition bg-blue-600 text-white hover:bg-blue-700"
+        >
+          <div>
+            <p className="font-medium">MercadoPago</p>
+            <p className="text-sm">Hasta 3 cuotas sin interés</p>
+          </div>
+          <span className="text-lg">💳</span>
+        </label>
+      )}
+    </div>
+  </section>
+)}
       </div>
 
       {/* --------- RESUMEN --------- */}
@@ -918,7 +961,7 @@ useEffect(() => {
   × {Number(item.cantidad)}
 </p>
 <p className="text-xs text-green-700">
-  Promo 2x1 aplicada en el total ✅
+  Promociones aplicadas en el total 
 </p>
 
               </div>

@@ -12,6 +12,8 @@ const SLIDES = [
     line2: "ZAPATILLA",
     price: "$35.000",
     href: "/productos/zapatillas-individuales",
+    benefit1: "3 cuotas sin interés",
+    benefit2: "Envío gratis",
   },
   {
     img: "/dcc.JPG",
@@ -19,6 +21,8 @@ const SLIDES = [
     line2: "ZAPATILLAS",
     price: "$59.999",
     href: "/productos/zapatillas",
+    benefit1: "3 cuotas sin interés",
+    benefit2: "Envío gratis",
   },
   {
     img: "/rayo.JPG",
@@ -26,6 +30,8 @@ const SLIDES = [
     line2: "ZAPATILLAS",
     price: "$250.000",
     href: "/productos/mayorista",
+    benefit1: "Compra mayorista",
+    benefit2: "Pagando con transferencia",
   },
 ]
 
@@ -177,13 +183,13 @@ export default function HeroSlider() {
               </h1>
 
               <div className="hero-meta mt-6 flex flex-col gap-2 sm:flex-row sm:gap-6 text-white">
-                <div className="text-base sm:text-lg md:text-xl font-semibold">
-                  3 cuotas sin interés
-                </div>
-                <div className="text-base sm:text-lg md:text-xl font-semibold text-white/90">
-                  Envío gratis
-                </div>
-              </div>
+  <div className="text-base sm:text-lg md:text-xl font-semibold">
+    {currentSlide.benefit1}
+  </div>
+  <div className="text-base sm:text-lg md:text-xl font-semibold text-white/90">
+    {currentSlide.benefit2}
+  </div>
+</div>
 
               <div className="hero-meta mt-8">
                 <Link href={currentSlide.href}>

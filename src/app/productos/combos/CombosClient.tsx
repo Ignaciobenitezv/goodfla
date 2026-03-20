@@ -20,9 +20,11 @@ const BADGE_MAP: Record<string, string> = {
 export default function CombosClient({
   combos,
   basePath = "/combo",
+  mode = "combo",
 }: {
   combos: any[]
   basePath?: string
+  mode?: "combo" | "individual" | "mayorista"
 }) {
   const safeCombos = Array.isArray(combos) ? combos : []
 
@@ -511,10 +513,23 @@ useEffect(() => {
             <div className={gridClass}>
  {combosFiltrados.map((combo: any) => {
  
-  const precio = Number(combo.precio ?? combo.precioActual ?? 0)
+    const precio = Number(combo.precio ?? combo.precioActual ?? 0)
   const precioViejo = Number(combo.precioAnterior ?? combo.precioAntes ?? 0)
-  const cuota = Math.round(precio / 3)
 
+  const cuotaTexto = (precio / 3).toLocaleString("es-AR", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })
+
+ const precioTransferencia = mode === "mayorista" 
+  ? precio 
+  : Math.round(precio * 0.8)
+  const precioTransferenciaTexto = precioTransferencia.toLocaleString("es-AR")
+  const precioTexto = precio.toLocaleString("es-AR")
+  const precioViejoTexto = precioViejo.toLocaleString("es-AR")
+
+  const ahorroTransferencia = Math.max(0, precio - precioTransferencia)
+  const ahorroTransferenciaTexto = ahorroTransferencia.toLocaleString("es-AR")
   const packQty =
     Array.isArray(combo.categoriasIncluidas) && combo.categoriasIncluidas.length > 0
       ? combo.categoriasIncluidas.reduce(
@@ -606,71 +621,56 @@ const badgeText = BADGE_MAP[badgeCode] ?? ""
             </div>
           ) : null}
 
-          {/* Precio */}
-<div className="mt-1.5 min-h-[100px]">
-  {showPackPrice ? (
-    <>
-      <div className="text-[14px] sm:text-[15px] font-bold text-red-600">
-        {packQty} pares por
-      </div>
+         {/* Precio */}
+<div className="mt-2 min-h-[150px] space-y-2">
+  {showPackPrice && (
+  <div className="inline-flex items-center rounded-md bg-red-50 border border-red-200 px-2.5 py-1">
+    <p className="text-[16px] sm:text-[24px] font-extrabold text-red-600 leading-none">
+      {packQty} pares por
+    </p>
+  </div>
+)}
 
-      <div className="flex items-baseline gap-1.5 flex-wrap">
-        <span className="text-[16px] sm:text-[18px] font-extrabold">
-          $ {precio.toLocaleString("es-AR")}
-        </span>
-        <span className={isDark ? "text-[13px] text-white/70" : "text-[13px] text-zinc-500"}>
-          por
-        </span>
-      </div>
-
-      <div className="text-[14px] sm:text-[16px] font-semibold mt-0.5">
-        Transferencia
-      </div>
-
-      {precioPorUnidad ? (
-        <div className="mt-1 text-[14px] sm:text-[15px] font-bold text-red-600">
-          $ {precioPorUnidad.toLocaleString("es-AR")} c/u
-        </div>
-      ) : (
-        <div className="mt-1 text-[12px] min-h-[16px]" />
-      )}
-
-      {precioViejo > 0 ? (
-        <div className={["mt-1 text-[12px] line-through", isDark ? "text-white/50" : "text-zinc-400"].join(" ")}>
-          $ {precioViejo.toLocaleString("es-AR")}
-        </div>
-      ) : null}
-    </>
-  ) : (
-    <>
-      <div className="flex items-baseline gap-1.5 flex-wrap">
-        <span className="text-[16px] sm:text-[18px] font-extrabold">
-          $ {precio.toLocaleString("es-AR")}
-        </span>
-        <span className={isDark ? "text-[13px] text-white/70" : "text-[13px] text-zinc-500"}>
-          por
-        </span>
-      </div>
-
-      <div className="text-[14px] sm:text-[16px] font-semibold mt-0.5">
-        Transferencia
-      </div>
-
-      {precioViejo > 0 ? (
-        <div className={["mt-1 text-[12px] line-through", isDark ? "text-white/50" : "text-zinc-400"].join(" ")}>
-          $ {precioViejo.toLocaleString("es-AR")}
-        </div>
-      ) : (
-        <div className="mt-1 text-[12px] min-h-[16px]" />
-      )}
-    </>
+  {precioViejo > 0 && (
+    <p className="text-[12px] text-zinc-400 line-through">
+      ${precioViejoTexto} ARS
+    </p>
   )}
-</div>
 
-          {/* Cuotas */}
-          <div className="mt-1.5 text-[12px] sm:text-[13px] min-h-[18px]">
-            3 x $ {cuota.toLocaleString("es-AR")} sin interés
-          </div>
+  <div className="flex items-center gap-2 flex-wrap">
+    <p className="text-[22px] sm:text-[24px] font-extrabold leading-none text-black">
+      ${precioTexto}
+    </p>
+
+    <span className="bg-red-600 text-white text-[10px] sm:text-[11px] px-2 py-1 rounded font-semibold">
+      OFERTA
+    </span>
+  </div>
+
+  <p className="text-[12px] sm:text-[13px] text-zinc-700">
+    3x de <span className="font-semibold">${cuotaTexto}</span> sin interés
+  </p>
+
+  <div className="rounded-lg border border-green-200 bg-green-50 px-3 py-2">
+    <p className="text-[16px] sm:text-[18px] leading-tight">
+  <span className="font-extrabold text-green-800">
+    ${precioTransferenciaTexto}
+  </span>{" "}
+  <span className="font-semibold text-green-700">
+    CON TRANSFERENCIA{" "}
+{mode !== "mayorista" && envioGratis ? "+ Envío gratis" : ""}
+  </span>
+</p>
+
+    {mode !== "mayorista" && (
+  <p className="text-[11px] text-green-700 mt-1">
+    Ahorrás ${ahorroTransferenciaTexto} pagando en efectivo / transferencia
+  </p>
+)}
+  </div>
+
+  <div className="min-h-[18px]" />
+</div>
 
           {/* Botón */}
           <div className="mt-auto pt-3">

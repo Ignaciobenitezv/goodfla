@@ -314,7 +314,19 @@ export async function POST(req: Request) {
     if (!cart.length) {
       return NextResponse.json({ ok: false, error: "invalid_cart", message: "Items inválidos (sin productId)." }, { status: 400 })
     }
+    const hasMayorista = cart.some((item) => !!item.packMayoristaId)
 
+if (hasMayorista && !isQuoteOnly) {
+  return NextResponse.json(
+    {
+      ok: false,
+      error: "mayorista_only_transfer",
+      message:
+        "Tu carrito contiene productos mayoristas. Por eso, esta compra solo puede abonarse por transferencia bancaria.",
+    },
+    { status: 400 }
+  )
+}
     const ids = cart.map((x) => x.productId)
 
     // ==========================
