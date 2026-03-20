@@ -39,76 +39,188 @@ export default function CheckoutPage() {
 
   // ================= WHATSAPP (TRANSFERENCIA / EFECTIVO) =================
   const WHATSAPP_NUMBER = "5493624934353" // 
+const sanitizeWhatsappText = (value: string) => {
+  return String(value ?? "")
+    .replace(/[*_~`]/g, "")
+    .replace(/\r/g, "")
+    .replace(/[^\S\n]+/g, " ")
+    .trim()
+}
 
-  const buildWhatsappOrderText = () => {
+const formatARS = (value: number) => {
+  const rounded = Math.round(Number(value || 0))
+  return rounded.toLocaleString("es-AR")
+}
+const buildWhatsappOrderText = ({
+  subtotalPromo,
+  totalFinal,
+}: {
+  subtotalPromo: number
+  totalFinal: number
+}) => {
+  const lines = (items || []).map((it: any) => {
+    const nombreBase = String(it?.nombre ?? "Producto")
+      .replace(/\s*\(Talle [^)]+\)\s*/gi, "")
+      .replace(/\s+/g, " ")
+      .trim()
+
+    const nombre = sanitizeWhatsappText(nombreBase)
+    const talle = it?.talle ? ` (Talle ${sanitizeWhatsappText(String(it.talle))})` : ""
+    const qty = Number(it?.cantidad ?? 1)
+    const unit = Number(it?.precio ?? 0)
+    const lineTotal = unit * qty
+
+    return `- ${nombre}${talle} x${qty} - $${formatARS(lineTotal)}`
+  })
+
+  const entregaTxt =
+    envio === "domicilio"
+      ? `Envio a domicilio (CP: ${cp || "-"})`
+      : envio === "sucursal"
+      ? "Retiro por sucursal"
+      : "Entrega: -"
+
+  const envioCostoTxt =
+    envio === "sucursal"
+      ? "Gratis"
+      : quote
+      ? quote.price === 0
+        ? "Gratis"
+        : `$${formatARS(quote.price)}`
+      : "-"
+
+  const descuentoAplicado = Math.max(0, subtotalSinPromo - subtotalPromo)
+
+  const direccion =
+    envio === "domicilio"
+      ? `Direccion: ${sanitizeWhatsappText(
+          `${destinatario.calle || "-"} ${destinatario.numero || ""}, ${
+            destinatario.barrio ? destinatario.barrio + ", " : ""
+          }${destinatario.ciudad || "-"}`
+        )}`
+      : ""
+
+  return [
+    "Hola! Mi pedido es:",
+    "",
+    ...lines,
+    "",
+    `Subtotal (precio lista): $${formatARS(subtotalSinPromo)}`,
+    `Descuento aplicado: -$${formatARS(descuentoAplicado)}`,
+    `Total final: $${formatARS(totalFinal)}`,
+    `Costo de envio: ${envioCostoTxt}`,
+    "",
+    `Cliente: ${sanitizeWhatsappText(`${nombre} ${apellido}`)}`,
+    `Telefono: ${sanitizeWhatsappText(telefono || "-")}`,
+    `Entrega: ${sanitizeWhatsappText(entregaTxt)}`,
+    direccion,
+    "",
+    "Quiero abonar en transferencia/efectivo.",
+  ]
+    .filter(Boolean)
+    .map((line) => sanitizeWhatsappText(line))
+    .join("\n")
+}
+
+
+const fetchTransferTotals = async () => {
+  const payload = {
+    quoteOnly: true,
+    orderId: `transfer_${Date.now()}`,
+    comboId: effectiveComboId,
+    paymentMode: "transfer",
+    items: compactItems,
+    shipping: {
+      type: envio === "domicilio" ? "domicilio" : "sucursal",
+      cp: envio === "domicilio" ? cp : undefined,
+    },
+  }
+
+  const res = await fetch("/api/payments/card", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  })
+
+  const json = await res.json().catch(() => null)
+
+  if (!res.ok || !json?.ok) {
+    throw new Error(json?.message || "No se pudo calcular el total con transferencia")
+  }
+
+  return {
+    subtotal: Number(json.subtotal ?? 0),
+    computedTotal: Number(json.computedTotal ?? 0),
+    shippingPrice: Number(json.shippingPrice ?? 0),
+  }
+}
+
+
+
+
+const handleTransferOrCashWhatsApp = async () => {
+  if (!items?.length) {
+    alert("Tu carrito está vacío.")
+    return
+  }
+
+  if (!nombre.trim() || !apellido.trim() || !telefono.trim()) {
+    alert("Completá tus datos de contacto antes de continuar.")
+    setStep("contacto")
+    return
+  }
+
+  try {
+    const totals = await fetchTransferTotals()
+
     const lines = (items || []).map((it: any) => {
-      const nombreProd = it?.nombre ?? "Producto"
-      const talle = it?.talle ? ` (Talle ${it.talle})` : ""
+      const nombreLimpio = String(it?.nombre ?? "Producto")
+        .replace(/\s*\(Talle [^)]+\)\s*/gi, "")
+        .replace(/[*_~`]/g, "")
+        .trim()
+
+      const talle = it?.talle ? ` (Talle ${String(it.talle).replace(/[*_~`]/g, "").trim()})` : ""
       const qty = Number(it?.cantidad ?? 1)
       const unit = Number(it?.precio ?? 0)
       const lineTotal = unit * qty
 
-      return `- ${nombreProd}${talle} x${qty} - $${lineTotal.toLocaleString("es-AR")}`
+      return `- ${nombreLimpio}${talle} x${qty} - $${formatARS(lineTotal)}`
     })
 
-    const entregaTxt =
-      envio === "domicilio"
-        ? `Envío a domicilio (CP: ${cp || "—"})`
-        : envio === "sucursal"
-          ? "Retiro por sucursal"
-          : "Entrega: —"
+    const descuentoAplicado = Math.max(0, subtotalSinPromo - totals.subtotal)
 
-    const envioCostoTxt = quote
-      ? quote.price === 0
-        ? "Gratis"
-        : `$${quote.price.toLocaleString("es-AR")}`
-      : "—"
-
-    const header = [
-      "Hola! 👋 Mi pedido es:",
+    const messageLines = [
+      "Hola! Mi pedido es:",
       "",
       ...lines,
       "",
-      `Subtotal (precio lista): $${subtotalSinPromo.toLocaleString("es-AR")}`,
-`Descuento aplicado: -$${descuentoPromo.toLocaleString("es-AR")}`,
-`Total final: $${total.toLocaleString("es-AR")}`,
-
-      `Costo de envío: ${envioCostoTxt}`,
+      `Subtotal (precio lista): $${formatARS(subtotalSinPromo)}`,
+      `Descuento aplicado: -$${formatARS(descuentoAplicado)}`,
+      `Total final: $${formatARS(totals.computedTotal)}`,
+      `Costo de envio: ${envio === "sucursal" ? "Gratis" : quote ? (quote.price === 0 ? "Gratis" : `$${formatARS(quote.price)}`) : "-"}`,
       "",
-      `Cliente: ${nombre} ${apellido}`.trim(),
-      `Teléfono: ${telefono || "—"}`,
-      `Entrega: ${entregaTxt}`,
+      `Cliente: ${sanitizeWhatsappText(`${nombre} ${apellido}`)}`,
+      `Telefono: ${sanitizeWhatsappText(telefono || "-")}`,
+      `Entrega: ${envio === "domicilio" ? `Envio a domicilio (CP: ${cp || "-"})` : envio === "sucursal" ? "Retiro por sucursal" : "Entrega: -"}`,
       envio === "domicilio"
-        ? `Dirección: ${destinatario.calle || "—"} ${destinatario.numero || ""}, ${destinatario.barrio ? destinatario.barrio + ", " : ""}${destinatario.ciudad || "—"}`
+        ? `Direccion: ${sanitizeWhatsappText(`${destinatario.calle || "-"} ${destinatario.numero || ""}, ${destinatario.barrio ? destinatario.barrio + ", " : ""}${destinatario.ciudad || "-"}`)}`
         : "",
       "",
       "Quiero abonar en transferencia/efectivo.",
-    ]
-      .filter(Boolean)
-      .join("\n")
+    ].filter(Boolean)
 
-    return header
-  }
+    const safeText = messageLines.join("\n")
 
-  const handleTransferOrCashWhatsApp = () => {
-    if (!items?.length) {
-      alert("Tu carrito está vacío.")
-      return
-    }
+    console.log("WHATSAPP_TEXT_REAL =>", safeText)
+    console.log("WHATSAPP_TEXT_JSON =>", JSON.stringify(safeText))
 
-    // (opcional) validación suave: si estás en paso pago, ideal tener datos de contacto
-    if (!nombre.trim() || !apellido.trim() || !telefono.trim()) {
-      alert("Completá tus datos de contacto antes de continuar.")
-      setStep("contacto")
-      return
-    }
-
-    const text = buildWhatsappOrderText()
-    const url = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(text)}`
+    const url = `https://api.whatsapp.com/send?phone=${WHATSAPP_NUMBER}&text=${encodeURIComponent(safeText)}`
     window.open(url, "_blank", "noopener,noreferrer")
+  } catch (error) {
+    console.error("❌ Error calculando transferencia:", error)
+    alert("No se pudo calcular el total con transferencia.")
   }
-
-
+}
 
 
 
@@ -400,15 +512,16 @@ const descuentoPromo = useMemo(() => {
   setSummaryLoading(true)
   try {
     const payload = {
-      quoteOnly: true,
-      orderId: `summary_${Date.now()}`,
-      comboId: effectiveComboId,
-      items: compactItems,
-      shipping: {
-        type: envio === "domicilio" ? "domicilio" : "sucursal",
-        cp: envio === "domicilio" ? cp : undefined,
-      },
-    }
+  quoteOnly: true,
+  orderId: `summary_${Date.now()}`,
+  comboId: effectiveComboId,
+  paymentMode: payMethod === "transfer" ? "transfer" : "standard",
+  items: compactItems,
+  shipping: {
+    type: envio === "domicilio" ? "domicilio" : "sucursal",
+    cp: envio === "domicilio" ? cp : undefined,
+  },
+}
 
     const res = await fetch("/api/payments/card", {
       method: "POST",
@@ -723,7 +836,7 @@ useEffect(() => {
 
   fetchSummaryTotals()
   // eslint-disable-next-line react-hooks/exhaustive-deps
-}, [items, envio, cp, effectiveComboId])
+}, [items, envio, cp, effectiveComboId, payMethod])
 
   useEffect(() => {
   if (hasMayorista && (payMethod === "card_inline" || payMethod === "mp_redirect")) {
@@ -858,11 +971,11 @@ useEffect(() => {
 
     <div className="space-y-3">
       <label
-        onClick={() => {
-          setPayMethod("transfer")
-          orderIdRef.current = ""
-          handleTransferOrCashWhatsApp()
-        }}
+       onClick={async () => {
+  setPayMethod("transfer")
+  orderIdRef.current = ""
+  await handleTransferOrCashWhatsApp()
+}}
         className={`flex items-center justify-between border rounded p-4 cursor-pointer transition ${
           payMethod === "transfer"
             ? "border-amber-600 bg-amber-50"
@@ -874,7 +987,7 @@ useEffect(() => {
 
   {!hasMayorista ? (
     <p className="mt-1 inline-flex rounded-full bg-green-100 px-3 py-1 text-sm font-extrabold text-green-800 border border-green-200">
-      💸 Aprovechá el 20% OFF pagando por este medio
+      💸 Aprovechá el 30% OFF pagando por este medio
     </p>
   ) : (
     <p className="mt-1 inline-flex rounded-full bg-amber-100 px-3 py-1 text-sm font-bold text-amber-800 border border-amber-200">

@@ -523,7 +523,7 @@ useEffect(() => {
 
  const precioTransferencia = mode === "mayorista" 
   ? precio 
-  : Math.round(precio * 0.8)
+  : Math.round(precio * 0.7)
   const precioTransferenciaTexto = precioTransferencia.toLocaleString("es-AR")
   const precioTexto = precio.toLocaleString("es-AR")
   const precioViejoTexto = precioViejo.toLocaleString("es-AR")
@@ -647,27 +647,29 @@ const badgeText = BADGE_MAP[badgeCode] ?? ""
     </span>
   </div>
 
+  {mode !== "mayorista" && (
   <p className="text-[12px] sm:text-[13px] text-zinc-700">
     3x de <span className="font-semibold">${cuotaTexto}</span> sin interés
   </p>
-
-  <div className="rounded-lg border border-green-200 bg-green-50 px-3 py-2">
-    <p className="text-[16px] sm:text-[18px] leading-tight">
-  <span className="font-extrabold text-green-800">
-    ${precioTransferenciaTexto}
-  </span>{" "}
-  <span className="font-semibold text-green-700">
-    CON TRANSFERENCIA{" "}
-{mode !== "mayorista" && envioGratis ? "+ Envío gratis" : ""}
-  </span>
-</p>
-
-    {mode !== "mayorista" && (
-  <p className="text-[11px] text-green-700 mt-1">
-    Ahorrás ${ahorroTransferenciaTexto} pagando en efectivo / transferencia
-  </p>
 )}
-  </div>
+
+  <div className="rounded-lg border border-green-200 bg-green-50 px-3 py-3 min-h-[108px] sm:min-h-[96px] flex flex-col justify-center overflow-hidden">
+  <p className="leading-snug break-words">
+    <span className="block text-[15px] sm:text-[18px] font-extrabold text-green-800">
+      ${precioTransferenciaTexto}
+    </span>
+    <span className="block text-[13px] sm:text-[16px] font-semibold text-green-700 mt-0.5">
+      CON TRANSFERENCIA{" "}
+      {mode !== "mayorista" && envioGratis ? "+ Envío gratis" : ""}
+    </span>
+  </p>
+
+  {mode !== "mayorista" && (
+    <p className="text-[10px] sm:text-[11px] leading-snug text-green-700 mt-2 break-words">
+      Ahorrás ${ahorroTransferenciaTexto} pagando en efectivo / transferencia
+    </p>
+  )}
+</div>
 
   <div className="min-h-[18px]" />
 </div>

@@ -186,7 +186,7 @@ const hasStockForCombo = () => {
   const aplicaTransferenciaPromo = mode === "combo"
 
   const precioTransferencia = aplicaTransferenciaPromo
-    ? Math.round(precioOferta * 0.8)
+    ? Math.round(precioOferta * 0.7)
     : precioOferta
 
   const cuotaExacta = precioOferta / 3

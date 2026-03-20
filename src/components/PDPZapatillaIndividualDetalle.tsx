@@ -41,7 +41,7 @@ export default function PDPZapatillaIndividualDetalle({
 
   const precioFinal = Number(producto.precioActual ?? producto.precio ?? 0);
     const precioHabitual = Number(producto.precioAntes ?? 0);
-  const precioTransferencia = Math.round(precioFinal * 0.8);
+  const precioTransferencia = Math.round(precioFinal * 0.7);
 
   const cuotaTexto = (precioFinal / 3).toLocaleString("es-AR", {
     minimumFractionDigits: 2,

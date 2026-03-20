@@ -37,7 +37,7 @@ type BrickPayload = {
   shipping?: { type: "domicilio" | "sucursal"; cp?: string }
 
   quoteOnly?: boolean
-
+  paymentMode?: "transfer" | "standard"
   // ✅ PASO 2 – agregar esto
   customer?: {
     nombre?: string
@@ -215,7 +215,7 @@ export async function POST(req: Request) {
   try {
     const body = (await req.json()) as BrickPayload
     const isQuoteOnly = !!(body as any).quoteOnly
-
+    const isTransferMode = body.paymentMode === "transfer"
 
     console.log("PAYMENT_CARD_IN", {
       orderId: body.orderId,
@@ -469,7 +469,11 @@ if (mayoristaLines.length) {
 
       for (const cid of comboIds) {
   const pack = comboById.get(cid) || null
-  const promoUnit = toMoney(Number(pack?.price ?? 0))
+  const basePromoUnit = toMoney(Number(pack?.price ?? 0))
+const promoUnit =
+  isTransferMode && pack?._type !== "packMayorista"
+    ? toMoney(basePromoUnit * 0.7)
+    : basePromoUnit
   if (!pack?._id || !promoUnit || promoUnit <= 0) {
     return NextResponse.json(
       { ok: false, error: "invalid_combo_price", message: "Combo/2x1 sin precio válido.", comboId: cid, pack },
@@ -513,11 +517,17 @@ if (mayoristaLines.length) {
 
     // C) Productos normales
     for (const it of normalProductLines) {
-      const prod = byId.get(it.productId)
-      if (!prod) continue
-      subtotalCalc += toMoney(getUnitPrice(prod) * Number(it.cantidad || 1))
-    }
+  const prod = byId.get(it.productId)
+  if (!prod) continue
 
+  const baseUnit = getUnitPrice(prod)
+  const finalUnit =
+    isTransferMode && !it.packMayoristaId
+      ? toMoney(baseUnit * 0.7)
+      : baseUnit
+
+  subtotalCalc += toMoney(finalUnit * Number(it.cantidad || 1))
+}
     subtotal = toMoney(subtotalCalc)
 
 
