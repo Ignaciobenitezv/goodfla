@@ -6,7 +6,7 @@ import Image from 'next/image'
 import AnimatedFadeDown from './AnimatedFadeDown'
 
 const categorias = [
-  { titulo: 'ZAPATILLAS 10 X $250.000', imagen: '/blanca.webp', link: '/productos/mayorista' },
+  { titulo: 'ZAPATILLAS 10 X $230.000', imagen: '/blanca.webp', link: '/productos/mayorista' },
   { titulo: 'ZAPATILLAS 2 X $59.999', imagen: '/sani2.webp', link: '/productos/zapatillas' },
   { titulo: 'ZAPATILLAS x $35.000', imagen: '/sty.webp', link: '/productos/zapatillas-individuales' },
 

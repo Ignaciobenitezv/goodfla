@@ -12,7 +12,7 @@ interface SectionTitleProps {
 // Orden de navegación circular
 const SECTIONS = [
   {
-    label: "Zapatillas 10 x $250.000",
+    label: "Zapatillas 10 x $230.000",
     href: "/productos/mayorista",
     paths: ["/productos/mayorista"],
   },

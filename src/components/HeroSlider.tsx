@@ -12,7 +12,7 @@ const SLIDES = [
     line2: "ZAPATILLA",
     price: "$35.000",
     href: "/productos/zapatillas-individuales",
-    benefit1: "3 cuotas sin interés",
+    benefit1: "Pagando con transferencia",
     benefit2: "Envío gratis",
   },
   {
@@ -21,17 +21,17 @@ const SLIDES = [
     line2: "ZAPATILLAS",
     price: "$59.999",
     href: "/productos/zapatillas",
-    benefit1: "3 cuotas sin interés",
+    benefit1: "Pagando con transferencia",
     benefit2: "Envío gratis",
   },
   {
     img: "/rayo.JPG",
     line1: "LLEVÁ 10",
     line2: "ZAPATILLAS",
-    price: "$250.000",
+    price: "$230.000",
     href: "/productos/mayorista",
-    benefit1: "Compra mayorista",
-    benefit2: "Pagando con transferencia",
+    benefit1: "Pagando con transferencia",
+    benefit2: "Compra mayorista",
   },
 ]
 
