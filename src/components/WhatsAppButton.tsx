@@ -4,7 +4,7 @@ import Link from "next/link"
 import { FaWhatsapp } from "react-icons/fa"
 
 export default function WhatsAppButton() {
-  const phone = "5493624545344"
+  const phone = "5493624934353"
   const message = "Quiero saber más información sobre..."
 
   return (

@@ -129,113 +129,14 @@ export default function GuiaDeTallesPage() {
               Elegí tu talle ideal
             </h1>
             <p className="mt-1 max-w-xl text-sm md:text-base text-black/80">
-              Usá esta guía como referencia para elegir el talle que mejor se adapte a tu cuerpo
-              y al calce que te gusta.
+              Usá esta guía como referencia para elegir el talle que mejor .
             </p>
           </div>
-          <div className="mt-4 md:mt-0">
-            <div className="rounded-2xl border border-black/10 bg-black/5 px-4 py-3 text-xs md:text-sm text-black/80 shadow-sm">
-              <p className="font-semibold">Tip rápido</p>
-              <p className="mt-1">
-                Si estás entre dos talles, elegí el más grande para un calce más relajado.
-              </p>
-            </div>
-          </div>
+          
         </div>
       </section>
 
-      {/* SUBTÍTULO / INFO GENERAL */}
-      <p className="mt-8 mx-auto max-w-3xl text-center text-base md:text-lg font-medium leading-relaxed text-zinc-700">
-        Medidas tomadas con la prenda apoyada sobre una superficie plana. Puede haber
-        tolerancias de ±1–2 cm según el proceso de confección.
-      </p>
-
-      {/* REMERAS OVERSIZE */}
-      <section className="mt-10 grid gap-6 md:grid-cols-[minmax(0,1.1fr)_minmax(0,1.3fr)] items-start">
-        <div className="space-y-3">
-          <h2 className="text-2xl md:text-3xl font-bold tracking-wide text-zinc-900">
-            Remeras Oversize
-          </h2>
-          <p className="text-sm md:text-[15px] text-zinc-700">
-            Corte amplio y relajado, pensado para que la prenda quede suelta en el cuerpo.
-            Si preferís un calce menos oversize, podés bajar un talle.
-          </p>
-          <div className="mt-2 grid gap-2 text-xs md:text-sm text-zinc-700">
-            <div className="rounded-xl bg-zinc-50 border border-zinc-200 px-3 py-2">
-              <p className="font-medium">Recomendado para:</p>
-              <p className="text-zinc-600">
-                Looks urbanos, outfits holgados y uso diario con jean o jogger.
-              </p>
-            </div>
-            <div className="rounded-xl bg-zinc-50 border border-zinc-200 px-3 py-2">
-              <p className="font-medium">Sensación de calce:</p>
-              <p className="text-zinc-600">
-                Más ancho de pecho y mangas que una remera clásica. El largo suele cubrir parte de la cadera.
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <SizeTable caption="Corte oversize" columns={oversizeCols} rows={oversizeRows} />
-      </section>
-
-      {/* JEANS BAGGY */}
-      <section className="mt-12 grid gap-6 md:grid-cols-[minmax(0,1.1fr)_minmax(0,1.3fr)] items-start">
-        <div className="space-y-3">
-          <h2 className="text-2xl md:text-3xl font-bold tracking-wide text-zinc-900">
-            Jeans Baggy
-          </h2>
-          <p className="text-sm md:text-[15px] text-zinc-700">
-            Jean de tiro medio/alto, recto y con pierna amplia. No es chupín ni wide leg extremo:
-            queda suelto pero con estructura.
-          </p>
-          <div className="mt-2 grid gap-2 text-xs md:text-sm text-zinc-700">
-            <div className="rounded-xl bg-zinc-50 border border-zinc-200 px-3 py-2">
-              <p className="font-medium">Cómo leer la cintura:</p>
-              <p className="text-zinc-600">
-                La medida de cintura es de lado a lado con la prenda apoyada. Para tu contorno total,
-                multiplicá por 2.
-              </p>
-            </div>
-            <div className="rounded-xl bg-zinc-50 border border-zinc-200 px-3 py-2">
-              <p className="font-medium">Tip de calce:</p>
-              <p className="text-zinc-600">
-                Si querés que quede más suelto en la cadera, elegí un talle más. Podés usar cinturón
-                para ajustar en la cintura.
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <SizeTable
-          caption="Medidas de jeans baggy"
-          columns={baggyCols}
-          rows={baggyRows}
-        />
-      </section>
-
-      {/* REMERAS COMUNES */}
-      <section className="mt-12 grid gap-6 md:grid-cols-[minmax(0,1.1fr)_minmax(0,1.3fr)] items-start">
-        <div className="space-y-3">
-          <h2 className="text-2xl md:text-3xl font-bold tracking-wide text-zinc-900">
-            Remeras comunes
-          </h2>
-          <p className="text-sm md:text-[15px] text-zinc-700">
-            Corte regular, ni muy suelto ni muy ajustado. Ideal para uso diario, look más clásico
-            y combinable con todo.
-          </p>
-          <div className="mt-2 grid gap-2 text-xs md:text-sm text-zinc-700">
-            <div className="rounded-xl bg-zinc-50 border border-zinc-200 px-3 py-2">
-              <p className="font-medium">Comparala con una prenda tuya:</p>
-              <p className="text-zinc-600">
-                Medí una remera que ya uses mucho y te guste cómo te queda, y compará con esta tabla.
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <SizeTable caption="Corte regular" columns={comunesCols} rows={comunesRows} />
-      </section>
+     
             {/* ZAPATILLAS */}
       <section className="mt-12 grid gap-6 md:grid-cols-[minmax(0,1.1fr)_minmax(0,1.3fr)] items-start">
         <div className="space-y-3">
@@ -263,35 +164,6 @@ export default function GuiaDeTallesPage() {
           rows={zapatillasRows}
         />
       </section>
-
-      {/* BLOQUE CÓMO MEDIR */}
-      <div className="mt-12 rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-5 md:px-6 md:py-6">
-        <p className="text-sm font-semibold text-zinc-900">Cómo medir tus prendas</p>
-        <p className="mt-1 text-xs md:text-sm text-zinc-600">
-          Lo ideal es medir una prenda similar que ya tengas y apoyarla sobre una superficie plana.
-        </p>
-        <ul className="mt-3 grid gap-2 text-xs md:text-sm text-zinc-700 md:grid-cols-2">
-          <li>
-            <strong>Alto:</strong> desde el punto más alto del hombro hasta el borde inferior.
-          </li>
-          <li>
-            <strong>Ancho:</strong> de axila a axila, con la prenda extendida sin estirar.
-          </li>
-          <li>
-            <strong>Cintura:</strong> medida de un lado a otro en la pretina del jean, sin estirar.
-          </li>
-          <li>
-            <strong>Largo del jean:</strong> desde la pretina hasta el bajo.
-          </li>
-          <li className="md:col-span-2">
-            <strong>Bota:</strong> ancho del bajo de la pierna, con la pierna extendida.
-          </li>
-        </ul>
-        <p className="mt-3 text-[11px] text-zinc-500">
-          Recordá: las prendas pueden tener una tolerancia de ±1–2 cm por el proceso de confección
-          y lavado.
-        </p>
-      </div>
       </main>
 </div>
 
