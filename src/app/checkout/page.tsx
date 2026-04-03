@@ -24,7 +24,14 @@ type Quote = {
 }
 
 export default function CheckoutPage() {
-  const { items, comboId, hasMayorista } = useCart()
+  const {
+  items,
+  comboId,
+  hasMayorista,
+  couponCode,
+  couponDiscount,
+  appliedCoupon,
+} = useCart()
   const router = useRouter()
   const mpRedirectLock = useRef(false)
 
@@ -125,16 +132,17 @@ const buildWhatsappOrderText = ({
 
 const fetchTransferTotals = async () => {
   const payload = {
-    quoteOnly: true,
-    orderId: `transfer_${Date.now()}`,
-    comboId: effectiveComboId,
-    paymentMode: "transfer",
-    items: compactItems,
-    shipping: {
-      type: envio === "domicilio" ? "domicilio" : "sucursal",
-      cp: envio === "domicilio" ? cp : undefined,
-    },
-  }
+  quoteOnly: true,
+  orderId: `transfer_${Date.now()}`,
+  comboId: effectiveComboId,
+  paymentMode: "transfer",
+  couponCode: couponCode ?? null,
+  items: compactItems,
+  shipping: {
+    type: envio === "domicilio" ? "domicilio" : "sucursal",
+    cp: envio === "domicilio" ? cp : undefined,
+  },
+}
 
   const res = await fetch("/api/payments/card", {
     method: "POST",
@@ -187,8 +195,7 @@ const handleTransferOrCashWhatsApp = async () => {
       return `- ${nombreLimpio}${talle} x${qty} - $${formatARS(lineTotal)}`
     })
 
-    const descuentoAplicado = Math.max(0, subtotalSinPromo - totals.subtotal)
-
+    const descuentoAplicado = Math.max(0, subtotalSinPromo - totals.computedTotal)
     const messageLines = [
       "Hola! Mi pedido es:",
       "",
@@ -196,6 +203,7 @@ const handleTransferOrCashWhatsApp = async () => {
       "",
       `Subtotal (precio lista): $${formatARS(subtotalSinPromo)}`,
       `Descuento aplicado: -$${formatARS(descuentoAplicado)}`,
+      couponCode ? `Cupón aplicado: ${couponCode}` : "",
       `Total final: $${formatARS(totals.computedTotal)}`,
       `Costo de envio: ${envio === "sucursal" ? "Gratis" : quote ? (quote.price === 0 ? "Gratis" : `$${formatARS(quote.price)}`) : "-"}`,
       "",
@@ -275,6 +283,9 @@ const descuentoPromo = useMemo(() => {
   if (!summaryTotals) return 0
   return Math.max(0, subtotalSinPromo - subtotalConPromo)
 }, [subtotalSinPromo, subtotalConPromo, summaryTotals])
+
+const totalFinalConCoupon = total
+
 
   // ✅ ID efectivo del combo (prioriza contexto, fallback al item)
   const effectiveComboId =
@@ -365,11 +376,12 @@ const descuentoPromo = useMemo(() => {
             : null,
       }
 
-      const payload = {
-        items,
-        comboId: effectiveComboId,// ✅ el comboId del useCart()
-        customer,
-      }
+     const payload = {
+  items,
+  comboId: effectiveComboId, // ✅ el comboId del useCart()
+  couponCode: couponCode ?? null,
+  customer,
+}
 
 
 
@@ -455,10 +467,11 @@ const descuentoPromo = useMemo(() => {
       const orderId = ensureOrderId()
 
       const payload = {
-        quoteOnly: true,
-        orderId,
-        comboId: effectiveComboId,
-        items: compactItems,
+  quoteOnly: true,
+  orderId,
+  comboId: effectiveComboId,
+  couponCode: couponCode ?? null,
+  items: compactItems,
         shipping: {
           type: envio === "domicilio" ? "domicilio" : "sucursal",
           cp: envio === "domicilio" ? cp : undefined,
@@ -516,6 +529,7 @@ const descuentoPromo = useMemo(() => {
   orderId: `summary_${Date.now()}`,
   comboId: effectiveComboId,
   paymentMode: payMethod === "transfer" ? "transfer" : "standard",
+  couponCode: couponCode ?? null,
   items: compactItems,
   shipping: {
     type: envio === "domicilio" ? "domicilio" : "sucursal",
@@ -698,6 +712,7 @@ const payload = {
 
   items: compactItems, // <- acá ya va corregido
   amount: serverAmount,
+  couponCode: couponCode ?? null,
   orderId,
   comboId: effectiveComboId,
 
@@ -1090,7 +1105,7 @@ useEffect(() => {
   </span>
 </div>
 
-{/* Descuento */}
+{/* Descuento promo */}
 {!summaryLoading && descuentoPromo > 0 && (
   <div className="flex justify-between text-sm">
     <span className="text-green-700 font-medium">Descuento</span>
@@ -1100,13 +1115,25 @@ useEffect(() => {
   </div>
 )}
 
+{/* Cupón aplicado */}
+{appliedCoupon && couponCode && (
+  <div className="flex justify-between text-sm">
+    <span className="text-green-700 font-medium">
+      Cupón aplicado: {appliedCoupon.code}
+    </span>
+    <span className="text-green-700 font-semibold">
+      -${Number(couponDiscount || 0).toLocaleString("es-AR")}
+    </span>
+  </div>
+)}
+
 {/* Subtotal con promo (server) */}
-<div className="flex justify-between font-medium">
-  <span>Total</span>
-  <span>
-    {summaryLoading ? "Calculando..." : `$${subtotalConPromo.toLocaleString("es-AR")}`}
-  </span>
-</div>
+{!summaryLoading && descuentoPromo > 0 && (
+  <div className="flex justify-between font-medium">
+    <span>Subtotal con promo</span>
+    <span>${subtotalConPromo.toLocaleString("es-AR")}</span>
+  </div>
+)}
 
 {/* Envío */}
 <div className="flex justify-between text-sm text-gray-600 pt-1">
@@ -1126,9 +1153,10 @@ useEffect(() => {
 <div className="flex justify-between text-lg font-bold border-t pt-2">
   <span>Total</span>
   <span>
-  ${subtotalConPromo.toLocaleString("es-AR")}
-</span>
-
+    {summaryLoading
+      ? "Calculando..."
+      : `$${totalFinalConCoupon.toLocaleString("es-AR")}`}
+  </span>
 </div>
 
       </aside>

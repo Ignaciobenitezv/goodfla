@@ -28,8 +28,24 @@ type CartContextType = {
   comboId: string | null
   quote: Quote | null
   hasMayorista: boolean
+
+  couponCode: string | null
+  couponStatus: "idle" | "checking" | "applied" | "invalid"
+  couponDiscount: number
+  couponError: string | null
+  appliedCoupon: {
+    _id: string
+    title?: string
+    code: string
+    discountType: "percent" | "fixed"
+    discountValue: number
+  } | null
+
   // ✅ setear/limpiar combo activo (para cobrar precio de combo)
   setActiveCombo: (id: string | null) => void
+  setCouponCode: (code: string | null) => void
+  applyCoupon: (subtotal: number, codeOverride?: string | null) => Promise<void>
+  clearCoupon: () => void
 
   addItem: (item: Omit<CartItem, "cartKey">) => void
   removeItem: (cartKey: string) => void
@@ -37,37 +53,76 @@ type CartContextType = {
   increaseQuantity: (cartKey: string) => void
   decreaseQuantity: (cartKey: string) => void
   checkout: () => void
-  
 }
 
 const CartContext = createContext<CartContextType | undefined>(undefined)
 
 export function CartProvider({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<CartItem[]>([])
-  const [comboId, setComboId] = useState<string | null>(null)
+const [comboId, setComboId] = useState<string | null>(null)
 const [quote, setQuote] = useState<Quote | null>(null)
+
+const [couponCode, setCouponCodeState] = useState<string | null>(null)
+const [couponStatus, setCouponStatus] = useState<"idle" | "checking" | "applied" | "invalid">("idle")
+const [couponDiscount, setCouponDiscount] = useState(0)
+const [couponError, setCouponError] = useState<string | null>(null)
+const [appliedCoupon, setAppliedCoupon] = useState<{
+  _id: string
+  title?: string
+  code: string
+  discountType: "percent" | "fixed"
+  discountValue: number
+} | null>(null)
+
 const hasMayorista = items.some((item) => !!item.packMayoristaId)
   // cargar desde localStorage
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem("cart")
-      if (stored) {
-        const parsed = JSON.parse(stored)
-        if (Array.isArray(parsed)) setItems(parsed)
-      }
-
-      const storedComboId = localStorage.getItem("cartComboId")
-      if (storedComboId && typeof storedComboId === "string") {
-        setComboId(storedComboId)
-      }
-    } catch (e) {
-      console.warn("[Cart] localStorage corrupto, reseteo", e)
-      localStorage.setItem("cart", "[]")
-      localStorage.removeItem("cartComboId")
-      setItems([])
-      setComboId(null)
+  try {
+    const stored = localStorage.getItem("cart")
+    if (stored) {
+      const parsed = JSON.parse(stored)
+      if (Array.isArray(parsed)) setItems(parsed)
     }
-  }, [])
+
+    const storedComboId = localStorage.getItem("cartComboId")
+    if (storedComboId && typeof storedComboId === "string") {
+      setComboId(storedComboId)
+    }
+
+    const storedCouponCode = localStorage.getItem("cartCouponCode")
+    const storedCouponDiscount = localStorage.getItem("cartCouponDiscount")
+    const storedAppliedCoupon = localStorage.getItem("cartAppliedCoupon")
+
+    if (storedCouponCode) {
+      setCouponCodeState(storedCouponCode)
+    }
+
+    if (storedCouponDiscount) {
+      setCouponDiscount(Number(storedCouponDiscount) || 0)
+    }
+
+    if (storedAppliedCoupon) {
+      try {
+        setAppliedCoupon(JSON.parse(storedAppliedCoupon))
+        setCouponStatus("applied")
+      } catch {}
+    }
+  } catch (e) {
+    console.warn("[Cart] localStorage corrupto, reseteo", e)
+    localStorage.setItem("cart", "[]")
+    localStorage.removeItem("cartComboId")
+    localStorage.removeItem("cartCouponCode")
+    localStorage.removeItem("cartCouponDiscount")
+    localStorage.removeItem("cartAppliedCoupon")
+    setItems([])
+    setComboId(null)
+    setCouponCodeState(null)
+    setCouponDiscount(0)
+    setCouponError(null)
+    setAppliedCoupon(null)
+    setCouponStatus("idle")
+  }
+}, [])
 
   // guardar carrito
   useEffect(() => {
@@ -78,6 +133,32 @@ const hasMayorista = items.some((item) => !!item.packMayoristaId)
     }
   }, [items])
 
+  useEffect(() => {
+  try {
+    if (couponCode) localStorage.setItem("cartCouponCode", couponCode)
+    else localStorage.removeItem("cartCouponCode")
+  } catch (e) {
+    console.warn("[Cart] no pude persistir cartCouponCode", e)
+  }
+}, [couponCode])
+
+useEffect(() => {
+  try {
+    if (couponDiscount > 0) localStorage.setItem("cartCouponDiscount", String(couponDiscount))
+    else localStorage.removeItem("cartCouponDiscount")
+  } catch (e) {
+    console.warn("[Cart] no pude persistir cartCouponDiscount", e)
+  }
+}, [couponDiscount])
+
+useEffect(() => {
+  try {
+    if (appliedCoupon) localStorage.setItem("cartAppliedCoupon", JSON.stringify(appliedCoupon))
+    else localStorage.removeItem("cartAppliedCoupon")
+  } catch (e) {
+    console.warn("[Cart] no pude persistir cartAppliedCoupon", e)
+  }
+}, [appliedCoupon])
 
   useEffect(() => {
   let cancelled = false
@@ -150,7 +231,79 @@ const hasMayorista = items.some((item) => !!item.packMayoristaId)
   const setActiveCombo = (id: string | null) => {
     setComboId(id ? String(id).trim() : null)
   }
+const setCouponCode = (code: string | null) => {
+  const normalized = String(code || "").trim().toUpperCase()
+  setCouponCodeState(normalized || null)
 
+  if (!normalized) {
+    setCouponStatus("idle")
+    setCouponDiscount(0)
+    setCouponError(null)
+    setAppliedCoupon(null)
+  }
+}
+
+const clearCoupon = () => {
+  setCouponCodeState(null)
+  setCouponStatus("idle")
+  setCouponDiscount(0)
+  setCouponError(null)
+  setAppliedCoupon(null)
+
+  try {
+    localStorage.removeItem("cartCouponCode")
+    localStorage.removeItem("cartCouponDiscount")
+    localStorage.removeItem("cartAppliedCoupon")
+  } catch {}
+}
+
+const applyCoupon = async (subtotal: number, codeOverride?: string | null) => {
+  const normalized = String(codeOverride ?? couponCode ?? "").trim().toUpperCase()
+  
+  if (!normalized) {
+    setCouponStatus("invalid")
+    setCouponDiscount(0)
+    setCouponError("Ingresá un cupón.")
+    setAppliedCoupon(null)
+    return
+  }
+
+  try {
+    setCouponStatus("checking")
+    setCouponError(null)
+
+    const res = await fetch("/api/coupons/validate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        couponCode: normalized,
+        subtotal,
+      }),
+    })
+
+    const data = await res.json().catch(() => null)
+
+    if (!res.ok || !data?.ok || !data?.valid) {
+      setCouponStatus("invalid")
+      setCouponDiscount(0)
+      setAppliedCoupon(null)
+      setCouponError(data?.error || data?.message || "Cupón inválido.")
+      return
+    }
+
+    setCouponCodeState(data.couponCode ?? normalized)
+    setCouponDiscount(Number(data.couponDiscount ?? 0))
+    setAppliedCoupon(data.appliedCoupon ?? null)
+    setCouponError(null)
+    setCouponStatus("applied")
+  } catch (e) {
+    console.warn("[Cart] applyCoupon error:", e)
+    setCouponStatus("invalid")
+    setCouponDiscount(0)
+    setAppliedCoupon(null)
+    setCouponError("No se pudo validar el cupón.")
+  }
+}
   const addItem = (item: Omit<CartItem, "cartKey">) => {
     // ✅ si agregás un producto normal, limpiamos comboId para no cobrar combo por error
     // (si estás armando un combo, setealo explícitamente desde la pantalla de combo usando setActiveCombo)
@@ -205,14 +358,16 @@ const hasMayorista = items.some((item) => !!item.packMayoristaId)
   }
 
   const clearCart = () => {
-    setItems([])
-    setComboId(null)
-    setQuote(null)
-    try {
-      localStorage.setItem("cart", "[]")
-      localStorage.removeItem("cartComboId")
-    } catch {}
-  }
+  setItems([])
+  setComboId(null)
+  setQuote(null)
+  clearCoupon()
+
+  try {
+    localStorage.setItem("cart", "[]")
+    localStorage.removeItem("cartComboId")
+  } catch {}
+}
 
   const increaseQuantity = (cartKey: string) => {
     setItems((prev) =>
@@ -289,18 +444,26 @@ const hasMayorista = items.some((item) => !!item.packMayoristaId)
   return (
     <CartContext.Provider
       value={{
-        items,
-        comboId,
-        quote,
-        hasMayorista,
-        setActiveCombo,
-        addItem,
-        removeItem,
-        clearCart,
-        increaseQuantity,
-        decreaseQuantity,
-        checkout,
-      }}
+  items,
+  comboId,
+  quote,
+  hasMayorista,
+  couponCode,
+  couponStatus,
+  couponDiscount,
+  couponError,
+  appliedCoupon,
+  setActiveCombo,
+  setCouponCode,
+  applyCoupon,
+  clearCoupon,
+  addItem,
+  removeItem,
+  clearCart,
+  increaseQuantity,
+  decreaseQuantity,
+  checkout,
+}}
     >
       {children}
     </CartContext.Provider>

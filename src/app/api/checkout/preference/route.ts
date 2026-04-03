@@ -2,6 +2,7 @@
 import { NextResponse } from "next/server"
 import { randomUUID } from "crypto"
 import { createClient } from "@sanity/client"
+import { validateCoupon } from "@/lib/coupons"
 
 export const runtime = "nodejs"
 
@@ -433,7 +434,22 @@ if (comboLines.length) {
 
     console.log("🟢 MP ITEMS QUE SE ENVIAN =>", mpItems)
 
+    // 🔽 CALCULAR SUBTOTAL REAL
+const subtotal = mpItems.reduce(
+  (acc, item) =>
+    acc + Number(item.unit_price || 0) * Number(item.quantity || 0),
+  0
+)
 
+// 🔽 VALIDAR CUPÓN
+const couponResult = await validateCoupon({
+  couponCode: body?.couponCode ?? null,
+  subtotal,
+})
+
+const couponCode = couponResult.couponCode
+const couponDiscount = Number(couponResult.couponDiscount ?? 0)
+const appliedCoupon = couponResult.appliedCoupon
     const res = await fetch("https://api.mercadopago.com/checkout/preferences", {
       method: "POST",
       headers: {
@@ -441,7 +457,17 @@ if (comboLines.length) {
         Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify({
-        items: mpItems,
+        items: [
+  ...mpItems,
+  ...(couponDiscount > 0
+    ? [{
+        title: `Descuento cupón ${couponCode}`,
+        quantity: 1,
+        unit_price: -couponDiscount,
+        currency_id: "ARS",
+      }]
+    : []),
+],
         external_reference: orderId,
         back_urls: {
           success: successUrl,
@@ -475,6 +501,10 @@ if (comboLines.length) {
             cantidad: l.cantidad,
             comboId: l.comboId ?? null,
           }))),
+
+          couponCode,
+  couponDiscount,
+  appliedCouponCode: appliedCoupon?.code ?? null,
           // ✅ NUEVO: datos del cliente
           customer: {
             nombre: body?.customer?.nombre?.trim() || null,

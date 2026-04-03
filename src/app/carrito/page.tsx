@@ -3,10 +3,24 @@
 import { useCart } from "@/context/CartContext"
 import Image from "next/image"
 import { useRouter } from "next/navigation"
-import { useMemo } from "react"
+import { useEffect, useMemo, useState } from "react"
  
 export default function CarritoPage() {
-  const { items, removeItem, increaseQuantity, decreaseQuantity, quote } = useCart()
+  const {
+  items,
+  removeItem,
+  increaseQuantity,
+  decreaseQuantity,
+  quote,
+  couponCode,
+  couponStatus,
+  couponDiscount,
+  couponError,
+  appliedCoupon,
+  setCouponCode,
+  applyCoupon,
+  clearCoupon,
+} = useCart()
   const router = useRouter()
   const quoteLoading = items.length > 0 && !quote
 
@@ -25,7 +39,13 @@ const descuento = useMemo(() => {
   if (quoteLoading) return 0
   return Math.max(0, subtotalSinPromo - totalConPromo)
 }, [quoteLoading, subtotalSinPromo, totalConPromo])
+const [couponInput, setCouponInput] = useState(couponCode || "")
 
+useEffect(() => {
+  setCouponInput(couponCode || "")
+}, [couponCode])
+
+const totalFinalConCoupon = Math.max(0, totalConPromo - couponDiscount)
   return (
     <main className="max-w-5xl mx-auto px-4 py-10 mt-20">
       <h1 className="text-3xl font-semibold mb-8">Tu carrito</h1>
@@ -149,13 +169,67 @@ const descuento = useMemo(() => {
     ${subtotalSinPromo.toLocaleString("es-AR")}
   </span>
 </div>
-
-{/* Descuento */}
+{/* Descuento promo */}
 {!quoteLoading && descuento > 0 && (
   <div className="flex justify-between text-sm mb-3">
     <span className="text-green-700 font-medium">Descuento</span>
     <span className="text-green-700 font-semibold">
       -${descuento.toLocaleString("es-AR")}
+    </span>
+  </div>
+)}
+
+{/* Cupón */}
+<div className="mb-4 space-y-2">
+  <label className="block text-sm font-medium">Cupón de descuento</label>
+
+  <div className="flex gap-2">
+    <input
+      type="text"
+      value={couponInput}
+      onChange={(e) => setCouponInput(e.target.value.toUpperCase())}
+      placeholder="Ingresá tu cupón"
+      className="flex-1 border rounded-lg px-3 py-2 text-sm"
+    />
+    <button
+      type="button"
+      onClick={() => {
+  setCouponCode(couponInput)
+  applyCoupon(subtotalSinPromo, couponInput)
+}}
+      className="px-4 py-2 rounded-lg bg-black text-white text-sm"
+    >
+      Aplicar
+    </button>
+  </div>
+
+  {couponStatus === "applied" && appliedCoupon && (
+    <div className="flex items-center justify-between text-sm text-green-700">
+      <span>Cupón aplicado: {appliedCoupon.code}</span>
+      <button
+        type="button"
+        onClick={() => {
+          setCouponInput("")
+          clearCoupon()
+        }}
+        className="underline"
+      >
+        Quitar
+      </button>
+    </div>
+  )}
+
+  {couponError && (
+    <p className="text-sm text-red-600">{couponError}</p>
+  )}
+</div>
+
+{/* Descuento cupón */}
+{couponDiscount > 0 && (
+  <div className="flex justify-between text-sm mb-3">
+    <span className="text-green-700 font-medium">Descuento cupón</span>
+    <span className="text-green-700 font-semibold">
+      -${couponDiscount.toLocaleString("es-AR")}
     </span>
   </div>
 )}
@@ -167,8 +241,8 @@ const descuento = useMemo(() => {
   <span>Total</span>
   <span>
     {quoteLoading
-      ? "Calculando..."
-      : `$${totalConPromo.toLocaleString("es-AR")}`}
+  ? "Calculando..."
+  : `$${totalFinalConCoupon.toLocaleString("es-AR")}`}
   </span>
 </div>
 

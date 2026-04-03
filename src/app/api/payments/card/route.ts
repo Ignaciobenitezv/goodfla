@@ -4,6 +4,7 @@ export const runtime = "nodejs"
 import { NextResponse } from "next/server"
 import crypto from "crypto"
 import { createClient } from "@sanity/client"
+import { validateCoupon } from "@/lib/coupons"
 
 type CompactItem = {
   _id?: string
@@ -37,9 +38,10 @@ type BrickPayload = {
   shipping?: { type: "domicilio" | "sucursal"; cp?: string }
 
   quoteOnly?: boolean
-  paymentMode?: "transfer" | "standard"
-  // ✅ PASO 2 – agregar esto
-  customer?: {
+paymentMode?: "transfer" | "standard"
+couponCode?: string | null
+
+customer?: {
     nombre?: string
     apellido?: string
     telefono?: string
@@ -533,15 +535,29 @@ const promoUnit =
 
 
 
-    // 4) Shipping
-    const { origin } = new URL(req.url)
-    const shippingType = body.shipping?.type === "domicilio" ? "domicilio" : "sucursal"
-    const shippingPrice = shippingType === "domicilio" ? await getShippingPrice(origin, body.shipping?.cp) : 0
+   // 4) Shipping
+const { origin } = new URL(req.url)
+const shippingType = body.shipping?.type === "domicilio" ? "domicilio" : "sucursal"
+const shippingPrice = shippingType === "domicilio" ? await getShippingPrice(origin, body.shipping?.cp) : 0
 
-    const computedTotal = toMoney(subtotal + shippingPrice)
-    if (!computedTotal || computedTotal <= 0) {
-      return NextResponse.json({ ok: false, error: "invalid_amount", message: "Monto inválido." }, { status: 400 })
-    }
+const couponResult = await validateCoupon({
+  couponCode: body.couponCode ?? null,
+  subtotal,
+})
+
+const couponCode = couponResult.couponCode
+const couponDiscount = Number(couponResult.couponDiscount ?? 0)
+const appliedCoupon = couponResult.appliedCoupon
+const couponError = couponResult.error
+
+const computedTotal = toMoney(subtotal - couponDiscount + shippingPrice)
+
+if (!computedTotal || computedTotal <= 0) {
+  return NextResponse.json(
+    { ok: false, error: "invalid_amount", message: "Monto inválido." },
+    { status: 400 }
+  )
+}
 
     // ==========================
 // ✅ NUEVO: lines[] para UI (precio efectivo por línea)
@@ -690,16 +706,20 @@ if (comboLines.length) {
 
 
     if ((body as any).quoteOnly) {
-      return NextResponse.json({
-        ok: true,
-        quoteOnly: true,
-        computedTotal,
-        subtotal,
-        shippingPrice,
-        shippingType,
-         lines,
-      })
-    }
+  return NextResponse.json({
+    ok: true,
+    quoteOnly: true,
+    computedTotal,
+    subtotal,
+    shippingPrice,
+    shippingType,
+    couponCode,
+    couponDiscount,
+    appliedCoupon,
+    couponError,
+    lines,
+  })
+}
 
 
     // (Opcional) sanity-check del monto que manda el front: NO afecta el cobro (cobramos computedTotal)
@@ -779,12 +799,15 @@ if (comboLines.length) {
       direccion: body.customer?.direccion || null,
     },
 
-    shippingType,
-    shippingPrice,
-    subtotal,
+   shippingType,
+shippingPrice,
+subtotal,
+couponCode,
+couponDiscount,
+appliedCouponCode: appliedCoupon?.code ?? null,
 
-    cart,
-    cartJson: JSON.stringify(cart),
+cart,
+cartJson: JSON.stringify(cart),
   },
 }
 
