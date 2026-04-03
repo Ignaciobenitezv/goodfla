@@ -128,7 +128,11 @@ async function getPackSnapshot(id: string): Promise<PackSnapshot | null> {
 
 async function reserveStockAtomic(cart: CartItem[], lockId: string) {
   const existing = await sanity.getDocument(lockId)
-  if ((existing as any)?.status === "processed") return { ok: true, already: true }
+
+if ((existing as any)?.status === "processed") {
+  return { ok: true, already: true }
+}
+
 
   const MAX_RETRIES = 8
 
@@ -575,14 +579,28 @@ if ((existing as any)?.status === "processed") {
   )
 }
 
-await sanity
-  .patch(markerId)
-  .set({
-    status: "processing",
-    processingAt: new Date().toISOString(),
-  })
-  .commit()
-  .catch(() => {})
+if ((existing as any)?.status === "processing") {
+  return respond200(
+    { msg: "already_processing_card_inline", markerId, paymentId },
+    startedAt
+  )
+}
+
+try {
+  await sanity
+    .patch(markerId)
+    .ifRevisionId((existing as any)?._rev)
+    .set({
+      status: "processing",
+      processingAt: new Date().toISOString(),
+    })
+    .commit()
+} catch {
+  return respond200(
+    { msg: "processing_lock_lost_card_inline", markerId, paymentId },
+    startedAt
+  )
+}
 
         // si está processed pero ownerNotified NO, dejamos seguir para reintentar mail
 
@@ -815,6 +833,7 @@ const updated = await sanity
   createdAt: new Date().toISOString(),
 })
 
+
 const existing = await sanity.getDocument(markerId)
 
 if ((existing as any)?.status === "processed") {
@@ -824,14 +843,28 @@ if ((existing as any)?.status === "processed") {
   )
 }
 
-await sanity
-  .patch(markerId)
-  .set({
-    status: "processing",
-    processingAt: new Date().toISOString(),
-  })
-  .commit()
-  .catch(() => {})
+if ((existing as any)?.status === "processing") {
+  return respond200(
+    { msg: "already_processing", markerId, paymentId, status: "processing" },
+    startedAt
+  )
+}
+
+try {
+  await sanity
+    .patch(markerId)
+    .ifRevisionId((existing as any)?._rev)
+    .set({
+      status: "processing",
+      processingAt: new Date().toISOString(),
+    })
+    .commit()
+} catch {
+  return respond200(
+    { msg: "processing_lock_lost", markerId, paymentId, status: "processing" },
+    startedAt
+  )
+}
 
     // =========================
     // 3) Traer preferencia + cart
