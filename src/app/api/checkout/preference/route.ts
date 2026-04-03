@@ -527,12 +527,12 @@ const appliedCoupon = couponResult.appliedCoupon
       return NextResponse.json({ ok: false, error: "mp_pref_error", mp: data }, { status: res.status })
     }
 
-    return NextResponse.json({
-      ok: true,
-      id: data.id,
-      init_point: data.sandbox_init_point || data.init_point,
-      orderId,
-    })
+   return NextResponse.json({
+  ok: true,
+  id: data.id,
+  init_point: data.init_point,
+  orderId,
+})
   } catch (error) {
     console.error("❌ Error en /api/checkout/preference:", error)
     return NextResponse.json({ ok: false, error: "internal_error" }, { status: 500 })
