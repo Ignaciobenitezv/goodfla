@@ -36,6 +36,21 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="es">
       <head>
+        {/* Google Analytics 4 */}
+        <Script
+          src="https://www.googletagmanager.com/gtag/js?id=G-MXWQ3PRYHB"
+          strategy="afterInteractive"
+        />
+        <Script id="ga4" strategy="afterInteractive">
+          {`
+            window.dataLayer = window.dataLayer || [];
+            function gtag(){dataLayer.push(arguments);}
+            window.gtag = gtag;
+            gtag('js', new Date());
+            gtag('config', 'G-MXWQ3PRYHB');
+          `}
+        </Script>
+
         {/* Meta Pixel */}
         {pixelId ? (
           <>
@@ -68,9 +83,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
 
       <body
-  className={`${barlowCondensed.variable} ${montserrat.variable} min-h-[100dvh] bg-white text-black`}
->
-
+        className={`${barlowCondensed.variable} ${montserrat.variable} min-h-[100dvh] bg-white text-black`}
+      >
         <UiProvider>
           <CartProvider>
             <Navbar />
