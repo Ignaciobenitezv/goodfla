@@ -4,6 +4,7 @@ import { useSearchParams } from "next/navigation"
 import Link from "next/link"
 import { useEffect, useRef, useState } from "react"
 import { useCart } from "@/context/CartContext"
+import { trackEvent } from "@/lib/gtag"
 
 type UiState =
   | "checking"
@@ -104,6 +105,21 @@ export default function SuccessClient() {
           // 1) OK final
           if (processed || state === "processed") {
             setProgress(96)
+            // ✅ TRACK PURCHASE (con deduplicación)
+  const transactionId = orderId || paymentIdFromUrl || merchantOrderId
+const key = `purchase_tracked_${transactionId}`
+
+if (transactionId && !sessionStorage.getItem(key)) {
+  trackEvent("purchase", {
+    transaction_id: transactionId,
+    value: 0,
+    currency: "ARS",
+    payment_type: "mercadopago",
+  })
+
+  sessionStorage.setItem(key, "1")
+}
+
             clearCart()
             localStorage.setItem("cart", "[]")
             localStorage.removeItem("lastOrder")

@@ -2,7 +2,8 @@
 
 import { useCart } from "@/context/CartContext"
 import Image from "next/image"
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useState, useRef } from "react"
+import { trackEvent } from "@/lib/gtag"
 
 type TransferQuote = {
   subtotal: number
@@ -146,6 +147,31 @@ useEffect(() => {
   ;(window as any).__transferQuoteRequestId = requestId
   fetchTransferQuote(requestId)
 }, [fetchTransferQuote])
+
+const hasTrackedCheckoutRef = useRef(false)
+
+useEffect(() => {
+  if (hasTrackedCheckoutRef.current) return
+  if (!items.length) return
+  if (!transferQuote) return // esperamos total real
+
+  hasTrackedCheckoutRef.current = true
+
+  trackEvent("begin_checkout", {
+  checkout_type: "transferencia",
+  currency: "ARS",
+  value: transferQuote.computedTotal,
+  items: items.map((item: any) => ({
+    item_id: item.productId,
+    item_name: item.nombre,
+    item_variant: item.talle,
+    quantity: item.cantidad,
+    price: item.precio,
+  })),
+})
+}, [items, transferQuote])
+
+
 useEffect(() => {
   setCouponInput(couponCode || "")
 }, [couponCode])
@@ -288,6 +314,19 @@ couponLine,
       ].filter(Boolean)
 
       const safeText = messageLines.join("\n")
+
+     trackEvent("add_payment_info", {
+  payment_type: "transferencia",
+  currency: "ARS",
+  value: totalTransfer,
+  items: items.map((item: any) => ({
+    item_id: item.productId,
+    item_name: item.nombre,
+    item_variant: item.talle,
+    quantity: item.cantidad,
+    price: item.precio,
+  })),
+})
 
       const url = `https://api.whatsapp.com/send?phone=${WHATSAPP_NUMBER}&text=${encodeURIComponent(safeText)}`
       window.open(url, "_blank", "noopener,noreferrer")

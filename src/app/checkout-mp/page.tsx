@@ -4,6 +4,7 @@ import { useCart } from "@/context/CartContext"
 import Image from "next/image"
 import { useRouter } from "next/navigation"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { trackEvent } from "@/lib/gtag"
 
 declare global {
   interface Window {
@@ -226,6 +227,31 @@ export default function CheckoutMpPage() {
     fetchMpQuote(requestId)
   }, [fetchMpQuote])
 
+
+const hasTrackedCheckoutRef = useRef(false)
+
+useEffect(() => {
+  if (hasTrackedCheckoutRef.current) return
+  if (!items.length) return
+  if (!mpQuote) return
+
+  hasTrackedCheckoutRef.current = true
+
+  trackEvent("begin_checkout", {
+    checkout_type: "mercadopago",
+    currency: "ARS",
+    value: mpQuote.computedTotal,
+    items: items.map((item: any) => ({
+      item_id: item.productId,
+      item_name: item.nombre,
+      item_variant: item.talle,
+      quantity: item.cantidad,
+      price: item.precio,
+    })),
+  })
+}, [items, mpQuote])
+
+
   useEffect(() => {
   setCouponInput(couponCode || "")
 }, [couponCode])
@@ -288,6 +314,19 @@ export default function CheckoutMpPage() {
 
     try {
       setRedirectLoading(true)
+
+        trackEvent("add_payment_info", {
+  payment_type: "mercadopago_redirect",
+  currency: "ARS",
+  value: totalMp,
+  items: items.map((item: any) => ({
+    item_id: item.productId,
+    item_name: item.nombre,
+    item_variant: item.talle,
+    quantity: item.cantidad,
+    price: item.precio,
+  })),
+})
 
       const payload = {
         items: compactItems,
@@ -485,6 +524,23 @@ export default function CheckoutMpPage() {
                   setCardLoading(false)
                   throw new Error("missing_payment_method")
                 }
+
+
+
+                trackEvent("add_payment_info", {
+  payment_type: "mercadopago_card",
+  currency: "ARS",
+  value: serverAmount,
+  items: items.map((item: any) => ({
+    item_id: item.productId,
+    item_name: item.nombre,
+    item_variant: item.talle,
+    quantity: item.cantidad,
+    price: item.precio,
+  })),
+})
+
+
 
                 const res = await fetch("/api/payments/card", {
                   method: "POST",
