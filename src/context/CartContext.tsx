@@ -1,6 +1,8 @@
 "use client"
 
 import { createContext, useContext, useState, useEffect, ReactNode } from "react"
+import { trackEvent } from "@/lib/gtag"
+
 
 type Quote = {
   subtotal: number
@@ -332,6 +334,19 @@ const applyCoupon = async (subtotal: number, codeOverride?: string | null) => {
 
       return [...prev, { ...item, cartKey, productId: item.productId }]
     })
+    trackEvent("add_to_cart", {
+  currency: "ARS",
+  value: Number(item.precio || 0) * Number(item.cantidad || 1),
+  items: [
+    {
+      item_id: item.productId,
+      item_name: item.nombre,
+      item_variant: item.talle || undefined,
+      quantity: Number(item.cantidad || 1),
+      price: Number(item.precio || 0),
+    },
+  ],
+})
   }
 
   const removeItem = (cartKey: string) => {
