@@ -202,3 +202,13 @@ body {
   animation-delay: 200ms;
   animation-fill-mode: both;
 }
+
+@keyframes softPulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.04); }
+  100% { transform: scale(1); }
+}
+
+.animate-soft-pulse {
+  animation: softPulse 2.5s ease-in-out infinite;
+}

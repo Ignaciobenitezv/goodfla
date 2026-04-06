@@ -624,12 +624,12 @@ const badgeText = BADGE_MAP[badgeCode] ?? ""
          {/* Precio */}
 <div className="mt-2 min-h-[150px] space-y-2">
   {showPackPrice && (
-  <div className="inline-flex items-center rounded-md bg-red-50 border border-red-200 px-2.5 py-1">
-    <p className="text-[16px] sm:text-[24px] font-extrabold text-red-600 leading-none">
-      {packQty} pares por
-    </p>
-  </div>
-)}
+    <div className="inline-flex items-center rounded-md bg-red-50 border border-red-200 px-2.5 py-1">
+      <p className="text-[16px] sm:text-[24px] font-extrabold text-red-600 leading-none">
+        {packQty} pares por
+      </p>
+    </div>
+  )}
 
   {precioViejo > 0 && (
     <p className="text-[12px] text-zinc-400 line-through">
@@ -637,39 +637,42 @@ const badgeText = BADGE_MAP[badgeCode] ?? ""
     </p>
   )}
 
+  {/* 🔥 BLOQUE VERDE PRIMERO */}
+  <div className="rounded-lg border border-green-200 bg-green-50 px-3 py-3 min-h-[108px] sm:min-h-[96px] flex flex-col justify-center overflow-hidden">
+    <p className="leading-snug break-words">
+      <span className="block text-[15px] sm:text-[18px] font-extrabold text-green-800">
+        ${precioTransferenciaTexto}
+      </span>
+      <span className="block text-[13px] sm:text-[16px] font-semibold text-green-700 mt-0.5">
+        CON TRANSFERENCIA{" "}
+        {mode !== "mayorista" && envioGratis ? "+ Envío gratis" : ""}
+      </span>
+    </p>
+
+    {mode !== "mayorista" && (
+      <p className="text-[10px] sm:text-[11px] leading-snug text-green-700 mt-2 break-words">
+        Ahorrás ${ahorroTransferenciaTexto} pagando en efectivo / transferencia
+      </p>
+    )}
+  </div>
+
+  {/* 🔽 PRECIO SECUNDARIO */}
   <div className="flex items-center gap-2 flex-wrap">
-    <p className="text-[22px] sm:text-[24px] font-extrabold leading-none text-black">
+    <p className="text-[16px] sm:text-[18px] font-bold leading-none text-black">
       ${precioTexto}
     </p>
 
     <span className="bg-red-600 text-white text-[10px] sm:text-[11px] px-2 py-1 rounded font-semibold">
       OFERTA
     </span>
-  </div>
-
-  {mode !== "mayorista" && (
-  <p className="text-[12px] sm:text-[13px] text-zinc-700">
-    3x de <span className="font-semibold">${cuotaTexto}</span> sin interés
-  </p>
-)}
-
-  <div className="rounded-lg border border-green-200 bg-green-50 px-3 py-3 min-h-[108px] sm:min-h-[96px] flex flex-col justify-center overflow-hidden">
-  <p className="leading-snug break-words">
-    <span className="block text-[15px] sm:text-[18px] font-extrabold text-green-800">
-      ${precioTransferenciaTexto}
-    </span>
-    <span className="block text-[13px] sm:text-[16px] font-semibold text-green-700 mt-0.5">
-      CON TRANSFERENCIA{" "}
-      {mode !== "mayorista" && envioGratis ? "+ Envío gratis" : ""}
-    </span>
-  </p>
-
-  {mode !== "mayorista" && (
-    <p className="text-[10px] sm:text-[11px] leading-snug text-green-700 mt-2 break-words">
-      Ahorrás ${ahorroTransferenciaTexto} pagando en efectivo / transferencia
+    {mode !== "mayorista" && (
+    <p className="text-[12px] sm:text-[13px] text-zinc-700">
+      3x de <span className="font-semibold">${cuotaTexto}</span> sin interés
     </p>
   )}
-</div>
+  </div>
+
+  
 
   <div className="min-h-[18px]" />
 </div>

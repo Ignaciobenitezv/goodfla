@@ -4,13 +4,13 @@ import { useCart } from "@/context/CartContext"
 import { useUi } from "@/context/UiContext"
 import Image from "next/image"
 import Link from "next/link"
-import { useEffect, useMemo, useState } from "react"
-
+import { useEffect, useMemo, useState, useCallback } from "react"
 
 export default function CartDrawer() {
   const { isCartOpen, closeCart } = useUi()
   const {
   items,
+  hasMayorista,
   removeItem,
   clearCart,
   increaseQuantity,
@@ -49,11 +49,81 @@ const descuento = useMemo(() => {
 
 const [couponInput, setCouponInput] = useState(couponCode || "")
 
+const [transferTotal, setTransferTotal] = useState<number | null>(null)
+const [transferLoading, setTransferLoading] = useState(false)
+
+
 useEffect(() => {
   setCouponInput(couponCode || "")
 }, [couponCode])
 
 const totalFinalConCoupon = Math.max(0, total - couponDiscount)
+
+const ahorroTransferencia = useMemo(() => {
+  if (transferTotal == null) return 0
+  return Math.max(0, totalFinalConCoupon - transferTotal)
+}, [totalFinalConCoupon, transferTotal])
+
+
+const cuotasMp = useMemo(() => {
+  if (!totalFinalConCoupon || totalFinalConCoupon <= 0) return 0
+  return totalFinalConCoupon / 3
+}, [totalFinalConCoupon])
+
+
+const fetchTransferTotal = useCallback(async () => {
+  if (!items.length) {
+    setTransferTotal(null)
+    return
+  }
+
+  try {
+    setTransferLoading(true)
+
+    const payload = {
+      quoteOnly: true,
+      orderId: `drawer_transfer_${Date.now()}`,
+      paymentMode: "transfer",
+      couponCode: couponCode ?? null,
+      items: items.map((i) => ({
+        _id: i.productId,
+        productId: i.productId,
+        talle: i.talle ?? null,
+        cantidad: Number(i.cantidad ?? 1),
+        comboId: i.comboId ?? null,
+        packMayoristaId: i.packMayoristaId ?? null,
+      })),
+      shipping: {
+        type: "sucursal" as const,
+      },
+    }
+
+    const res = await fetch("/api/payments/card", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    })
+
+    const data = await res.json().catch(() => null)
+
+    if (!res.ok || !data?.ok) {
+      setTransferTotal(null)
+      return
+    }
+
+    setTransferTotal(Number(data.computedTotal ?? 0))
+  } catch (error) {
+    console.error("[CartDrawer] transfer total error:", error)
+    setTransferTotal(null)
+  } finally {
+    setTransferLoading(false)
+  }
+}, [items, couponCode])
+
+
+useEffect(() => {
+  fetchTransferTotal()
+}, [fetchTransferTotal])
 
   return (
     <div
@@ -71,7 +141,7 @@ const totalFinalConCoupon = Math.max(0, total - couponDiscount)
 
       {/* Panel lateral */}
       <div
-        className={`absolute right-0 top-0 h-full w-full max-w-md bg-white shadow-lg transform transition-transform flex flex-col ${
+        className={`absolute right-0 top-0 h-full w-full max-w-[380px] bg-white shadow-lg transform transition-transform flex flex-col ${
           isCartOpen ? "translate-x-0" : "translate-x-full"
         }`}
       >
@@ -89,31 +159,45 @@ const totalFinalConCoupon = Math.max(0, total - couponDiscount)
             items.map((item) => (
               <div
                 key={item.cartKey} 
-                className="flex gap-3 border-b pb-3"
+                className="flex gap-3 border-b pb-3 items-start"
               >
                 <Image
                   src={item.imagen}
                   alt={item.nombre}
-                  width={70}
-                  height={90}
+                  width={62}
+                  height={78}
                   className="rounded object-cover"
                 />
-                <div className="flex-1">
-                  <h3 className="font-semibold text-sm">{item.nombre}</h3>
-                  {item.talle && (
-                    <p className="text-xs text-gray-500">Talle: {item.talle}</p>
-                  )}
+                <div className="flex-1 min-w-0">
+  <h3 className="font-semibold text-sm leading-tight line-clamp-2">
+    {item.nombre}
+  </h3>
 
-                  {/* Subtotal por producto */}
-                  <p className="text-xs text-gray-500">
-  Precio de lista: <span className="font-semibold">${Number(item.precio).toLocaleString("es-AR")}</span>
-</p>
-<p className="text-xs text-green-700">
-  Promociones aplicadas en el total 
-</p>
+  <div className="mt-1 space-y-0.5">
+    <p className="text-[11px] text-gray-400 line-through">
+      ${Number(item.precio).toLocaleString("es-AR")}
+    </p>
 
+    
 
-                  {/* Cantidad */}
+    <p className="text-[11px] font-extrabold uppercase leading-tight text-red-600">
+      30% OFF con transferencia
+    </p>
+
+    <p className="text-[11px] font-semibold leading-tight text-gray-700">
+      3 cuotas sin interés de{" "}
+      ${Number(cuotasMp).toLocaleString("es-AR", {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0,
+      })}
+    </p>
+
+    {item.talle && (
+      <p className="text-[11px] text-gray-500">Talle: {item.talle}</p>
+    )}
+  </div>
+
+  {/* Cantidad */}
                   <div className="flex items-center gap-2 mt-2">
                     <button
                       type="button" /* 👈 evita submit */
@@ -151,19 +235,13 @@ const totalFinalConCoupon = Math.max(0, total - couponDiscount)
 
         {/* Footer */}
 {items.length > 0 && (
-  <div className="border-t p-4 space-y-4">
-    <div className="flex justify-between text-sm">
-      <span className="text-gray-600">Pares</span>
-      <span className="text-gray-600 font-medium">{totalPares}</span>
-    </div>
+  <div className="border-t px-4 py-3 space-y-3">
+    <div className="flex justify-between text-[13px]">
+  <span className="text-gray-500">Pares</span>
+  <span className="text-gray-500 font-medium">{totalPares}</span>
+</div>
 
-    {/* Subtotal sin promo */}
-    <div className="flex justify-between text-sm">
-      <span className="text-gray-600">Subtotal</span>
-      <span className="text-gray-600">
-        ${subtotalSinPromo.toLocaleString("es-AR")}
-      </span>
-    </div>
+
 {/* Descuento promo */}
 {!quoteLoading && descuento > 0 && (
   <div className="flex justify-between text-sm">
@@ -174,60 +252,8 @@ const totalFinalConCoupon = Math.max(0, total - couponDiscount)
   </div>
 )}
 
-{/* Cupón */}
-<div className="space-y-2">
-  <label className="block text-sm font-medium">Cupón de descuento</label>
 
-  <div className="flex gap-2">
-    <input
-      type="text"
-      value={couponInput}
-      onChange={(e) => setCouponInput(e.target.value.toUpperCase())}
-      placeholder="Ingresá tu cupón"
-      className="flex-1 border rounded px-3 py-2 text-sm"
-    />
-    <button
-      type="button"
-      onClick={() => {
-  setCouponCode(couponInput)
-  applyCoupon(subtotalSinPromo, couponInput)
-}}
-      className="px-4 py-2 rounded bg-black text-white text-sm"
-    >
-      Aplicar
-    </button>
-  </div>
 
-  {couponStatus === "applied" && appliedCoupon && (
-    <div className="flex items-center justify-between text-sm text-green-700">
-      <span>Cupón aplicado: {appliedCoupon.code}</span>
-      <button
-        type="button"
-        onClick={() => {
-          setCouponInput("")
-          clearCoupon()
-        }}
-        className="underline"
-      >
-        Quitar
-      </button>
-    </div>
-  )}
-
-  {couponError && (
-    <p className="text-sm text-red-600">{couponError}</p>
-  )}
-</div>
-
-{/* Descuento cupón */}
-{couponDiscount > 0 && (
-  <div className="flex justify-between text-sm">
-    <span className="text-green-700 font-medium">Descuento cupón</span>
-    <span className="text-green-700 font-semibold">
-      -${couponDiscount.toLocaleString("es-AR")}
-    </span>
-  </div>
-)}
 
 <div className="h-px bg-gray-200" />
 
@@ -235,31 +261,86 @@ const totalFinalConCoupon = Math.max(0, total - couponDiscount)
             
 
             {/* Total */}
-            <div className="flex justify-between items-center border-t pt-4">
-              <span className="text-xl font-bold">Total:</span>
-              <span className="text-2xl font-extrabold">
-  {quoteLoading ? "Calculando..." : `$${Number(totalFinalConCoupon).toLocaleString("es-AR")}`}
-</span>
+            <div className="flex justify-between items-start border-t pt-3">
+  <div className="flex flex-col">
+    <span className="text-[13px] font-medium text-gray-500">
+      Total con Mercado Pago
+    </span>
 
-            </div>
+    {!quoteLoading && cuotasMp > 0 && (
+      <span className="mt-0.5 text-[11px] text-gray-500">
+        3 cuotas sin interés de{" "}
+        ${Number(cuotasMp).toLocaleString("es-AR", {
+          minimumFractionDigits: 0,
+          maximumFractionDigits: 0,
+        })}
+      </span>
+    )}
+  </div>
 
+  <span className="text-[16px] font-bold text-gray-900 leading-none">
+    {quoteLoading
+      ? "Calculando..."
+      : `$${Number(totalFinalConCoupon).toLocaleString("es-AR")}`}
+  </span>
+</div>
+<div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 space-y-1.5">
+  <p className="text-[14px] font-extrabold uppercase tracking-wide text-red-600">
+  30% OFF CON TRANSFERENCIA
+</p>
+
+  <div className="flex justify-between text-[13px]">
+    <span className="text-red-700">PAGÁS</span>
+    <span className="text-[20px] font-extrabold text-red-600 leading-none animate-soft-pulse">
+      {transferLoading
+        ? "..."
+        : transferTotal != null
+        ? `$${Number(transferTotal).toLocaleString("es-AR")}`
+        : "—"}
+    </span>
+  </div>
+
+  {ahorroTransferencia > 0 && (
+    <div className="flex justify-between text-[12px]">
+      
+     
+    </div>
+  )}
+</div>
             {/* Botones */}
-            <div className="flex gap-2">
-              <button
-                onClick={clearCart}
-                className="flex-1 px-4 py-2 bg-gray-200 rounded"
-                type="button"
-              >
-                Vaciar
-              </button>
-              <Link
-                href="/carrito"
-                onClick={closeCart}
-                className="flex-1 px-4 py-2 bg-black text-white rounded text-center"
-              >
-                Finalizar compra
-              </Link>
-            </div>
+<div className="space-y-2">
+
+ {hasMayorista ? (
+  <button
+    type="button"
+    disabled
+    className="flex w-full cursor-not-allowed items-center justify-center rounded-xl bg-[#009ee3]/40 px-4 py-2.5 text-center text-[13px] font-semibold uppercase tracking-wide text-white"
+    title="Los productos mayoristas solo pueden pagarse por transferencia"
+  >
+    Pagar con Mercado Pago
+  </button>
+) : (
+  <Link
+    href="/checkout-mp"
+    onClick={closeCart}
+    className="flex w-full items-center justify-center rounded-xl bg-[#009ee3] px-4 py-2.5 text-center text-[13px] font-semibold uppercase tracking-wide text-white transition hover:opacity-90"
+  >
+    Pagar con Mercado Pago
+  </Link>
+)}
+{hasMayorista && (
+  <p className="text-center text-[12px] text-amber-700">
+    Los productos mayoristas solo pueden pagarse por transferencia.
+  </p>
+)}
+  <Link
+    href="/checkout-transfer"
+    onClick={closeCart}
+   className="flex w-full items-center justify-center rounded-xl border border-black bg-white px-4 py-2.5 text-center text-[13px] font-semibold uppercase tracking-wide text-black transition hover:bg-black hover:text-white"
+  >
+    Pagar con transferencia
+  </Link>
+</div>
           </div>
         )}
       </div>

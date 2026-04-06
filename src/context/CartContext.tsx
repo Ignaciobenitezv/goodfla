@@ -16,6 +16,7 @@ type CartItem = {
   cartKey: string
   nombre: string
   precio: number
+  precioAnterior?: number
   cantidad: number
   imagen: string
   slug?: string

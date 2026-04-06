@@ -8,6 +8,7 @@ import { useEffect, useMemo, useState } from "react"
 export default function CarritoPage() {
   const {
   items,
+  hasMayorista,
   removeItem,
   increaseQuantity,
   decreaseQuantity,
@@ -22,6 +23,7 @@ export default function CarritoPage() {
   clearCoupon,
 } = useCart()
   const router = useRouter()
+  
   const quoteLoading = items.length > 0 && !quote
 
 const subtotalSinPromo = useMemo(() => {
@@ -39,11 +41,67 @@ const descuento = useMemo(() => {
   if (quoteLoading) return 0
   return Math.max(0, subtotalSinPromo - totalConPromo)
 }, [quoteLoading, subtotalSinPromo, totalConPromo])
+const [transferTotal, setTransferTotal] = useState<number | null>(null)
+const [transferLoading, setTransferLoading] = useState(false)
 const [couponInput, setCouponInput] = useState(couponCode || "")
-
 useEffect(() => {
   setCouponInput(couponCode || "")
 }, [couponCode])
+
+
+const fetchTransferTotal = async () => {
+  if (!items.length) {
+    setTransferTotal(null)
+    return
+  }
+
+  try {
+    setTransferLoading(true)
+
+    const payload = {
+      quoteOnly: true,
+      orderId: `carrito_transfer_${Date.now()}`,
+      paymentMode: "transfer",
+      couponCode: couponCode ?? null,
+      items: items.map((i) => ({
+        _id: i.productId,
+        productId: i.productId,
+        talle: i.talle ?? null,
+        cantidad: Number(i.cantidad ?? 1),
+        comboId: i.comboId ?? null,
+        packMayoristaId: i.packMayoristaId ?? null,
+      })),
+      shipping: {
+        type: "sucursal" as const,
+      },
+    }
+
+    const res = await fetch("/api/payments/card", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    })
+
+    const data = await res.json().catch(() => null)
+
+    if (!res.ok || !data?.ok) {
+      setTransferTotal(null)
+      return
+    }
+
+    setTransferTotal(Number(data.computedTotal ?? 0))
+  } catch (error) {
+    console.error("[CarritoPage] transfer total error:", error)
+    setTransferTotal(null)
+  } finally {
+    setTransferLoading(false)
+  }
+}
+
+useEffect(() => {
+  fetchTransferTotal()
+}, [items, couponCode])
+
 
 const totalFinalConCoupon = Math.max(0, totalConPromo - couponDiscount)
   return (
@@ -179,7 +237,6 @@ const totalFinalConCoupon = Math.max(0, totalConPromo - couponDiscount)
   </div>
 )}
 
-{/* Cupón */}
 <div className="mb-4 space-y-2">
   <label className="block text-sm font-medium">Cupón de descuento</label>
 
@@ -194,9 +251,9 @@ const totalFinalConCoupon = Math.max(0, totalConPromo - couponDiscount)
     <button
       type="button"
       onClick={() => {
-  setCouponCode(couponInput)
-  applyCoupon(subtotalSinPromo, couponInput)
-}}
+        setCouponCode(couponInput)
+        applyCoupon(subtotalSinPromo, couponInput)
+      }}
       className="px-4 py-2 rounded-lg bg-black text-white text-sm"
     >
       Aplicar
@@ -236,6 +293,9 @@ const totalFinalConCoupon = Math.max(0, totalConPromo - couponDiscount)
 
 <div className="h-px bg-gray-200 mb-4" />
 
+
+
+
 {/* Total final */}
 <div className="flex justify-between text-lg font-bold mb-6">
   <span>Total</span>
@@ -246,21 +306,55 @@ const totalFinalConCoupon = Math.max(0, totalConPromo - couponDiscount)
   </span>
 </div>
 
-            <button
-              onClick={() => router.push("/checkout")}
-              className="
-                w-full
-                bg-black
-                text-white
-                py-3
-                rounded-lg
-                font-medium
-                hover:bg-gray-800
-                transition
-              "
-            >
-              Finalizar compra
-            </button>
+
+
+{!hasMayorista && (
+  <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
+    <p className="text-xs font-semibold text-red-600 tracking-wide">
+      30% OFF CON TRANSFERENCIA
+    </p>
+
+    <div className="flex items-center justify-between mt-1">
+      <span className="text-sm text-red-500">PAGÁS</span>
+      <span className="text-xl font-extrabold text-red-600">
+        {transferLoading
+          ? "..."
+          : transferTotal != null
+          ? `$${transferTotal.toLocaleString("es-AR")}`
+          : "—"}
+      </span>
+    </div>
+  </div>
+)}
+
+            <div className="space-y-3">
+  {hasMayorista ? (
+    <button
+      type="button"
+      disabled
+      className="w-full rounded-lg bg-[#009ee3]/40 py-3 font-medium text-white cursor-not-allowed"
+      title="Los productos mayoristas solo pueden pagarse por transferencia"
+    >
+      Pagar con Mercado Pago
+    </button>
+  ) : (
+    <button
+      type="button"
+      onClick={() => router.push("/checkout-mp")}
+      className="w-full rounded-lg bg-[#009ee3] py-3 font-medium text-white transition hover:opacity-90"
+    >
+      Pagar con Mercado Pago
+    </button>
+  )}
+
+  <button
+    type="button"
+    onClick={() => router.push("/checkout-transfer")}
+    className="w-full rounded-lg bg-black py-3 font-medium text-white transition hover:opacity-90"
+  >
+    Pagar con transferencia
+  </button>
+</div>
 
             <button
               onClick={() => router.push("/")}
