@@ -417,7 +417,11 @@ if (comboLines.length) {
     // 3) MP preference
     // ==========================
     const { origin } = new URL(req.url)
-    const baseUrl = "https://www.goodflaa.com"
+    const baseUrl =
+      process.env.SITE_URL ||
+      process.env.PUBLIC_BASE_URL ||
+      origin ||
+      "http://localhost:3000"
 
     const token = process.env.MP_ACCESS_TOKEN
     if (!token) return NextResponse.json({ ok: false, error: "Missing MP_ACCESS_TOKEN" }, { status: 500 })

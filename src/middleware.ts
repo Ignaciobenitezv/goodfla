@@ -4,14 +4,6 @@ import type { NextRequest } from "next/server"
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl
 
-  // 🔴 REDIRECT CHECKOUT VIEJO → CARRITO
-  if (pathname === "/checkout") {
-    const url = req.nextUrl.clone()
-    url.pathname = "/carrito"
-    url.search = ""
-    return NextResponse.redirect(url)
-  }
-
   // 🔵 BLOQUEOS DE PRODUCTOS (lo que ya tenías)
   if (
     pathname === "/productos" ||
@@ -27,10 +19,9 @@ export function middleware(req: NextRequest) {
   return NextResponse.next()
 }
 
-// 👇 IMPORTANTE: agregar /checkout al matcher
+// ❗ SACAMOS /checkout del matcher
 export const config = {
   matcher: [
-    "/checkout",
     "/productos",
     "/productos/jeans",
     "/productos/remeras",
