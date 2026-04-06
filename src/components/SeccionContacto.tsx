@@ -2,7 +2,7 @@
 
 export default function SeccionContacto() {
   // WhatsApp: número en formato internacional sin "+"
-  const phone = '5403624545344'
+  const phone = '5403624934353'
   const presetMessage = 'Hola! Quiero hacer una consulta sobre Goodfla 😊'
   const waUrl = `https://wa.me/${phone}?text=${encodeURIComponent(presetMessage)}`
 
