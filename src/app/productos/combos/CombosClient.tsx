@@ -28,7 +28,7 @@ export default function CombosClient({
 }) {
   const safeCombos = Array.isArray(combos) ? combos : []
 
-  const [sort, setSort] = useState("mas-vendidos")
+  const [sort, setSort] = useState("manual")
   const [minPrice, setMinPrice] = useState(0)
 
   const priceMaxFromData = useMemo(
@@ -77,6 +77,8 @@ useEffect(() => {
     if (inStock) data = data.filter((c) => c.inStock !== false)
 
     switch (sort) {
+      case "manual":
+        break
       case "precio-asc":
         data.sort(
           (a, b) => (Number(a.precio ?? a.precioActual) || Infinity) - (Number(b.precio ?? b.precioActual) || Infinity)
@@ -85,7 +87,7 @@ useEffect(() => {
         break
       case "precio-desc":
         data.sort(
-          (a, b) => (Number(a.precio ?? a.precioActual) || Infinity) - (Number(b.precio ?? b.precioActual) || Infinity)
+          (a, b) => (Number(b.precio ?? b.precioActual) || -Infinity) - (Number(a.precio ?? a.precioActual) || -Infinity)
 
         )
         break
@@ -93,6 +95,9 @@ useEffect(() => {
         data.sort((a, b) =>
           String(a.nombre || "").localeCompare(String(b.nombre || ""))
         )
+        break
+      case "nuevos":
+        data.sort((a, b) => (a._createdAt < b._createdAt ? 1 : -1))
         break
       default:
         data.sort((a, b) => (a._createdAt < b._createdAt ? 1 : -1))
@@ -436,7 +441,8 @@ useEffect(() => {
                   onChange={(e) => setSort(e.target.value)}
                   className="border border-slate-300 rounded-md px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-marca-crema/60 bg-white/80"
                 >
-                  <option value="mas-vendidos">Más vendidos</option>
+                  <option value="manual">Destacados</option>
+                  <option value="nuevos">Más nuevos</option>
                   <option value="precio-asc">Precio: Menor a mayor</option>
                   <option value="precio-desc">Precio: Mayor a menor</option>
                   <option value="alfabetico">Alfabéticamente</option>

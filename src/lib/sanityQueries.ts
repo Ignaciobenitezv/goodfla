@@ -1,7 +1,7 @@
 import groq from 'groq'
 
 export const Q_PRODUCTOS = `
-*[_type == "producto"]{
+*[_type == "producto"] | order(coalesce(ordenVisual, 999999) asc, _createdAt desc){
   _id,
   nombre,
   descripcion,
@@ -111,7 +111,7 @@ export const Q_COMBO_BY_SLUG = groq`
 }`
 
 export const Q_PRODUCTOS_BY_CATEGORIA = groq`
-*[_type=="producto" && categoria->slug.current == $slug] | order(_createdAt desc){
+*[_type=="producto" && categoria->slug.current == $slug] | order(coalesce(ordenVisual, 999999) asc, _createdAt desc){
   _id,
   nombre,
   precio,
@@ -143,7 +143,7 @@ export const Q_JEANS = groq`
 }`;
 
 export const Q_ZAPATILLAS = groq`
-*[_type == "producto" && categoria->slug.current == "zapatillas"] | order(_createdAt desc) {
+*[_type == "producto" && categoria->slug.current == "zapatillas"] | order(coalesce(ordenVisual, 999999) asc, _createdAt desc) {
   _id,
   _createdAt,
   nombre,
@@ -164,7 +164,7 @@ export const Q_ZAPATILLAS = groq`
 
 
 export const Q_ZAPA2X1_LIST = groq`
-*[_type == "zapatillas2x1" && defined(slug.current)] | order(_createdAt desc){
+*[_type == "zapatillas2x1" && defined(slug.current)] | order(coalesce(ordenVisual, 999999) asc, _createdAt desc){
   _id,
   _createdAt,
   nombre,
@@ -204,7 +204,7 @@ export const Q_ZAPA2X1_LIST = groq`
 
 
 export const Q_MAYORISTA_LIST = groq`
-*[_type == "packMayorista" && activo == true && defined(slug.current)] | order(_createdAt desc){
+*[_type == "packMayorista" && activo == true && defined(slug.current)] | order(coalesce(ordenVisual, 999999) asc, _createdAt desc){
   _id,
   _createdAt,
   title,
@@ -350,7 +350,7 @@ export const Q_ZAPATILLAS_INDIVIDUALES_LIST = groq`
 *[
   _type == "producto" &&
   categoria->slug.current == "zapatillas"
-] | order(_createdAt desc) {
+] | order(coalesce(ordenVisual, 999999) asc, _createdAt desc) {
   _id,
   _createdAt,
   nombre,

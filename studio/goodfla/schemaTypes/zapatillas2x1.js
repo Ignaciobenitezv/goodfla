@@ -83,6 +83,12 @@ export default {
       options: { source: "nombre", maxLength: 96 },
       validation: (Rule) => Rule.required(),
     },
+    {
+      name: "ordenVisual",
+      title: "Orden visual",
+      type: "number",
+      description: "Menor número = aparece primero en los listados",
+    },
   ],
   preview: {
     select: { title: "nombre", media: "portada", precio: "precioActual" },

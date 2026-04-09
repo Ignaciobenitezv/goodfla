@@ -125,5 +125,11 @@ export default {
       type: 'boolean',
       initialValue: true,
     },
+    {
+      name: 'ordenVisual',
+      title: 'Orden visual',
+      type: 'number',
+      description: 'Menor número = aparece primero en los listados',
+    },
   ],
 }
