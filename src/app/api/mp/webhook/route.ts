@@ -715,7 +715,15 @@ if (!items.length && cart.length) {
 const updated = await sanity
   .patch(markerId)
   .setIfMissing({ ownerNotified: false, customerNotified: false })
-  .set({ status: "processed", processedAt: new Date().toISOString() })
+  .set({
+    status: "processed",
+    processedAt: new Date().toISOString(),
+    detailsJson: JSON.stringify({
+      transaction_amount: Number(payment?.transaction_amount ?? 0),
+      total: Number(payment?.transaction_amount ?? 0),
+      currency_id: String(payment?.currency_id || "ARS"),
+    }),
+  })
   .commit({ returnDocuments: true })
   .catch(() => null)
         console.log("📧 attempting_owner_email_card_inline", {
@@ -937,13 +945,20 @@ try {
     // =========================
     const processedAt = new Date().toISOString()
 
-    const updated = await sanity
-      .patch(markerId)
-      .setIfMissing({ ownerNotified: false, customerNotified: false })
-      .set({ status: "processed", processedAt })
-      .commit({ returnDocuments: true })
-      .catch(() => null)
-
+   const updated = await sanity
+  .patch(markerId)
+  .setIfMissing({ ownerNotified: false, customerNotified: false })
+  .set({
+    status: "processed",
+    processedAt,
+    detailsJson: JSON.stringify({
+      transaction_amount: Number(approvedPayment?.transaction_amount ?? 0),
+      total: Number(approvedPayment?.transaction_amount ?? 0),
+      currency_id: String(approvedPayment?.currency_id || "ARS"),
+    }),
+  })
+  .commit({ returnDocuments: true })
+  .catch(() => null)
     // 🟢 Avisar al dueño SOLO una vez
 
     if (updated) {
