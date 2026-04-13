@@ -106,16 +106,26 @@ export default function SuccessClient() {
           if (processed || state === "processed") {
             setProgress(96)
             // ✅ TRACK PURCHASE (con deduplicación)
-  const transactionId = orderId || paymentIdFromUrl || merchantOrderId
+ const transactionId = orderId || paymentIdFromUrl || merchantOrderId
 const key = `purchase_tracked_${transactionId}`
 
 if (transactionId && !sessionStorage.getItem(key)) {
+  // GA4
   trackEvent("purchase", {
     transaction_id: transactionId,
-    value: 0,
+    value: Number(data.total || 0),
     currency: "ARS",
     payment_type: "mercadopago",
   })
+
+  // META
+  if (typeof window !== "undefined" && typeof (window as any).fbq === "function") {
+    ;(window as any).fbq("track", "Purchase", {
+      value: Number(data.total || 0),
+      currency: "ARS",
+      content_type: "product",
+    })
+  }
 
   sessionStorage.setItem(key, "1")
 }

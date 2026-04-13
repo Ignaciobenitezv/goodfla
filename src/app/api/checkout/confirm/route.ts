@@ -131,12 +131,29 @@ export async function GET(req: Request) {
         orderId: orderIdParam || null,
         markerId: null,
         reason: "marker_not_found_yet",
+        total: 0,
       })
     }
 
     const state = normalizeState(marker?.status)
     const processed = state === "processed"
     const failed = state === "failed_stock" || state === "stock_insufficient"
+
+let total = 0
+
+try {
+  const details = marker?.detailsJson
+    ? typeof marker.detailsJson === "string"
+      ? JSON.parse(marker.detailsJson)
+      : marker.detailsJson
+    : null
+
+  total =
+    Number(details?.transaction_amount) ||
+    Number(details?.total) ||
+    0
+} catch {}
+
 
     // =========================================================
     // 3) Respuesta estable para el front
@@ -154,7 +171,7 @@ export async function GET(req: Request) {
       merchantOrderId: marker?.orderId ? String(marker.orderId) : resolvedMerchantOrderId,
       preferenceId: marker?.preferenceId ? String(marker.preferenceId) : preferenceId,
       orderId: orderIdParam || (marker?.orderId ? String(marker.orderId) : null),
-
+       total,
       markerId: markerId,
       createdAt: marker?.createdAt || null,
       processedAt: marker?.processedAt || null,

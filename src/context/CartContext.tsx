@@ -307,48 +307,62 @@ const applyCoupon = async (subtotal: number, codeOverride?: string | null) => {
     setCouponError("No se pudo validar el cupón.")
   }
 }
+  
   const addItem = (item: Omit<CartItem, "cartKey">) => {
-    // ✅ si agregás un producto normal, limpiamos comboId para no cobrar combo por error
-    // (si estás armando un combo, setealo explícitamente desde la pantalla de combo usando setActiveCombo)
+  // ✅ si agregás un producto normal, limpiamos comboId para no cobrar combo por error
+  // (si estás armando un combo, setealo explícitamente desde la pantalla de combo usando setActiveCombo)
 
-    const cartKey = `${item.productId}-${item.talle || "default"}`
+  const cartKey = `${item.productId}-${item.talle || "default"}`
 
-    setItems((prev) => {
-      const existing = prev.find((i) => i.cartKey === cartKey)
+  setItems((prev) => {
+    const existing = prev.find((i) => i.cartKey === cartKey)
 
-      const enCarrito = existing ? existing.cantidad : 0
-      const stockRestante = (item.stock ?? Infinity) - enCarrito
+    const enCarrito = existing ? existing.cantidad : 0
+    const stockRestante = (item.stock ?? Infinity) - enCarrito
 
-      if (item.cantidad > stockRestante) {
-        alert("No hay suficiente stock disponible")
-        return prev
-      }
+    if (item.cantidad > stockRestante) {
+      alert("No hay suficiente stock disponible")
+      return prev
+    }
 
-      if (existing) {
-        return prev.map((i) =>
-          i.cartKey === cartKey
-            ? { ...i, cantidad: i.cantidad + item.cantidad }
-            : i
-        )
-      }
+    if (existing) {
+      return prev.map((i) =>
+        i.cartKey === cartKey
+          ? { ...i, cantidad: i.cantidad + item.cantidad }
+          : i
+      )
+    }
 
-      return [...prev, { ...item, cartKey, productId: item.productId }]
+    return [...prev, { ...item, cartKey, productId: item.productId }]
+  })
+
+  trackEvent("add_to_cart", {
+    currency: "ARS",
+    value: Number(item.precio || 0) * Number(item.cantidad || 1),
+    items: [
+      {
+        item_id: item.productId,
+        item_name: item.nombre,
+        item_variant: item.talle || undefined,
+        quantity: Number(item.cantidad || 1),
+        price: Number(item.precio || 0),
+      },
+    ],
+  })
+
+  // ✅ META PIXEL
+  if (typeof window !== "undefined" && typeof (window as any).fbq === "function") {
+    ;(window as any).fbq("track", "AddToCart", {
+      content_ids: [item.productId],
+      content_name: item.nombre,
+      content_type: "product",
+      value: Number(item.precio || 0) * Number(item.cantidad || 1),
+      currency: "ARS",
     })
-    trackEvent("add_to_cart", {
-  currency: "ARS",
-  value: Number(item.precio || 0) * Number(item.cantidad || 1),
-  items: [
-    {
-      item_id: item.productId,
-      item_name: item.nombre,
-      item_variant: item.talle || undefined,
-      quantity: Number(item.cantidad || 1),
-      price: Number(item.precio || 0),
-    },
-  ],
-})
   }
+}
 
+  
   const removeItem = (cartKey: string) => {
     setItems((prev) => {
       const after = prev.filter((i) => i.cartKey !== cartKey)
@@ -417,46 +431,55 @@ const applyCoupon = async (subtotal: number, codeOverride?: string | null) => {
 
   // checkout
   const checkout = async () => {
-    try {
-       if (hasMayorista) {
+  try {
+    // ✅ META PIXEL
+    if (typeof window !== "undefined" && typeof (window as any).fbq === "function") {
+      ;(window as any).fbq("track", "InitiateCheckout", {
+        num_items: items.reduce((acc, i) => acc + Number(i.cantidad || 0), 0),
+        value: items.reduce((acc, i) => acc + Number(i.precio || 0) * Number(i.cantidad || 0), 0),
+        currency: "ARS",
+      })
+    }
+
+    // ✅ RESTAURAR ESTO
+    if (hasMayorista) {
       alert("Tu carrito contiene productos mayoristas. Por eso, esta compra solo puede abonarse por transferencia bancaria.")
       return
     }
-      // payload stock (tuyo)
-      const lastOrderPayload = items.map((i) => ({
-        productId: i.productId,
-        cantidad: i.cantidad,
-        talle: i.talle ?? null,
-      }))
-      localStorage.setItem("lastOrder", JSON.stringify(lastOrderPayload))
 
-      const res = await fetch("/api/checkout/preference", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        // ✅ CLAVE: mandamos comboId si existe
-        body: JSON.stringify({ items, comboId }),
-      })
+    // payload stock (tuyo)
+    const lastOrderPayload = items.map((i) => ({
+      productId: i.productId,
+      cantidad: i.cantidad,
+      talle: i.talle ?? null,
+    }))
+    localStorage.setItem("lastOrder", JSON.stringify(lastOrderPayload))
 
-      const data = await res.json().catch(() => null)
+    const res = await fetch("/api/checkout/preference", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ items, comboId }),
+    })
 
-      if (!res.ok) {
-        console.error("[Cart] checkout error:", data)
-        alert("⚠️ No se pudo iniciar el pago")
-        return
-      }
+    const data = await res.json().catch(() => null)
 
-      if (data?.init_point) {
-        window.location.href = data.init_point
-        return
-      }
-
+    if (!res.ok) {
+      console.error("[Cart] checkout error:", data)
       alert("⚠️ No se pudo iniciar el pago")
-    } catch (err) {
-      console.error("❌ Error en checkout:", err)
-      alert("Hubo un error al procesar el pago")
+      return
     }
-  }
 
+    if (data?.init_point) {
+      window.location.href = data.init_point
+      return
+    }
+
+    alert("⚠️ No se pudo iniciar el pago")
+  } catch (err) {
+    console.error("❌ Error en checkout:", err)
+    alert("Hubo un error al procesar el pago")
+  }
+}
   return (
     <CartContext.Provider
       value={{
