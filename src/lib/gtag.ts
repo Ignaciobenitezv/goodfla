@@ -14,5 +14,8 @@ export function trackEvent(
   if (typeof window === "undefined") return
   if (typeof window.gtag !== "function") return
 
-  window.gtag("event", eventName, params || {})
+  window.gtag("event", eventName, {
+  ...(params || {}),
+  debug_mode: true,
+})
 }
