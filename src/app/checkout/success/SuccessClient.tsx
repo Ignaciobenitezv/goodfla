@@ -71,7 +71,7 @@ export default function SuccessClient() {
           return
         }
 
-        const maxTries = 10
+        const maxTries = 30
         const waitMs = 2000
 
         for (let i = 1; i <= maxTries; i++) {
@@ -99,17 +99,16 @@ export default function SuccessClient() {
           }
 
           const state = String(data.state || "processing")
-          const processed = !!data.processed
-          const failed = !!data.failed
+const processed = !!data.processed
+const failed = !!data.failed
+const approved = !!data.approved || state === "approved_pending_webhook"
 
-          // 1) OK final
-          if (processed || state === "processed") {
-            setProgress(96)
-            // ✅ TRACK PURCHASE (con deduplicación)
- const transactionId = orderId || paymentIdFromUrl || merchantOrderId
+const transactionId = orderId || paymentIdFromUrl || merchantOrderId
 const key = `purchase_tracked_${transactionId}`
 
-if (transactionId && !sessionStorage.getItem(key)) {
+const trackPurchaseOnce = () => {
+  if (!transactionId || sessionStorage.getItem(key)) return
+
   // GA4
   trackEvent("purchase", {
     transaction_id: transactionId,
@@ -120,25 +119,44 @@ if (transactionId && !sessionStorage.getItem(key)) {
 
   // META
   if (typeof window !== "undefined" && typeof (window as any).fbq === "function") {
-    ;(window as any).fbq("track", "Purchase", {
-      value: Number(data.total || 0),
-      currency: "ARS",
-      content_type: "product",
-    })
-  }
+  ;(window as any).fbq("track", "Purchase", {
+    value: Number(data.total || 0),
+    currency: "ARS",
+    content_type: "product",
+  }, {
+    eventID: transactionId,
+  })
+}
 
   sessionStorage.setItem(key, "1")
 }
 
-            clearCart()
-            localStorage.setItem("cart", "[]")
-            localStorage.removeItem("lastOrder")
+// 1) OK final
+if (processed || state === "processed") {
+  setProgress(96)
+  trackPurchaseOnce()
 
-            setUi("cleared")
-            setMsg("Pago aprobado. Tu compra fue confirmada")
-            setTimeout(() => setProgress(100), 350)
-            return
-          }
+  clearCart()
+  localStorage.setItem("cart", "[]")
+  localStorage.removeItem("lastOrder")
+
+  setUi("cleared")
+  setMsg("Pago aprobado. Tu compra fue confirmada")
+  setTimeout(() => setProgress(100), 350)
+  return
+}
+
+// 2) Pago aprobado pero webhook todavía procesando
+if (approved) {
+  setProgress((p) => clamp(Math.max(p, 80) + 4))
+  trackPurchaseOnce()
+
+  setUi("approved_waiting_stock")
+  setMsg(`Pago aprobado. Terminando de confirmar el pedido… (intento ${i}/${maxTries})`)
+
+  await new Promise((r) => setTimeout(r, waitMs))
+  continue
+}
 
           // 2) Fallo stock: cortar y avisar
           if (failed || state === "failed_stock" || state === "stock_insufficient") {
@@ -159,10 +177,10 @@ if (transactionId && !sessionStorage.getItem(key)) {
 
 
         setUi("approved_waiting_stock")
-        setMsg(
-          "Pago aprobado. Todavía estamos confirmando el stock. Si no se actualiza en unos minutos, escribinos."
-        )
-        setProgress(88)
+setMsg(
+  "Tu pago ya fue aprobado. Estamos terminando de confirmar el pedido. No hace falta que vuelvas a pagar."
+)
+setProgress(92)
       } catch (e) {
         console.error("error success:", e)
         setUi("error")

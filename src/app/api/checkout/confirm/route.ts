@@ -119,21 +119,38 @@ export async function GET(req: Request) {
 
     // Si todavía no hay marker, seguimos esperando (NO es error)
     if (!marker) {
-      return NextResponse.json({
-        ok: true,
-        state: "processing",
-        processed: false,
-        approved: null,
-        mpStatus: null,
-        paymentId: paymentId || null,
-        merchantOrderId: resolvedMerchantOrderId,
-        preferenceId,
-        orderId: orderIdParam || null,
-        markerId: null,
-        reason: "marker_not_found_yet",
-        total: 0,
-      })
+  let mpStatus: string | null = null
+  let approved = false
+  let total = 0
+
+  if (paymentId) {
+    const pay = await mpGetSoft(`https://api.mercadopago.com/v1/payments/${paymentId}`)
+    if (!(pay as any)?.__error) {
+      mpStatus = String(pay?.status || "").toLowerCase() || null
+      approved = mpStatus === "approved"
+      total =
+        Number(pay?.transaction_amount) ||
+        Number(pay?.transaction_details?.total_paid_amount) ||
+        0
     }
+  }
+
+  return NextResponse.json({
+    ok: true,
+    state: approved ? "approved_pending_webhook" : "processing",
+    processed: false,
+    failed: false,
+    approved,
+    mpStatus,
+    paymentId: paymentId || null,
+    merchantOrderId: resolvedMerchantOrderId,
+    preferenceId,
+    orderId: orderIdParam || null,
+    markerId: null,
+    reason: approved ? "approved_but_marker_not_found_yet" : "marker_not_found_yet",
+    total,
+  })
+}
 
     const state = normalizeState(marker?.status)
     const processed = state === "processed"
