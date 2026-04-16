@@ -329,7 +329,11 @@ couponLine,
 })
 
       const url = `https://api.whatsapp.com/send?phone=${WHATSAPP_NUMBER}&text=${encodeURIComponent(safeText)}`
-      window.open(url, "_blank", "noopener,noreferrer")
+
+// ⏳ esperar a que GA4 envíe el evento
+setTimeout(() => {
+  window.open(url, "_blank", "noopener,noreferrer")
+}, 300)
     } catch (error) {
       console.error("❌ Error preparando WhatsApp:", error)
       alert("No se pudo preparar el mensaje de WhatsApp.")
