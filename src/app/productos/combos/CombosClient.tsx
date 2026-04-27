@@ -527,15 +527,10 @@ useEffect(() => {
     maximumFractionDigits: 2,
   })
 
- const precioTransferencia = mode === "mayorista" 
-  ? precio 
-  : Math.round(precio * 0.7)
-  const precioTransferenciaTexto = precioTransferencia.toLocaleString("es-AR")
+ 
   const precioTexto = precio.toLocaleString("es-AR")
   const precioViejoTexto = precioViejo.toLocaleString("es-AR")
 
-  const ahorroTransferencia = Math.max(0, precio - precioTransferencia)
-  const ahorroTransferenciaTexto = ahorroTransferencia.toLocaleString("es-AR")
   const packQty =
     Array.isArray(combo.categoriasIncluidas) && combo.categoriasIncluidas.length > 0
       ? combo.categoriasIncluidas.reduce(
@@ -545,8 +540,7 @@ useEffect(() => {
       : 1
 
   const showPackPrice = packQty > 1
-  const precioPorUnidad = showPackPrice ? Math.round(precio / packQty) : null
-
+  
   const rating = Math.max(0, Math.min(5, Number(combo.rating ?? 0)))   
    const votes = Math.max(0, Number(combo.ratingCount ?? 0))
     const envioGratis = combo.envioGratis === true
@@ -602,9 +596,9 @@ const badgeText = BADGE_MAP[badgeCode] ?? ""
           </div>
 
           {/* Título */}
-          <h3 className="mt-1.5 text-[12px] sm:text-[13px] leading-snug font-semibold line-clamp-2 min-h-[30px]">
-            {combo.nombre}
-          </h3>
+          <h3 className="mt-2 text-[14px] sm:text-[20px] leading-snug font-bold text-zinc-900 line-clamp-2 min-h-[38px]">
+  {combo.nombre}
+</h3>
 
           {/* Rating */}
           {(rating > 0 || votes > 0) ? (
@@ -615,7 +609,7 @@ const badgeText = BADGE_MAP[badgeCode] ?? ""
                   return (
                     <span
                       key={idx}
-                      className={filled ? "text-[14px] text-amber-400" : "text-[14px] text-zinc-300"}
+                      className={filled ? "text-[26px] text-amber-400" : "text-[16px] text-zinc-300"}
                     >
                       ★
                     </span>
@@ -623,7 +617,7 @@ const badgeText = BADGE_MAP[badgeCode] ?? ""
                 })}
               </div>
 
-              {votes > 0 ? <span className="text-[12px] text-zinc-500">({votes})</span> : null}
+              {votes > 0 ? <span className="text-[18px] text-zinc-500">({votes})</span> : null}
             </div>
           ) : null}
 
@@ -638,49 +632,33 @@ const badgeText = BADGE_MAP[badgeCode] ?? ""
   )}
 
   {precioViejo > 0 && (
-    <p className="text-[12px] text-zinc-400 line-through">
-      ${precioViejoTexto} ARS
-    </p>
+    <p className="text-[13px] sm:text-[20px] text-zinc-400 line-through font-medium">
+  ${precioViejoTexto} ARS
+</p>
   )}
 
-  {/* 🔥 BLOQUE VERDE PRIMERO */}
-  <div className="rounded-lg border border-green-200 bg-green-50 px-3 py-3 min-h-[108px] sm:min-h-[96px] flex flex-col justify-center overflow-hidden">
-    <p className="leading-snug break-words">
-      <span className="block text-[15px] sm:text-[18px] font-extrabold text-green-800">
-        ${precioTransferenciaTexto}
-      </span>
-      <span className="block text-[13px] sm:text-[16px] font-semibold text-green-700 mt-0.5">
-        CON TRANSFERENCIA{" "}
-        {mode !== "mayorista" && envioGratis ? "+ Envío gratis" : ""}
-      </span>
-    </p>
 
-    {mode !== "mayorista" && (
-      <p className="text-[10px] sm:text-[11px] leading-snug text-green-700 mt-2 break-words">
-        Ahorrás ${ahorroTransferenciaTexto} pagando en efectivo / transferencia
-      </p>
-    )}
-  </div>
 
   {/* 🔽 PRECIO SECUNDARIO */}
-  <div className="flex items-center gap-2 flex-wrap">
-    <p className="text-[16px] sm:text-[18px] font-bold leading-none text-black">
-      ${precioTexto}
-    </p>
+ <div className="mt-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-3 py-3 shadow-sm transition-transform duration-300 group-hover:-translate-y-0.5 group-hover:shadow-md">
+  <p className="text-[11px] font-bold uppercase tracking-wide text-emerald-700">
+    Precio final
+  </p>
 
-    <span className="bg-red-600 text-white text-[10px] sm:text-[11px] px-2 py-1 rounded font-semibold">
-      OFERTA
-    </span>
-    {mode !== "mayorista" && (
-    <p className="text-[12px] sm:text-[13px] text-zinc-700">
-      3x de <span className="font-semibold">${cuotaTexto}</span> sin interés
+  <p className="mt-1 text-[28px] sm:text-[32px] font-black leading-none tracking-tight text-emerald-700">
+    ${precioTexto}
+  </p>
+
+  {mode !== "mayorista" && (
+    <p className="mt-2 inline-flex rounded-full bg-red-600 px-3 py-1 text-[12px] sm:text-[13px] font-bold text-white">
+      3 cuotas sin interés de ${cuotaTexto}
     </p>
   )}
-  </div>
+</div>
 
   
 
-  <div className="min-h-[18px]" />
+  
 </div>
 
           {/* Botón */}

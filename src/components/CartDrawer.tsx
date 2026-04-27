@@ -180,17 +180,15 @@ useEffect(() => {
 
     
 
-    <p className="text-[11px] font-extrabold uppercase leading-tight text-red-600">
-      30% OFF con transferencia
-    </p>
-
-    <p className="text-[11px] font-semibold leading-tight text-gray-700">
-      3 cuotas sin interés de{" "}
-      ${Number(cuotasMp).toLocaleString("es-AR", {
-        minimumFractionDigits: 0,
-        maximumFractionDigits: 0,
-      })}
-    </p>
+    {!hasMayorista && (
+  <p className="text-[11px] font-semibold leading-tight text-gray-700">
+    3 cuotas sin interés de{" "}
+    ${Number(cuotasMp).toLocaleString("es-AR", {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    })}
+  </p>
+)}
 
     {item.talle && (
       <p className="text-[11px] text-gray-500">Talle: {item.talle}</p>
@@ -261,13 +259,13 @@ useEffect(() => {
             
 
             {/* Total */}
-            <div className="flex justify-between items-start border-t pt-3">
+       <div className="flex justify-between items-start border-t pt-3">
   <div className="flex flex-col">
     <span className="text-[13px] font-medium text-gray-500">
-      Total con Mercado Pago
+      {hasMayorista ? "Total por transferencia" : "Total con Mercado Pago"}
     </span>
 
-    {!quoteLoading && cuotasMp > 0 && (
+    {!hasMayorista && !quoteLoading && cuotasMp > 0 && (
       <span className="mt-0.5 text-[11px] text-gray-500">
         3 cuotas sin interés de{" "}
         ${Number(cuotasMp).toLocaleString("es-AR", {
@@ -284,62 +282,31 @@ useEffect(() => {
       : `$${Number(totalFinalConCoupon).toLocaleString("es-AR")}`}
   </span>
 </div>
-<div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 space-y-1.5">
-  <p className="text-[14px] font-extrabold uppercase tracking-wide text-red-600">
-  30% OFF CON TRANSFERENCIA
-</p>
-
-  <div className="flex justify-between text-[13px]">
-    <span className="text-red-700">PAGÁS</span>
-    <span className="text-[20px] font-extrabold text-red-600 leading-none animate-soft-pulse">
-      {transferLoading
-        ? "..."
-        : transferTotal != null
-        ? `$${Number(transferTotal).toLocaleString("es-AR")}`
-        : "—"}
-    </span>
-  </div>
-
-  {ahorroTransferencia > 0 && (
-    <div className="flex justify-between text-[12px]">
-      
-     
-    </div>
-  )}
-</div>
             {/* Botones */}
 <div className="space-y-2">
+  {hasMayorista ? (
+    <>
+      <p className="text-center text-[12px] text-amber-700">
+        Los productos mayoristas solo pueden pagarse por transferencia.
+      </p>
 
- {hasMayorista ? (
-  <button
-    type="button"
-    disabled
-    className="flex w-full cursor-not-allowed items-center justify-center rounded-xl bg-[#009ee3]/40 px-4 py-2.5 text-center text-[13px] font-semibold uppercase tracking-wide text-white"
-    title="Los productos mayoristas solo pueden pagarse por transferencia"
-  >
-    Pagar con Mercado Pago
-  </button>
-) : (
-  <Link
-    href="/checkout-mp"
-    onClick={closeCart}
-    className="flex w-full items-center justify-center rounded-xl bg-[#009ee3] px-4 py-2.5 text-center text-[13px] font-semibold uppercase tracking-wide text-white transition hover:opacity-90"
-  >
-    Pagar con Mercado Pago
-  </Link>
-)}
-{hasMayorista && (
-  <p className="text-center text-[12px] text-amber-700">
-    Los productos mayoristas solo pueden pagarse por transferencia.
-  </p>
-)}
-  <Link
-    href="/checkout-transfer"
-    onClick={closeCart}
-   className="flex w-full items-center justify-center rounded-xl border border-black bg-white px-4 py-2.5 text-center text-[13px] font-semibold uppercase tracking-wide text-black transition hover:bg-black hover:text-white"
-  >
-    Pagar con transferencia
-  </Link>
+      <Link
+        href="/checkout-transfer"
+        onClick={closeCart}
+        className="flex w-full items-center justify-center rounded-xl border border-black bg-white px-4 py-2.5 text-center text-[13px] font-semibold uppercase tracking-wide text-black transition hover:bg-black hover:text-white"
+      >
+        Pagar
+      </Link>
+    </>
+  ) : (
+    <Link
+      href="/checkout-mp"
+      onClick={closeCart}
+      className="flex w-full items-center justify-center rounded-xl bg-[#009ee3] px-4 py-2.5 text-center text-[13px] font-semibold uppercase tracking-wide text-white transition hover:opacity-90"
+    >
+      Pagar
+    </Link>
+  )}
 </div>
           </div>
         )}

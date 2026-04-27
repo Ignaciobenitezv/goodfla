@@ -308,52 +308,32 @@ const totalFinalConCoupon = Math.max(0, totalConPromo - couponDiscount)
 
 
 
-{!hasMayorista && (
-  <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
-    <p className="text-xs font-semibold text-red-600 tracking-wide">
-      30% OFF CON TRANSFERENCIA
-    </p>
 
-    <div className="flex items-center justify-between mt-1">
-      <span className="text-sm text-red-500">PAGÁS</span>
-      <span className="text-xl font-extrabold text-red-600">
-        {transferLoading
-          ? "..."
-          : transferTotal != null
-          ? `$${transferTotal.toLocaleString("es-AR")}`
-          : "—"}
-      </span>
-    </div>
-  </div>
-)}
 
-            <div className="space-y-3">
+<div className="space-y-3">
   {hasMayorista ? (
-    <button
-      type="button"
-      disabled
-      className="w-full rounded-lg bg-[#009ee3]/40 py-3 font-medium text-white cursor-not-allowed"
-      title="Los productos mayoristas solo pueden pagarse por transferencia"
-    >
-      Pagar con Mercado Pago
-    </button>
+    <>
+      <p className="text-center text-xs font-medium text-amber-700">
+        Los productos mayoristas solo pueden pagarse por transferencia.
+      </p>
+
+      <button
+        type="button"
+        onClick={() => router.push("/checkout-transfer")}
+        className="w-full rounded-lg bg-black py-3 font-medium text-white transition hover:opacity-90"
+      >
+        Pagar
+      </button>
+    </>
   ) : (
     <button
       type="button"
       onClick={() => router.push("/checkout-mp")}
       className="w-full rounded-lg bg-[#009ee3] py-3 font-medium text-white transition hover:opacity-90"
     >
-      Pagar con Mercado Pago
+      Pagar
     </button>
   )}
-
-  <button
-    type="button"
-    onClick={() => router.push("/checkout-transfer")}
-    className="w-full rounded-lg bg-black py-3 font-medium text-white transition hover:opacity-90"
-  >
-    Pagar con transferencia
-  </button>
 </div>
 
             <button

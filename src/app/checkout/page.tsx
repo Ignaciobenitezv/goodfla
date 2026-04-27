@@ -96,8 +96,6 @@ const buildWhatsappOrderText = ({
         : `$${formatARS(quote.price)}`
       : "-"
 
-  const descuentoAplicado = Math.max(0, subtotalSinPromo - subtotalPromo)
-
   const direccion =
     envio === "domicilio"
       ? `Direccion: ${sanitizeWhatsappText(
@@ -112,8 +110,7 @@ const buildWhatsappOrderText = ({
     "",
     ...lines,
     "",
-    `Subtotal (precio lista): $${formatARS(subtotalSinPromo)}`,
-    `Descuento aplicado: -$${formatARS(descuentoAplicado)}`,
+    `Subtotal: $${formatARS(subtotalSinPromo)}`,
     `Total final: $${formatARS(totalFinal)}`,
     `Costo de envio: ${envioCostoTxt}`,
     "",
@@ -195,14 +192,12 @@ const handleTransferOrCashWhatsApp = async () => {
       return `- ${nombreLimpio}${talle} x${qty} - $${formatARS(lineTotal)}`
     })
 
-    const descuentoAplicado = Math.max(0, subtotalSinPromo - totals.computedTotal)
     const messageLines = [
       "Hola! Mi pedido es:",
       "",
       ...lines,
       "",
       `Subtotal (precio lista): $${formatARS(subtotalSinPromo)}`,
-      `Descuento aplicado: -$${formatARS(descuentoAplicado)}`,
       couponCode ? `Cupón aplicado: ${couponCode}` : "",
       `Total final: $${formatARS(totals.computedTotal)}`,
       `Costo de envio: ${envio === "sucursal" ? "Gratis" : quote ? (quote.price === 0 ? "Gratis" : `$${formatARS(quote.price)}`) : "-"}`,
@@ -985,37 +980,34 @@ useEffect(() => {
     )}
 
     <div className="space-y-3">
-      <label
-       onClick={async () => {
-  setPayMethod("transfer")
-  orderIdRef.current = ""
-  await handleTransferOrCashWhatsApp()
-}}
-        className={`flex items-center justify-between border rounded p-4 cursor-pointer transition ${
-          payMethod === "transfer"
-            ? "border-amber-600 bg-amber-50"
-            : "hover:border-black"
-        }`}
-      >
-        <div>
-  <p className="font-medium">Efectivo / Transferencia</p>
+      {hasMayorista && (
+  <label
+    onClick={async () => {
+      setPayMethod("transfer")
+      orderIdRef.current = ""
+      await handleTransferOrCashWhatsApp()
+    }}
+    className={`flex items-center justify-between border rounded p-4 cursor-pointer transition ${
+      payMethod === "transfer"
+        ? "border-amber-600 bg-amber-50"
+        : "hover:border-black"
+    }`}
+  >
+    <div>
+      <p className="font-medium">Efectivo / Transferencia</p>
 
-  {!hasMayorista ? (
-    <p className="mt-1 inline-flex rounded-full bg-green-100 px-3 py-1 text-sm font-extrabold text-green-800 border border-green-200">
-      💸 Aprovechá el 30% OFF pagando por este medio
-    </p>
-  ) : (
-    <p className="mt-1 inline-flex rounded-full bg-amber-100 px-3 py-1 text-sm font-bold text-amber-800 border border-amber-200">
-      Medio de pago habilitado para esta compra
-    </p>
-  )}
+      <p className="mt-1 inline-flex rounded-full bg-amber-100 px-3 py-1 text-sm font-bold text-amber-800 border border-amber-200">
+        Medio de pago habilitado para esta compra
+      </p>
 
-  <p className="text-xs text-gray-500 mt-2">
-    Coordinamos por WhatsApp y te pasamos los datos
-  </p>
-</div>
-        <span className="text-lg">💸</span>
-      </label>
+      <p className="text-xs text-gray-500 mt-2">
+        Coordinamos por WhatsApp y te pasamos los datos
+      </p>
+    </div>
+
+    <span className="text-lg">💸</span>
+  </label>
+)}
 
       {!hasMayorista && (
         <>

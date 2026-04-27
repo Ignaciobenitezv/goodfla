@@ -7,8 +7,8 @@ import AnimatedFadeDown from './AnimatedFadeDown'
 
 const categorias = [
   { titulo: 'ZAPATILLAS 10 X $230.000', imagen: '/blanca.webp', link: '/productos/mayorista' },
-  { titulo: 'ZAPATILLAS 2 X $59.999', imagen: '/sani2.webp', link: '/productos/zapatillas' },
-  { titulo: 'ZAPATILLAS x $35.000', imagen: '/sty.webp', link: '/productos/zapatillas-individuales' },
+  { titulo: 'ZAPATILLAS 2 X $69.999', imagen: '/sani2.webp', link: '/productos/zapatillas' },
+  { titulo: 'ZAPATILLAS x $37.500', imagen: '/sty.webp', link: '/productos/zapatillas-individuales' },
 
   // { titulo: 'COMBOS', imagen: '/fd.jpg', link: '/productos/combos' },
 ]
