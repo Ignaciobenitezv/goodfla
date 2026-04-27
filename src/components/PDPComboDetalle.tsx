@@ -183,11 +183,7 @@ const hasStockForCombo = () => {
   const precioHabitual = Number(combo?.precioAnterior ?? 0)
 
   const esMayorista = mode === "mayorista"
-  const aplicaTransferenciaPromo = mode === "combo"
-
-  const precioTransferencia = aplicaTransferenciaPromo
-    ? Math.round(precioOferta * 0.7)
-    : precioOferta
+  
 
   const cuotaExacta = precioOferta / 3
   const cuotaTexto = cuotaExacta.toLocaleString("es-AR", {
@@ -197,7 +193,7 @@ const hasStockForCombo = () => {
 
   const precioOfertaTexto = precioOferta.toLocaleString("es-AR")
   const precioHabitualTexto = precioHabitual.toLocaleString("es-AR")
-  const precioTransferenciaTexto = precioTransferencia.toLocaleString("es-AR")
+  
   // ================= RENDER =================
   return (
     <>
@@ -243,18 +239,13 @@ const hasStockForCombo = () => {
   )}
 
   {/* Transferencia (HERO SECONDARY) */}
+{esMayorista && (
   <div className="bg-green-50 border border-green-200 rounded-lg px-4 py-3">
     <p className="text-green-800 font-bold text-base md:text-lg">
-      ${precioTransferenciaTexto}{" "}
-      {esMayorista ? "SOLO TRANSFERENCIA" : "CON TRANSFERENCIA + ENVIO GRATIS"}
+      ${precioOfertaTexto} Precio mayorista
     </p>
-
-    {!esMayorista && (
-      <p className="text-xs text-green-700 mt-1">
-         Ahorrás pagando en efectivo / transferencia
-      </p>
-    )}
   </div>
+)}
 
 </div>
 

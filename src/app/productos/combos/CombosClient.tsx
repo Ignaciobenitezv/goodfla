@@ -650,9 +650,9 @@ const badgeText = BADGE_MAP[badgeCode] ?? ""
   </p>
 
   {mode !== "mayorista" && (
-    <p className="mt-2 inline-flex rounded-full bg-red-600 px-3 py-1 text-[12px] sm:text-[13px] font-bold text-white">
-      3 cuotas sin interés de ${cuotaTexto}
-    </p>
+ <p className="mt-2 flex w-full items-center justify-center rounded-full bg-red-600 px-2 py-[2px] text-[9px] sm:text-[16px] font-semibold text-white leading-tight text-center break-words">
+  3 cuotas sin interés de ${cuotaTexto}
+</p>
   )}
 </div>
 

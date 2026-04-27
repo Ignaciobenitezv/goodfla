@@ -174,15 +174,6 @@ export default function PDPZapatillaIndividualDetalle({
     o 3x de <span className="font-semibold">${cuotaTexto}</span> sin interés
   </p>
 
-  <div className="bg-green-50 border border-green-200 rounded-lg px-4 py-3">
-    <p className="text-green-800 font-bold text-base md:text-lg">
-      ${precioTransferenciaTexto} CON TRANSFERENCIA + ENVÍO GRATIS
-    </p>
-
-    <p className="text-xs text-green-700 mt-1">
-      Ahorrás ${ahorroTransferenciaTexto} pagando en efectivo / transferencia
-    </p>
-  </div>
 </div>
 
             <div className="mt-3">
