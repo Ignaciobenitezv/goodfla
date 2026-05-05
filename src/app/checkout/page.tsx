@@ -96,11 +96,13 @@ const buildWhatsappOrderText = ({
         : `$${formatARS(quote.price)}`
       : "-"
 
-  const direccion =
-    envio === "domicilio"
+    const direccion =
+      envio === "domicilio"
       ? `Direccion: ${sanitizeWhatsappText(
           `${destinatario.calle || "-"} ${destinatario.numero || ""}, ${
-            destinatario.barrio ? destinatario.barrio + ", " : ""
+            (destinatario.provincia || destinatario.barrio)
+              ? `${destinatario.provincia || destinatario.barrio}, `
+              : ""
           }${destinatario.ciudad || "-"}`
         )}`
       : ""
@@ -206,7 +208,7 @@ const handleTransferOrCashWhatsApp = async () => {
       `Telefono: ${sanitizeWhatsappText(telefono || "-")}`,
       `Entrega: ${envio === "domicilio" ? `Envio a domicilio (CP: ${cp || "-"})` : envio === "sucursal" ? "Retiro por sucursal" : "Entrega: -"}`,
       envio === "domicilio"
-        ? `Direccion: ${sanitizeWhatsappText(`${destinatario.calle || "-"} ${destinatario.numero || ""}, ${destinatario.barrio ? destinatario.barrio + ", " : ""}${destinatario.ciudad || "-"}`)}`
+        ? `Direccion: ${sanitizeWhatsappText(`${destinatario.calle || "-"} ${destinatario.numero || ""}, ${(destinatario.provincia || destinatario.barrio) ? `${destinatario.provincia || destinatario.barrio}, ` : ""}${destinatario.ciudad || "-"}`)}`
         : "",
       "",
       "Quiero abonar en transferencia/efectivo.",
@@ -247,6 +249,7 @@ const handleTransferOrCashWhatsApp = async () => {
     calle: "",
     numero: "",
     barrio: "",
+    provincia: "",
     ciudad: "",
   })
 
@@ -255,8 +258,8 @@ const handleTransferOrCashWhatsApp = async () => {
   const datosEnvioCompletos =
   destinatario.calle.trim() !== "" &&
   destinatario.numero.trim() !== "" &&
-  
-  destinatario.barrio.trim() !== "" &&
+
+  (destinatario.provincia.trim() !== "" || destinatario.barrio.trim() !== "") &&
   destinatario.ciudad.trim() !== ""
 const puedeContinuarEntrega =
   envio === "sucursal" ||
@@ -360,12 +363,17 @@ const totalFinalConCoupon = total
         email: email.trim(),
         envio: envio || null,
         cp: cp || null,
+        departamento: null,
+        provincia: destinatario.provincia || destinatario.barrio || null,
+        pais: "Argentina",
         direccion:
           envio === "domicilio"
             ? {
               calle: destinatario.calle || "",
               numero: destinatario.numero || "",
               barrio: destinatario.barrio || "",
+              provincia: destinatario.provincia || destinatario.barrio || "",
+              pais: "Argentina",
               ciudad: destinatario.ciudad || "",
             }
             : null,
@@ -478,12 +486,17 @@ const totalFinalConCoupon = total
           email: email.trim(),
           envio,
           cp: cp || null,
+          departamento: null,
+          provincia: destinatario.provincia || destinatario.barrio || null,
+          pais: "Argentina",
           direccion:
             envio === "domicilio"
               ? {
                 calle: destinatario.calle || "",
                 numero: destinatario.numero || "",
                 barrio: destinatario.barrio || "",
+                provincia: destinatario.provincia || destinatario.barrio || "",
+                pais: "Argentina",
                 ciudad: destinatario.ciudad || "",
               }
               : null,
@@ -718,12 +731,17 @@ const payload = {
     email: email.trim(),
     envio: envio,
     cp: cp || null,
+    departamento: null,
+    provincia: destinatario.provincia || destinatario.barrio || null,
+    pais: "Argentina",
     direccion:
       envio === "domicilio"
         ? {
             calle: destinatario.calle || "",
             numero: destinatario.numero || "",
             barrio: destinatario.barrio || "",
+            provincia: destinatario.provincia || destinatario.barrio || "",
+            pais: "Argentina",
             ciudad: destinatario.ciudad || "",
           }
         : null,
@@ -926,7 +944,7 @@ useEffect(() => {
     handleChangeDestinatario("numero", onlyNumbers)
   }}
 />
-                <ValidatedInput placeholder="Provincia" value={destinatario.barrio} onChange={(v: string) => handleChangeDestinatario("barrio", v)} />
+                <ValidatedInput placeholder="Provincia / Estado" value={destinatario.provincia} onChange={(v: string) => handleChangeDestinatario("provincia", v)} />
                 <ValidatedInput placeholder="Ciudad" value={destinatario.ciudad} onChange={(v: string) => handleChangeDestinatario("ciudad", v)} />
               </div>
             )}

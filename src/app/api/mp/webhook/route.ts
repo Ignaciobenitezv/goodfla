@@ -331,14 +331,20 @@ type MetaCustomer = {
   nombre?: string | null
   apellido?: string | null
   telefono?: string | null
-  email?: string | null // ✅ NUEVO
+  email?: string | null
   envio?: "domicilio" | "sucursal" | null
   cp?: string | null
+  departamento?: string | null
+  provincia?: string | null
+  pais?: string | null
   direccion?: {
     calle?: string | null
     numero?: string | null
     barrio?: string | null
     ciudad?: string | null
+    departamento?: string | null
+    provincia?: string | null
+    pais?: string | null
   } | null
 }
 
@@ -369,33 +375,63 @@ function parseCartFromMetadata(meta: any): CartItem[] {
 
 function buildShippingFromCustomer(customer: MetaCustomer | null | undefined): string {
   const envio = customer?.envio
-  if (envio === "sucursal") return "Retiro por sucursal"
+  const country = customer?.direccion?.pais || customer?.pais || null
+
+  if (envio === "sucursal") {
+    return [
+      "Metodo: Retiro por sucursal",
+      country ? `Pais: ${country}` : null,
+    ]
+      .filter(Boolean)
+      .join(" | ")
+  }
 
   const d = customer?.direccion
-  const parts = [d?.calle, d?.numero, d?.barrio, d?.ciudad, customer?.cp].filter(Boolean)
-  return parts.length ? parts.join(" ") : "Envío a domicilio"
+  const street = [d?.calle, d?.numero].filter(Boolean).join(" ").trim()
+  const province = d?.provincia || customer?.provincia || d?.barrio || null
+  const department = d?.departamento || customer?.departamento || null
+
+  const lines = [
+    "Metodo: Envio a domicilio",
+    country ? `Pais: ${country}` : null,
+    street ? `Direccion: ${street}` : null,
+    department ? `Departamento / referencia: ${department}` : null,
+    d?.ciudad ? `Ciudad: ${d.ciudad}` : null,
+    province ? `Provincia / Estado: ${province}` : null,
+    customer?.cp ? `Codigo postal: ${customer.cp}` : null,
+  ].filter(Boolean)
+
+  return lines.length ? lines.join(" | ") : "Envio a domicilio"
 }
 
 function buildShippingObjectFromCustomer(customer: MetaCustomer | null | undefined) {
   const envio = customer?.envio
+  const d = customer?.direccion || undefined
+  const direccion =
+    d || customer?.departamento || customer?.provincia || customer?.pais
+      ? {
+        calle: d?.calle ?? undefined,
+        numero: d?.numero ?? undefined,
+        barrio: d?.barrio ?? undefined,
+        departamento: d?.departamento ?? customer?.departamento ?? undefined,
+        ciudad: d?.ciudad ?? undefined,
+        provincia: d?.provincia ?? customer?.provincia ?? d?.barrio ?? undefined,
+        pais: d?.pais ?? customer?.pais ?? undefined,
+      }
+      : undefined
 
   if (envio === "sucursal") {
-    return { type: "sucursal" as const }
+    return {
+      type: "sucursal" as const,
+      pais: customer?.pais ?? d?.pais ?? undefined,
+    }
   }
-
-  const d = customer?.direccion || undefined
 
   return {
     type: "domicilio" as const,
     cp: customer?.cp ?? undefined,
-    direccion: d
-      ? {
-        calle: d.calle ?? undefined,
-        numero: d.numero ?? undefined,
-        barrio: d.barrio ?? undefined,
-        ciudad: d.ciudad ?? undefined,
-      }
-      : undefined,
+    pais: customer?.pais ?? d?.pais ?? undefined,
+    direccion,
   }
 }
 
@@ -753,6 +789,8 @@ const updated = await sanity
                 paymentId,
                 total: Number(payment?.transaction_amount ?? 0) || undefined,
                 currency: String(payment?.currency_id || "ARS"),
+                buyerFirstName: String(customer?.nombre || "").trim() || undefined,
+                buyerLastName: String(customer?.apellido || "").trim() || undefined,
                 buyerName,
                 buyerEmail,
                 buyerPhone,
@@ -1016,6 +1054,14 @@ try {
               paymentId,
               total: Number(payment?.transaction_amount ?? 0) || undefined,
               currency: String(payment?.currency_id || "ARS"),
+              buyerFirstName:
+                String(metaCustomer?.nombre || "").trim() ||
+                String(payment?.payer?.first_name || "").trim() ||
+                undefined,
+              buyerLastName:
+                String(metaCustomer?.apellido || "").trim() ||
+                String(payment?.payer?.last_name || "").trim() ||
+                undefined,
               buyerName,
               buyerEmail,
               buyerPhone,

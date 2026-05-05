@@ -48,11 +48,17 @@ customer?: {
     email?: string // ✅ NUEVO
     envio?: "domicilio" | "sucursal"
     cp?: string | null
+    departamento?: string | null
+    provincia?: string | null
+    pais?: string | null
     direccion?: {
       calle?: string
       numero?: string
       barrio?: string
+      departamento?: string
       ciudad?: string
+      provincia?: string
+      pais?: string
     } | null
   }
 }
@@ -796,6 +802,9 @@ if (comboLines.length) {
       email: email || null,
       envio: body.customer?.envio || shippingType,
       cp: body.customer?.cp || body.shipping?.cp || null,
+      departamento: body.customer?.departamento || null,
+      provincia: body.customer?.provincia || null,
+      pais: body.customer?.pais || null,
       direccion: body.customer?.direccion || null,
     },
 
