@@ -50,6 +50,21 @@ async function mpGetSoft(url: string) {
   }
 }
 
+function getEmailErrorMessage(e: any) {
+  return String(
+    e?.message ||
+      e?.response?.data?.message ||
+      e?.response?.message ||
+      e?.name ||
+      e ||
+      "email_send_failed"
+  )
+}
+
+function needsEmailRetry(doc: any) {
+  return doc?.ownerNotified !== true || doc?.customerNotified !== true
+}
+
 
 function pickTopicAndId(req: Request, body: any) {
   const url = new URL(req.url)
@@ -607,8 +622,11 @@ async function handle(req: Request) {
 })
 
 const existing = await sanity.getDocument(markerId)
+const retryEmailsOnly =
+  (existing as any)?.status === "processed" && needsEmailRetry(existing)
+let emailRetryLocked = false
 
-if ((existing as any)?.status === "processed") {
+if ((existing as any)?.status === "processed" && !retryEmailsOnly) {
   return respond200(
     { msg: "already_processed_card_inline", markerId, paymentId },
     startedAt
@@ -622,20 +640,54 @@ if ((existing as any)?.status === "processing") {
   )
 }
 
-try {
-  await sanity
-    .patch(markerId)
-    .ifRevisionId((existing as any)?._rev)
-    .set({
-      status: "processing",
-      processingAt: new Date().toISOString(),
-    })
-    .commit()
-} catch {
-  return respond200(
-    { msg: "processing_lock_lost_card_inline", markerId, paymentId },
-    startedAt
-  )
+if (retryEmailsOnly) {
+  if ((existing as any)?.emailRetryStatus === "processing") {
+    return respond200(
+      { msg: "email_retry_already_processing_card_inline", markerId, paymentId },
+      startedAt
+    )
+  }
+
+  try {
+    await sanity
+      .patch(markerId)
+      .ifRevisionId((existing as any)?._rev)
+      .set({
+        emailRetryStatus: "processing",
+        emailRetryStartedAt: new Date().toISOString(),
+      })
+      .commit()
+
+    emailRetryLocked = true
+  } catch {
+    return respond200(
+      { msg: "email_retry_lock_lost_card_inline", markerId, paymentId },
+      startedAt
+    )
+  }
+
+  console.log("📧 retrying_missing_emails_card_inline", {
+    markerId,
+    paymentId,
+    ownerNotified: (existing as any)?.ownerNotified === true,
+    customerNotified: (existing as any)?.customerNotified === true,
+  })
+} else {
+  try {
+    await sanity
+      .patch(markerId)
+      .ifRevisionId((existing as any)?._rev)
+      .set({
+        status: "processing",
+        processingAt: new Date().toISOString(),
+      })
+      .commit()
+  } catch {
+    return respond200(
+      { msg: "processing_lock_lost_card_inline", markerId, paymentId },
+      startedAt
+    )
+  }
 }
 
         // si está processed pero ownerNotified NO, dejamos seguir para reintentar mail
@@ -702,7 +754,7 @@ const packIdSet = new Set(packIds)
 // ✅ SOLO descontar stock de líneas que NO sean packMayorista
 const cartForStock = cart.filter((x) => !packIdSet.has(String(x.productId)))
 
-if (cartForStock.length) {
+if (!retryEmailsOnly && cartForStock.length) {
   const r = await reserveStockAtomic(cartForStock, markerId)
 
   if (!r.ok) {
@@ -730,13 +782,14 @@ if (cartForStock.length) {
 
     return respond200({ ignored: true, reason: "failed_stock_card_inline", markerId, paymentId }, startedAt)
   }
-} else {
+} else if (!retryEmailsOnly) {
   console.log("📦 only packMayorista lines in card_inline webhook: skipping stock reserve", {
     markerId,
     paymentId,
   })
 }
 
+try {
 // ✅ items SIEMPRE desde el cart (incluye packMayorista y productos)
 let items = await buildEmailItems(cart, meta)
 if (!items.length && cart.length) {
@@ -784,6 +837,13 @@ const updated = await sanity
           // OWNER
           if (updated.ownerNotified !== true) {
             try {
+              console.log("📧 attempting_owner_email_card_inline", {
+                markerId,
+                paymentId,
+                orderId: orderIdForEmail,
+                to: "OWNER_EMAIL",
+              })
+
               await sendOwnerSaleEmail({
                 orderId: orderIdForEmail,
                 paymentId,
@@ -800,17 +860,47 @@ const updated = await sanity
               })
 
               await sanity.patch(markerId)
-                .set({ ownerNotified: true, ownerNotifiedAt: new Date().toISOString() })
+                .set({
+                  ownerNotified: true,
+                  ownerNotifiedAt: new Date().toISOString(),
+                })
+                .unset(["ownerEmailFailed", "ownerEmailError", "ownerEmailFailedAt"])
                 .commit()
                 .catch(() => { })
+
+              console.log("✅ owner_email_sent_card_inline", {
+                markerId,
+                paymentId,
+                orderId: orderIdForEmail,
+              })
             } catch (e: any) {
-              console.error("❌ owner_notify_failed (card_inline)", e?.message || e)
+              const errMsg = getEmailErrorMessage(e)
+              console.error("❌ owner_notify_failed_card_inline", {
+                markerId,
+                paymentId,
+                error: errMsg,
+              })
+              await sanity.patch(markerId)
+                .set({
+                  ownerEmailFailed: true,
+                  ownerEmailError: errMsg,
+                  ownerEmailFailedAt: new Date().toISOString(),
+                })
+                .commit()
+                .catch(() => { })
             }
           }
 
           // CUSTOMER
           if (buyerEmail && updated.customerNotified !== true) {
             try {
+              console.log("📧 attempting_customer_email_card_inline", {
+                markerId,
+                paymentId,
+                orderId: orderIdForEmail,
+                to: buyerEmail,
+              })
+
               await sendCustomerPurchaseEmail({
                 to: buyerEmail,
                 orderId: orderIdForEmail,
@@ -824,16 +914,66 @@ const updated = await sanity
               })
 
               await sanity.patch(markerId)
-                .set({ customerNotified: true, customerNotifiedAt: new Date().toISOString() })
+                .set({
+                  customerNotified: true,
+                  customerNotifiedAt: new Date().toISOString(),
+                })
+                .unset(["customerEmailFailed", "customerEmailError", "customerEmailFailedAt"])
                 .commit()
                 .catch(() => { })
+
+              console.log("✅ customer_email_sent_card_inline", {
+                markerId,
+                paymentId,
+                orderId: orderIdForEmail,
+                to: buyerEmail,
+              })
             } catch (e: any) {
-              console.error("❌ customer_notify_failed (card_inline)", e?.message || e)
+              const errMsg = getEmailErrorMessage(e)
+              console.error("❌ customer_notify_failed_card_inline", {
+                markerId,
+                paymentId,
+                to: buyerEmail,
+                error: errMsg,
+              })
+              await sanity.patch(markerId)
+                .set({
+                  customerEmailFailed: true,
+                  customerEmailError: errMsg,
+                  customerEmailFailedAt: new Date().toISOString(),
+                })
+                .commit()
+                .catch(() => { })
             }
+          } else if (!buyerEmail && updated.customerNotified !== true) {
+            const errMsg = "Missing buyerEmail"
+            console.warn("⚠️ customer_email_skipped_missing_buyer_email_card_inline", {
+              markerId,
+              paymentId,
+              orderId: orderIdForEmail,
+            })
+            await sanity.patch(markerId)
+              .set({
+                customerEmailFailed: true,
+                customerEmailError: errMsg,
+                customerEmailFailedAt: new Date().toISOString(),
+              })
+              .commit()
+              .catch(() => { })
           }
         }
 
-
+} finally {
+  if (emailRetryLocked) {
+    await sanity.patch(markerId)
+      .set({
+        emailRetryStatus: "done",
+        emailRetryFinishedAt: new Date().toISOString(),
+      })
+      .commit()
+      .catch(() => { })
+  }
+}
 
         return respond200({ msg: "processed_card_inline_no_merchant_order", markerId, paymentId }, startedAt)
       }
@@ -881,8 +1021,11 @@ const updated = await sanity
 
 
 const existing = await sanity.getDocument(markerId)
+const retryEmailsOnly =
+  (existing as any)?.status === "processed" && needsEmailRetry(existing)
+let emailRetryLocked = false
 
-if ((existing as any)?.status === "processed") {
+if ((existing as any)?.status === "processed" && !retryEmailsOnly) {
   return respond200(
     { msg: "already_processed", markerId, paymentId, status: "processed" },
     startedAt
@@ -896,20 +1039,54 @@ if ((existing as any)?.status === "processing") {
   )
 }
 
-try {
-  await sanity
-    .patch(markerId)
-    .ifRevisionId((existing as any)?._rev)
-    .set({
-      status: "processing",
-      processingAt: new Date().toISOString(),
-    })
-    .commit()
-} catch {
-  return respond200(
-    { msg: "processing_lock_lost", markerId, paymentId, status: "processing" },
-    startedAt
-  )
+if (retryEmailsOnly) {
+  if ((existing as any)?.emailRetryStatus === "processing") {
+    return respond200(
+      { msg: "email_retry_already_processing", markerId, paymentId },
+      startedAt
+    )
+  }
+
+  try {
+    await sanity
+      .patch(markerId)
+      .ifRevisionId((existing as any)?._rev)
+      .set({
+        emailRetryStatus: "processing",
+        emailRetryStartedAt: new Date().toISOString(),
+      })
+      .commit()
+
+    emailRetryLocked = true
+  } catch {
+    return respond200(
+      { msg: "email_retry_lock_lost", markerId, paymentId },
+      startedAt
+    )
+  }
+
+  console.log("📧 retrying_missing_emails", {
+    markerId,
+    paymentId,
+    ownerNotified: (existing as any)?.ownerNotified === true,
+    customerNotified: (existing as any)?.customerNotified === true,
+  })
+} else {
+  try {
+    await sanity
+      .patch(markerId)
+      .ifRevisionId((existing as any)?._rev)
+      .set({
+        status: "processing",
+        processingAt: new Date().toISOString(),
+      })
+      .commit()
+  } catch {
+    return respond200(
+      { msg: "processing_lock_lost", markerId, paymentId, status: "processing" },
+      startedAt
+    )
+  }
 }
 
     // =========================
@@ -945,7 +1122,7 @@ try {
     // ✅ SOLO descontar stock de líneas que NO sean packMayorista
     const cartForStock = mergedCart.filter((x) => !packIdSet.has(String(x.productId)))
 
-    if (cartForStock.length) {
+    if (!retryEmailsOnly && cartForStock.length) {
       const r = await reserveStockAtomic(cartForStock, markerId)
 
       if (!r.ok) {
@@ -971,12 +1148,13 @@ try {
         return respond200({ ignored: true, reason: "failed_stock", markerId, paymentId }, startedAt)
       }
 
-    } else {
+    } else if (!retryEmailsOnly) {
       console.log("📦 onlyy packMayorista lines: skipping stock reserve", { markerId, paymentId })
     }
 
 
 
+try {
 
     // =========================
     // 5) Procesado + aviso por mail (idempotente)
@@ -1049,6 +1227,13 @@ try {
         // 1) OWNER mail
         if (updated.ownerNotified !== true) {
           try {
+            console.log("📧 attempting_owner_email", {
+              markerId,
+              paymentId,
+              orderId: emailOrderId,
+              to: "OWNER_EMAIL",
+            })
+
             await sendOwnerSaleEmail({
               orderId: emailOrderId,
               paymentId,
@@ -1072,17 +1257,48 @@ try {
 
             await sanity
               .patch(markerId)
-              .set({ ownerNotified: true, ownerNotifiedAt: new Date().toISOString() })
+              .set({
+                ownerNotified: true,
+                ownerNotifiedAt: new Date().toISOString(),
+              })
+              .unset(["ownerEmailFailed", "ownerEmailError", "ownerEmailFailedAt"])
               .commit()
               .catch(() => { })
+
+            console.log("✅ owner_email_sent", {
+              markerId,
+              paymentId,
+              orderId: emailOrderId,
+            })
           } catch (e: any) {
-            console.error("❌ owner_notify_failed", e?.message || e)
+            const errMsg = getEmailErrorMessage(e)
+            console.error("❌ owner_notify_failed", {
+              markerId,
+              paymentId,
+              error: errMsg,
+            })
+            await sanity
+              .patch(markerId)
+              .set({
+                ownerEmailFailed: true,
+                ownerEmailError: errMsg,
+                ownerEmailFailedAt: new Date().toISOString(),
+              })
+              .commit()
+              .catch(() => { })
           }
         }
 
         // 2) CUSTOMER mail
         if (buyerEmail && updated.customerNotified !== true) {
           try {
+            console.log("📧 attempting_customer_email", {
+              markerId,
+              paymentId,
+              orderId: emailOrderId,
+              to: buyerEmail,
+            })
+
             await sendCustomerPurchaseEmail({
               to: buyerEmail,
               orderId: emailOrderId,
@@ -1097,17 +1313,71 @@ try {
 
             await sanity
               .patch(markerId)
-              .set({ customerNotified: true, customerNotifiedAt: new Date().toISOString() })
+              .set({
+                customerNotified: true,
+                customerNotifiedAt: new Date().toISOString(),
+              })
+              .unset(["customerEmailFailed", "customerEmailError", "customerEmailFailedAt"])
               .commit()
               .catch(() => { })
+
+            console.log("✅ customer_email_sent", {
+              markerId,
+              paymentId,
+              orderId: emailOrderId,
+              to: buyerEmail,
+            })
           } catch (e: any) {
-            console.error("❌ customer_notify_failed", e?.message || e)
+            const errMsg = getEmailErrorMessage(e)
+            console.error("❌ customer_notify_failed", {
+              markerId,
+              paymentId,
+              to: buyerEmail,
+              error: errMsg,
+            })
+            await sanity
+              .patch(markerId)
+              .set({
+                customerEmailFailed: true,
+                customerEmailError: errMsg,
+                customerEmailFailedAt: new Date().toISOString(),
+              })
+              .commit()
+              .catch(() => { })
           }
+        } else if (!buyerEmail && updated.customerNotified !== true) {
+          const errMsg = "Missing buyerEmail"
+          console.warn("⚠️ customer_email_skipped_missing_buyer_email", {
+            markerId,
+            paymentId,
+            orderId: emailOrderId,
+          })
+          await sanity
+            .patch(markerId)
+            .set({
+              customerEmailFailed: true,
+              customerEmailError: errMsg,
+              customerEmailFailedAt: new Date().toISOString(),
+            })
+            .commit()
+            .catch(() => { })
         }
       } catch (e: any) {
         console.error("❌ notify_block_failed", e?.message || e)
       }
     }
+} finally {
+  if (emailRetryLocked) {
+    await sanity
+      .patch(markerId)
+      .set({
+        emailRetryStatus: "done",
+        emailRetryFinishedAt: new Date().toISOString(),
+      })
+      .commit()
+      .catch(() => { })
+  }
+}
     return respond200({ msg: "processed", markerId, paymentId, preferenceId: prefId }, startedAt)
 
 
